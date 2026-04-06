@@ -29,11 +29,7 @@ function sendError(req, res, status, detail) {
 
 function correlationAndSecurityHeaders(req, res, next) {
   const requireCorr = process.env.BANK_REQUIRE_CORRELATION_ID === '1'
-  if (
-    requireCorr &&
-    !req.get('x-correlation-id') &&
-    !req.get('x-request-id')
-  ) {
+  if (requireCorr && !req.get('x-correlation-id') && !req.get('x-request-id')) {
     const syn = uuid()
     res.setHeader('X-Correlation-Id', syn)
     res.setHeader('X-Request-Id', syn)
@@ -44,8 +40,7 @@ function correlationAndSecurityHeaders(req, res, next) {
       timestamp: new Date().toISOString(),
     })
   }
-  const incoming =
-    req.get('x-correlation-id') || req.get('x-request-id') || uuid()
+  const incoming = req.get('x-correlation-id') || req.get('x-request-id') || uuid()
   req.correlationId = incoming
   res.setHeader('X-Correlation-Id', incoming)
   res.setHeader('X-Request-Id', incoming)
@@ -263,8 +258,7 @@ function sendLoanProductReference(_req, res) {
         disbursement_rails: ['ACH', 'WIRE'],
       },
     ],
-    note:
-      'Catalogue snapshot for integration tests; origination still validates term_months against allowed_term_months.',
+    note: 'Catalogue snapshot for integration tests; origination still validates term_months against allowed_term_months.',
   })
 }
 
