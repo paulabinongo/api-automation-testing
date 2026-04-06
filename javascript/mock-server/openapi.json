@@ -1,0 +1,977 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Retail Bank Loan API (Mock)",
+    "description": "Practice API for **API automation** and demos.\n\n**Flow (production-shaped):** **login** → **KYC** → **DRAFT** → **submit** → **processing/accept** (**IN_PROCESSING**) → **disclosures/acknowledge** → **credit-check** → **underwriting/start** (**IN_UNDERWRITING**) → **underwriting/decision** → optional **stipulations** → **funding/authorize** (**CLEARED_FOR_BOOKING**) → **fund** (**FUNDED**) → **disburse** (**ACTIVE**) → **payments** → **payoff** (**CLOSED**) → **logout**.\n\n**Production alignment:** Extra steps mirror **ops intake**, **initial disclosures**, **underwriting queue**, and **funding authorization** before booking. **Phase map:** **`DOCUMENTATION.md`** §**5.0** / §**5.4**. **Postman:** **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** (§**7**).\n\n**Auth:** All `/v1/*` routes except **GET /health**, **GET /reference/loan-products**, and **POST /auth/login** require `Authorization: Bearer <access_token>`.\n\n**Ops headers (production-style):** Responses are tagged with **`X-Correlation-Id`**, **`X-Request-Id`** (echo or minted), **`X-API-Environment`** (default **sandbox**; set **`BANK_API_ENV`**), **`X-API-Revision`**, **`Cache-Control: no-store`**. Send **`X-Correlation-Id`** from the client to tie logs to your own trace (optional unless **`BANK_REQUIRE_CORRELATION_ID=1`**). Optional **`Idempotency-Key`** on **authenticated POST** retries: same key + same path + same body replays the first **2xx** (`Idempotent-Replayed: true`); a different body with the same key returns **409**. Optional **`BANK_API_RATE_LIMIT_PER_MINUTE`** (per client IP) returns **429** with **`Retry-After`**.\n\n**Implementation:** `javascript/mock-server/server.js`.",
+    "version": "0.7.0"
+  },
+  "servers": [{ "url": "/", "description": "Same host as this Swagger page" }],
+  "security": [{ "bearerAuth": [] }],
+  "tags": [
+    {
+      "name": "System",
+      "description": "**Liveness** and runtime metadata — **unauthenticated** (gateway / platform probes)."
+    },
+    {
+      "name": "Reference",
+      "description": "**Read-only catalogue** data (product terms, rails) for intake UIs — **unauthenticated** in this sandbox."
+    },
+    { "name": "Auth", "description": "Session — **login** first; **Bearer** on all other `/v1` calls. Maps to authenticated channels in production." },
+    { "name": "Onboarding", "description": "**KYC / customer onboarding** before origination (**403** on create application if skipped). In production: CIP, KYC, AML — here **POST /onboarding/kyc** returns **VERIFIED** instantly." },
+    { "name": "Applications", "description": "**Intake** → **ops processing** → **disclosures** → **credit** → **underwriting queue** → **decision** → **pre-close (stips)**. See **DOCUMENTATION.md** §5.0 / §5.4." },
+    { "name": "Loans", "description": "**Funding authorize** (secondary approval) → **fund** (book) → **disburse** → **servicing**. See **DOCUMENTATION.md** §5.4." }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "description": "Platform liveness — no **Authorization** header. Matches typical **GET /health** behind an API gateway.",
+        "operationId": "health",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is up",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthOut" },
+                "example": {
+                  "status": "UP",
+                  "environment": "sandbox",
+                  "api_revision": "0.7.0",
+                  "time": "2026-04-06T12:00:00.000Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reference/loan-products": {
+      "get": {
+        "tags": ["Reference"],
+        "summary": "Loan product catalogue",
+        "description": "Approved **term_months** LOVs and representative limits — use before showing an application form. No auth in sandbox.",
+        "operationId": "loanProductReference",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoanProductReferenceOut" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login",
+        "description": "Public. Returns **access_token** — click **Authorize** in Swagger and paste `Bearer <token>` or only the token. Passwords accepted in sandbox: **demo** or **demo123** (any email).",
+        "operationId": "login",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginIn" },
+              "example": { "email": "demo.borrower@loan.bank", "password": "demo" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginOut" } } }
+          },
+          "401": { "description": "Invalid credentials" },
+          "422": { "description": "Missing email or password" }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "description": "Ends the session; the same token cannot be reused.",
+        "operationId": "logout",
+        "responses": {
+          "204": { "description": "Session ended" },
+          "401": { "description": "Missing or invalid token" }
+        }
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Current session",
+        "description": "Returns user id, email, and whether KYC is complete.\n\n**Not public:** you must send **`Authorization: Bearer`** with the **`access_token`** from **POST /auth/login**. In Swagger: click **Authorize** (top), paste the token, **Authorize**, then **Try it out** here. The auto-generated **curl** only includes that header **after** you have authorized — otherwise you will see **401**.",
+        "operationId": "authMe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthMeOut" } } }
+          },
+          "401": { "description": "Missing or invalid Bearer token — login first, then add the header or use **Authorize**" }
+        }
+      }
+    },
+    "/v1/onboarding/status": {
+      "get": {
+        "tags": ["Onboarding"],
+        "summary": "KYC status",
+        "description": "Same as **GET /auth/me** for KYC flags: requires **Bearer** token from **POST /auth/login** (Swagger **Authorize**).",
+        "operationId": "onboardingStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OnboardingStatusOut" } } }
+          },
+          "401": { "description": "Missing or invalid Bearer token" }
+        }
+      }
+    },
+    "/v1/onboarding/kyc": {
+      "post": {
+        "tags": ["Onboarding"],
+        "summary": "Submit KYC (customer onboarding)",
+        "description": "**Required** before **POST /loan-applications**. Sandbox always returns **VERIFIED**.",
+        "operationId": "submitKyc",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/KycIn" },
+              "example": {
+                "full_name": "Alex Rivera",
+                "email": "alex.rivera@example.com",
+                "date_of_birth": "1992-06-15",
+                "national_id_last4": "4567"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "KYC verified (simulated)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KycOut" } } }
+          },
+          "401": { "description": "Unauthorized" },
+          "422": { "description": "Validation error" }
+        }
+      }
+    },
+    "/v1/loan-applications": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Create application (DRAFT)",
+        "description": "**Application intake** — first LOS step after KYC. Creates **DRAFT** with **`loan_id: null`** until **POST …/underwriting/decision** creates the loan (see **DOCUMENTATION.md** §5.4). Requires **completed KYC** (otherwise **403**).",
+        "operationId": "createApplication",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApplicationIn" },
+              "example": {
+                "product_code": "TERM_36",
+                "principal_cents": 5000000,
+                "term_months": 36,
+                "borrower": {
+                  "full_name": "Alex Rivera",
+                  "email": "alex.rivera@example.com",
+                  "annual_income_cents": 12000000
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created **DRAFT** application. **`loan_id` is always `null` here** — the bank only creates a loan record after **POST …/underwriting/decision** (approve or conditional). Use **`application.id`** until then.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApplicationOut" },
+                "example": {
+                  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                  "status": "DRAFT",
+                  "product_code": "TERM_36",
+                  "principal_cents": 5000000,
+                  "term_months": 36,
+                  "borrower": {
+                    "full_name": "Alex Rivera",
+                    "email": "alex.rivera@example.com",
+                    "annual_income_cents": 12000000
+                  },
+                  "loan_id": null,
+                  "stipulations": [],
+                  "decline_reason_code": null,
+                  "credit_reference_id": null
+                }
+              }
+            }
+          },
+          "401": { "description": "Not logged in" },
+          "403": { "description": "KYC not completed — call **POST /onboarding/kyc** first" },
+          "422": {
+            "description": "Validation error",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } } }
+          }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}": {
+      "get": {
+        "tags": ["Applications"],
+        "summary": "Get application by id",
+        "operationId": "getApplication",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+          },
+          "404": { "description": "Application not found" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/submit": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Submit (DRAFT → SUBMITTED)",
+        "operationId": "submitApplication",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Invalid state (not DRAFT)" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/processing/accept": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Ops — accept into processing queue",
+        "description": "**SUBMITTED** → **IN_PROCESSING** — processing / loan ops has accepted the file (mirrors LOS intake after borrower submit).",
+        "operationId": "acceptProcessing",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "responses": {
+          "200": {
+            "description": "Application IN_PROCESSING",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Must be SUBMITTED" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/disclosures/acknowledge": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Acknowledge initial disclosure package",
+        "description": "**IN_PROCESSING** only. Sets **`disclosures_acknowledged_at`** (sandbox: required before **credit-check** — Reg-TILA-style gate). Optional JSON body for demos, e.g. **`package_version`** (ignored by validation). Repeat calls are idempotent.",
+        "operationId": "acknowledgeDisclosures",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "package_version": { "type": "string", "example": "LE-2026-Q2" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ack recorded",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Must be IN_PROCESSING" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/credit-check": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Run credit check",
+        "description": "Requires **IN_PROCESSING** and **`disclosures_acknowledged_at`** set (call **processing/accept** then **disclosures/acknowledge**). **Once** per application — success → **CREDIT_COMPLETED** or **DECLINED**; calling again returns **409**.",
+        "operationId": "creditCheck",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreditCheckIn" },
+              "example": { "force_outcome": "PASS" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CREDIT_COMPLETED or DECLINED",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Must be IN_PROCESSING with disclosures acknowledged" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/underwriting/start": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Start underwriting queue",
+        "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING** — assigns the file to underwriting before **POST …/underwriting/decision**.",
+        "operationId": "startUnderwriting",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "responses": {
+          "200": {
+            "description": "Application IN_UNDERWRITING",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Must be CREDIT_COMPLETED" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/underwriting/decision": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Underwriting decision",
+        "operationId": "underwritingDecision",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UnderwritingDecisionIn" },
+              "examples": {
+                "approve": { "value": { "outcome": "APPROVE" } },
+                "conditional": {
+                  "value": {
+                    "outcome": "CONDITIONAL",
+                    "stipulations": [{ "description": "Proof of income (W-2)" }]
+                  }
+                },
+                "decline": { "value": { "outcome": "DECLINE", "decline_reason_code": "POLICY" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Application + loan (or **loan: null** if declined). **stipulations** is **[]** after straight **APPROVE**; after **CONDITIONAL** it lists items with **id**, **description**, **fulfilled** (use **id** in fulfill path).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UnderwritingDecisionOut" },
+                "examples": {
+                  "approve_empty_stips": {
+                    "summary": "Straight APPROVE — stipulations empty",
+                    "value": {
+                      "application": {
+                        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                        "status": "APPROVED_CLEAR_TO_CLOSE",
+                        "product_code": "TERM_36",
+                        "principal_cents": 5000000,
+                        "term_months": 36,
+                        "borrower": {
+                          "full_name": "Alex Rivera",
+                          "email": "alex@example.com",
+                          "annual_income_cents": 12000000
+                        },
+                        "loan_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                        "stipulations": [],
+                        "decline_reason_code": null,
+                        "credit_reference_id": "CR-ABC123DEF456"
+                      },
+                      "loan": {
+                        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                        "status": "PENDING_FUNDING",
+                        "balance_cents": 5000000,
+                        "principal_cents": 5000000,
+                        "term_months": 36,
+                        "product_code": "TERM_36"
+                      }
+                    }
+                  },
+                  "conditional_with_stips": {
+                    "summary": "CONDITIONAL — stipulations need fulfilling",
+                    "value": {
+                      "application": {
+                        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                        "status": "APPROVED_CONDITIONAL",
+                        "product_code": "TERM_36",
+                        "principal_cents": 5000000,
+                        "term_months": 36,
+                        "borrower": {
+                          "full_name": "Alex Rivera",
+                          "email": "alex@example.com",
+                          "annual_income_cents": 12000000
+                        },
+                        "loan_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                        "stipulations": [
+                          {
+                            "id": "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6",
+                            "description": "Proof of income (W-2)",
+                            "fulfilled": false
+                          }
+                        ],
+                        "decline_reason_code": null,
+                        "credit_reference_id": "CR-ABC123DEF456"
+                      },
+                      "loan": {
+                        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                        "status": "PENDING_STIPS",
+                        "balance_cents": 5000000,
+                        "principal_cents": 5000000,
+                        "term_months": 36,
+                        "product_code": "TERM_36"
+                      }
+                    }
+                  },
+                  "declined": {
+                    "summary": "DECLINE — no loan",
+                    "value": {
+                      "application": {
+                        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                        "status": "DECLINED",
+                        "product_code": "TERM_36",
+                        "principal_cents": 5000000,
+                        "term_months": 36,
+                        "borrower": {
+                          "full_name": "Alex Rivera",
+                          "email": "alex@example.com",
+                          "annual_income_cents": 12000000
+                        },
+                        "loan_id": null,
+                        "stipulations": [],
+                        "decline_reason_code": "UNDERWRITING_DECLINE",
+                        "credit_reference_id": "CR-ABC123DEF456"
+                      },
+                      "loan": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Must be IN_UNDERWRITING (call POST …/underwriting/start after credit)" },
+          "422": { "description": "Invalid outcome or missing stips" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/stipulations/fulfill-all": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Fulfill all outstanding stipulations",
+        "description": "**One-shot alternative** to calling **POST …/stipulations/{stipulationId}/fulfill** repeatedly. Valid only when **`application.status`** is **APPROVED_CONDITIONAL** and **`loan.status`** is **PENDING_STIPS**. Marks **every** stipulation **`fulfilled: true`**, then moves the application to **APPROVED_CLEAR_TO_CLOSE** and the loan to **PENDING_FUNDING** (same end state as clearing the last stip individually). Returns **`fulfilled_stipulation_ids`** (all stipulation UUIDs on the application). **Do not use** after straight **APPROVE** — use **fund** directly.",
+        "operationId": "fulfillAllStipulations",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "responses": {
+          "200": {
+            "description": "All stipulations cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["application", "loan", "fulfilled_stipulation_ids"],
+                  "properties": {
+                    "application": { "$ref": "#/components/schemas/ApplicationOut" },
+                    "loan": { "$ref": "#/components/schemas/LoanOut" },
+                    "fulfilled_stipulation_ids": {
+                      "type": "array",
+                      "items": { "type": "string", "format": "uuid" },
+                      "description": "Every **`id`** from **`application.stipulations`** after all are marked fulfilled."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Application or loan not found" },
+          "409": { "description": "Not APPROVED_CONDITIONAL / not PENDING_STIPS / nothing left to fulfill" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/stipulations/{stipulationId}/fulfill": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Fulfill a stipulation",
+        "description": "**When to use this:** only after **CONDITIONAL** underwriting, when **`application.stipulations`** lists items with **`fulfilled: false`**. **Do not use** if you chose straight **APPROVE** (stipulations were **[]** — go straight to **fund**). To clear **all** open stips in **one** request, use **POST …/stipulations/fulfill-all** instead.\n\n**stipulationId:** copy the real **`id`** from the underwriting response (a **UUID**). The docs example uses a sample UUID; your runtime value comes from **Try it out** on underwriting — expand **`application.stipulations[0].id`** in the response body.",
+        "operationId": "fulfillStipulation",
+        "parameters": [
+          { "$ref": "#/components/parameters/applicationId" },
+          {
+            "name": "stipulationId",
+            "in": "path",
+            "required": true,
+            "description": "UUID from `application.stipulations[n].id` in the **underwriting** response (CONDITIONAL path).",
+            "schema": { "type": "string", "format": "uuid" },
+            "example": "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated application and loan",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UnderwritingDecisionOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Wrong application/loan state" }
+        }
+      }
+    },
+    "/v1/loans/{loanId}": {
+      "get": {
+        "tags": ["Loans"],
+        "summary": "Get loan",
+        "operationId": "getLoan",
+        "parameters": [{ "$ref": "#/components/parameters/loanId" }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+          },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/v1/loans/{loanId}/funding/authorize": {
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Authorize funding — clear to book",
+        "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** — funding desk / secondary approval (mirrors production **clear-to-fund** before **GL** booking). Sets **`funding_authorized_at`**. Call **POST …/fund** next.",
+        "operationId": "authorizeFunding",
+        "parameters": [{ "$ref": "#/components/parameters/loanId" }],
+        "responses": {
+          "200": {
+            "description": "Loan CLEARED_FOR_BOOKING",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Must be PENDING_FUNDING" }
+        }
+      }
+    },
+    "/v1/loans/{loanId}/fund": {
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Fund loan — book on ledger",
+        "description": "Books the obligation (**CLEARED_FOR_BOOKING** → **FUNDED**). Requires **POST …/funding/authorize** first when the loan was **PENDING_FUNDING**. Response includes **`funded_at`**. Next: **POST …/disburse**.",
+        "operationId": "fundLoan",
+        "parameters": [{ "$ref": "#/components/parameters/loanId" }],
+        "responses": {
+          "200": {
+            "description": "Loan is FUNDED (not yet disbursed to borrower)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Loan must be CLEARED_FOR_BOOKING" }
+        }
+      }
+    },
+    "/v1/loans/{loanId}/disburse": {
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Disburse — send proceeds to borrower",
+        "description": "Releases proceeds to the borrower (**FUNDED** → **ACTIVE**), e.g. wire/ACH; repayment/servicing usually applies from here. Requires **fund** first. Response includes **`disbursed_at`**.",
+        "operationId": "disburseLoan",
+        "parameters": [{ "$ref": "#/components/parameters/loanId" }],
+        "responses": {
+          "200": {
+            "description": "Loan is ACTIVE",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+          },
+          "404": { "description": "Not found" },
+          "409": { "description": "Loan must be FUNDED (call fund first)" }
+        }
+      }
+    },
+    "/v1/loans/{loanId}/payment-schedule": {
+      "get": {
+        "tags": ["Loans"],
+        "summary": "Illustrative payment schedule",
+        "operationId": "paymentSchedule",
+        "parameters": [{ "$ref": "#/components/parameters/loanId" }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaymentScheduleOut" } } }
+          },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/v1/loans/{loanId}/payments": {
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Record payment",
+        "operationId": "recordPayment",
+        "parameters": [{ "$ref": "#/components/parameters/loanId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PaymentIn" },
+              "example": { "amount_cents": 100000, "method": "ACH" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaymentResult" } } }
+          },
+          "400": { "description": "Payment exceeds balance" },
+          "404": { "description": "Not found" },
+          "409": { "description": "Loan must be ACTIVE" },
+          "422": { "description": "Invalid **amount_cents** or unsupported **method** (use **ACH** or **WIRE**)" }
+        }
+      }
+    },
+    "/v1/loans/{loanId}/payoff": {
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Payoff / close",
+        "operationId": "payoffLoan",
+        "parameters": [{ "$ref": "#/components/parameters/loanId" }],
+        "responses": {
+          "200": {
+            "description": "OK (idempotent if already CLOSED)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+          },
+          "404": { "description": "Not found" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Paste **access_token** from **POST /v1/auth/login** (Swagger: Authorize)."
+      }
+    },
+    "parameters": {
+      "correlationId": {
+        "name": "X-Correlation-Id",
+        "in": "header",
+        "required": false,
+        "description": "End-to-end correlation (W3C **traceparent**-adjacent pattern). Omit to let the server mint one; echo is returned on the response.",
+        "schema": { "type": "string", "maxLength": 128 }
+      },
+      "idempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "On **authenticated POST**, duplicate key + same JSON body replays the first successful response. Different body → **409**.",
+        "schema": { "type": "string", "maxLength": 128 }
+      },
+      "applicationId": {
+        "name": "applicationId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "loanId": {
+        "name": "loanId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "stipulationId": {
+        "name": "stipulationId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      }
+    },
+    "schemas": {
+      "HealthOut": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "UP" },
+          "environment": { "type": "string", "description": "From **X-API-Environment** / **`BANK_API_ENV`**" },
+          "api_revision": { "type": "string", "description": "Matches **`X-API-Revision`** (OpenAPI **info.version**)" },
+          "time": { "type": "string", "format": "date-time" }
+        }
+      },
+      "LoanProductReferenceOut": {
+        "type": "object",
+        "properties": {
+          "currency": { "type": "string", "example": "USD" },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "product_code": { "type": "string" },
+                "name": { "type": "string" },
+                "allowed_term_months": { "type": "array", "items": { "type": "integer" } },
+                "min_principal_cents": { "type": "integer" },
+                "max_principal_cents": { "type": "integer" },
+                "disbursement_rails": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "note": { "type": "string" }
+        }
+      },
+      "LoginIn": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        }
+      },
+      "LoginOut": {
+        "type": "object",
+        "properties": {
+          "access_token": { "type": "string" },
+          "token_type": { "type": "string", "example": "Bearer" },
+          "expires_in": { "type": "integer" },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "email": { "type": "string" }
+            }
+          }
+        }
+      },
+      "AuthMeOut": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "email": { "type": "string" }
+            }
+          },
+          "kyc_complete": { "type": "boolean" },
+          "kyc_id": { "type": "string", "nullable": true },
+          "kyc_status": { "type": "string" }
+        }
+      },
+      "OnboardingStatusOut": {
+        "type": "object",
+        "properties": {
+          "kyc_complete": { "type": "boolean" },
+          "kyc_id": { "type": "string", "nullable": true },
+          "status": { "type": "string", "description": "NOT_STARTED until KYC submitted, then VERIFIED in sandbox" }
+        }
+      },
+      "KycIn": {
+        "type": "object",
+        "required": ["full_name", "email", "date_of_birth", "national_id_last4"],
+        "properties": {
+          "full_name": { "type": "string" },
+          "email": { "type": "string" },
+          "date_of_birth": { "type": "string", "description": "YYYY-MM-DD" },
+          "national_id_last4": { "type": "string", "minLength": 4, "maxLength": 4, "pattern": "^\\d{4}$" }
+        }
+      },
+      "KycOut": {
+        "type": "object",
+        "properties": {
+          "kyc_id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "example": "VERIFIED" },
+          "message": { "type": "string" }
+        }
+      },
+      "BorrowerIn": {
+        "type": "object",
+        "required": ["full_name", "email", "annual_income_cents"],
+        "properties": {
+          "full_name": { "type": "string" },
+          "email": { "type": "string" },
+          "annual_income_cents": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "ApplicationIn": {
+        "type": "object",
+        "required": ["product_code", "principal_cents", "term_months", "borrower"],
+        "properties": {
+          "product_code": {
+            "type": "string",
+            "description": "Product / program code; often aligns with term (e.g. **TERM_36**)."
+          },
+          "principal_cents": { "type": "integer", "minimum": 1 },
+          "term_months": {
+            "type": "integer",
+            "enum": [6, 12, 18, 24, 32, 36],
+            "description": "Amortization term in **whole months** — bank **product catalogue** LOV only (no other values accepted)."
+          },
+          "borrower": { "$ref": "#/components/schemas/BorrowerIn" }
+        }
+      },
+      "StipulationOut": {
+        "type": "object",
+        "description": "Outstanding underwriting requirement. **id** is used in POST …/stipulations/{stipulationId}/fulfill.",
+        "required": ["id", "description", "fulfilled"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "description": { "type": "string" },
+          "fulfilled": { "type": "boolean" }
+        }
+      },
+      "ApplicationOut": {
+        "type": "object",
+        "description": "Application record. `loan_id` stays null until underwriting creates the loan.",
+        "properties": {
+          "id": { "type": "string", "description": "Application id — use this for submit, credit, underwriting paths." },
+          "status": { "type": "string" },
+          "product_code": { "type": "string" },
+          "principal_cents": { "type": "integer" },
+          "term_months": { "type": "integer" },
+          "borrower": {
+            "type": "object",
+            "properties": {
+              "full_name": { "type": "string" },
+              "email": { "type": "string" },
+              "annual_income_cents": { "type": "integer" }
+            }
+          },
+          "loan_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Loan id — **only set after a successful POST /underwriting/decision** that creates a loan. **Null** on a new draft from POST /loan-applications (there is no loan yet)."
+          },
+          "stipulations": {
+            "type": "array",
+            "description": "**[]** after straight **APPROVE**. After **CONDITIONAL**, each item has **id**, **description**, **fulfilled** (see examples on underwriting response).",
+            "items": { "$ref": "#/components/schemas/StipulationOut" }
+          },
+          "decline_reason_code": { "type": "string", "nullable": true },
+          "credit_reference_id": { "type": "string", "nullable": true },
+          "disclosures_acknowledged_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Set by **POST …/disclosures/acknowledge**; required before **credit-check**."
+          }
+        }
+      },
+      "CreditCheckIn": {
+        "type": "object",
+        "properties": {
+          "force_outcome": { "type": "string", "enum": ["PASS", "FAIL"] },
+          "simulated_credit_score": { "type": "integer", "minimum": 300, "maximum": 850 }
+        }
+      },
+      "StipulationIn": {
+        "type": "object",
+        "required": ["description"],
+        "description": "Each item adds one outstanding requirement. **`description`** is free text — the sandbox does **not** enforce a fixed list. For a long **copy-paste list** of demo descriptions, see **`DOCUMENTATION.md` §5.2 and `javascript/loanConstants.js`** (`STIPULATION_DESCRIPTION_EXAMPLES`).",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Human-readable stipulation line shown to ops/borrower. Examples: \"Proof of income (W-2)\", \"Signed disclosures\", \"Insurance binder\" — any wording is accepted.",
+            "example": "Proof of income (W-2)"
+          }
+        }
+      },
+      "UnderwritingDecisionIn": {
+        "type": "object",
+        "required": ["outcome"],
+        "properties": {
+          "outcome": { "type": "string", "enum": ["APPROVE", "CONDITIONAL", "DECLINE"] },
+          "decline_reason_code": { "type": "string" },
+          "stipulations": { "type": "array", "items": { "$ref": "#/components/schemas/StipulationIn" } }
+        }
+      },
+      "LoanOut": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "description": "**Sandbox loan status machine:** **PENDING_STIPS** → **PENDING_FUNDING** → **CLEARED_FOR_BOOKING** → **FUNDED** → **ACTIVE** → **PAID_OFF** → **CLOSED**. **funding/authorize** sits between clear-to-close and booking. See **DOCUMENTATION.md** §5.4."
+          },
+          "balance_cents": { "type": "integer" },
+          "principal_cents": { "type": "integer" },
+          "term_months": { "type": "integer" },
+          "product_code": { "type": "string" },
+          "funding_authorized_at": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set when **POST …/funding/authorize** succeeds. **null** until then."
+          },
+          "funded_at": { "type": "string", "nullable": true, "description": "Set when **fund** succeeds (booked). **null** until then." },
+          "disbursed_at": { "type": "string", "nullable": true, "description": "Set when **disburse** succeeds (proceeds sent). **null** until then." }
+        }
+      },
+      "UnderwritingDecisionOut": {
+        "type": "object",
+        "properties": {
+          "application": { "$ref": "#/components/schemas/ApplicationOut" },
+          "loan": { "nullable": true, "allOf": [{ "$ref": "#/components/schemas/LoanOut" }] }
+        }
+      },
+      "PaymentIn": {
+        "type": "object",
+        "required": ["amount_cents"],
+        "properties": {
+          "amount_cents": { "type": "integer", "minimum": 1 },
+          "method": {
+            "type": "string",
+            "enum": ["ACH", "WIRE"],
+            "default": "ACH",
+            "description": "**ACH** — NACHA ACH credit/debit to customer DDA (typical installment). **WIRE** — domestic wire (e.g. Fedwire-style) for payoffs or same-day funds."
+          }
+        }
+      },
+      "PaymentResult": {
+        "type": "object",
+        "properties": {
+          "loan": { "$ref": "#/components/schemas/LoanOut" },
+          "payment_amount_cents": { "type": "integer" },
+          "payment_method": {
+            "type": "string",
+            "enum": ["ACH", "WIRE"],
+            "description": "Echo of the validated **method** from the request."
+          }
+        }
+      },
+      "PaymentScheduleOut": {
+        "type": "object",
+        "properties": {
+          "loan_id": { "type": "string" },
+          "status": { "type": "string" },
+          "term_months": { "type": "integer" },
+          "original_principal_cents": { "type": "integer" },
+          "installments": { "type": "array", "items": { "type": "object" } },
+          "note": { "type": "string" }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+          },
+          "correlation_id": {
+            "type": "string",
+            "description": "Same value as response header **X-Correlation-Id** — cite in support tickets."
+          },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "retry_after_seconds": {
+            "type": "integer",
+            "description": "Present on **429** when **`BANK_API_RATE_LIMIT_PER_MINUTE`** is set."
+          }
+        }
+      }
+    }
+  }
+}

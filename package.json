@@ -1,0 +1,40 @@
+{
+  "name": "loan-api-automation",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "eslint javascript scripts",
+    "lint:fix": "eslint javascript scripts --fix",
+    "format": "prettier --write \"javascript/**/*.js\" \"scripts/**/*.mjs\" \"*.{json,md}\" \"vitest.config.js\" \"eslint.config.js\"",
+    "format:check": "prettier --check \"javascript/**/*.js\" \"scripts/**/*.mjs\" \"vitest.config.js\" \"eslint.config.js\"",
+    "validate:openapi": "node scripts/validate-openapi.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "cross-env PORT=9876 start-server-and-test start:mock http://127.0.0.1:9876/openapi.json \"cross-env LOAN_API_BASE_URL=http://127.0.0.1:9876/v1 npm run test\"",
+    "ci": "npm run validate:openapi && npm run lint && npm run format:check && npm run test:coverage && npm run test:integration",
+    "start:mock": "node javascript/mock-server/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@eslint/js": "^9.39.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/ui": "3.2.4",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.39.4",
+    "globals": "^17.4.0",
+    "msw": "^2.7.3",
+    "prettier": "^3.8.1",
+    "start-server-and-test": "^2.1.5",
+    "vitest": "3.2.4"
+  }
+}

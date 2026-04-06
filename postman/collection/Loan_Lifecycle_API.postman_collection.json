@@ -1,0 +1,1851 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-loan-lifecycle-001",
+    "name": "Loan Lifecycle API",
+    "description": "**Lifecycle** matches **Swagger UI**, **`javascript/mock-server/openapi.json`**, and **`DOCUMENTATION.md`** §**5** (happy path §**5.0**, production phase map §**5.4**). **OpenAPI 0.7+** adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**.\n\n**Order:** **Login** → **KYC** → Create → Submit → **Ops accept** → **Disclosures acknowledge** → Credit → **Start underwriting** → **Underwriting decision** → (optional **stipulations**) → **Funding authorize** → **Fund** (book) → **Disburse** → Get loan → Schedule → Payment(s) → Payoff → optional **Logout**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack — see **`DOCUMENTATION.md`** §**5.4** for what real institutions add.\n\n**Import-ready flow:** folder **Flow — Happy path (import & run in order)** (this guide §**7**).\n\n**Stipulation tests:** **Tests — stipulations (single & multiple)** — Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** — select **Loan Lifecycle — Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`javascript/mock-server/openapi.json`** in Postman.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only — do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** — set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8765"
+    },
+    {
+      "key": "api_root",
+      "value": "http://127.0.0.1:8765/v1"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "application_id",
+      "value": ""
+    },
+    {
+      "key": "loan_id",
+      "value": ""
+    },
+    {
+      "key": "stipulation_id",
+      "value": ""
+    },
+    {
+      "key": "stipulation_ids_json",
+      "value": "[]"
+    },
+    {
+      "key": "payment_amount_cents",
+      "value": "5000000"
+    },
+    {
+      "key": "payment_method",
+      "value": "ACH"
+    },
+    {
+      "key": "demo_login_email",
+      "value": "demo.borrower@loan.bank"
+    },
+    {
+      "key": "demo_login_password",
+      "value": "demo"
+    },
+    {
+      "key": "openapi_url",
+      "value": "http://127.0.0.1:8765/openapi.json"
+    },
+    {
+      "key": "swagger_url",
+      "value": "http://127.0.0.1:8765/docs"
+    },
+    {
+      "key": "correlation_id_override",
+      "value": ""
+    },
+    {
+      "key": "last_correlation_id",
+      "value": ""
+    },
+    {
+      "key": "last_request_id",
+      "value": ""
+    },
+    {
+      "key": "idempotency_key",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "(function () {",
+          "    var urlStr = pm.variables.replaceIn(String(pm.request.url));",
+          "    if (/\\/v1\\/health(\\?|#|$)/i.test(urlStr) || /\\/v1\\/reference\\/loan-products(\\?|#|$)/i.test(urlStr) || /\\/v1\\/auth\\/login(\\?|#|$)/i.test(urlStr)) {",
+          "        pm.request.headers.remove('Authorization');",
+          "    }",
+          "})();",
+          "var override = pm.environment.get('correlation_id_override');",
+          "var cid = (override && String(override).trim()) ? String(override).trim() : pm.variables.replaceIn('{{$guid}}');",
+          "pm.request.headers.upsert({ key: 'X-Correlation-Id', value: cid });",
+          "var idem = pm.environment.get('idempotency_key');",
+          "if (idem && String(idem).trim() && pm.request.method === 'POST') {",
+          "    pm.request.headers.upsert({ key: 'Idempotency-Key', value: String(idem).trim().slice(0, 128) });",
+          "} else {",
+          "    pm.request.headers.remove('Idempotency-Key');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "(function () {",
+          "    var c = pm.response.headers.get('X-Correlation-Id') || pm.response.headers.get('x-correlation-id');",
+          "    var r = pm.response.headers.get('X-Request-Id') || pm.response.headers.get('x-request-id');",
+          "    if (c && pm.environment && pm.environment.id) pm.environment.set('last_correlation_id', c);",
+          "    if (r && pm.environment && pm.environment.id) pm.environment.set('last_request_id', r);",
+          "})();"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "System & reference (no auth)",
+      "description": "**Unauthenticated** probes aligned with **`openapi.json` 0.7+**. Run before **Login** to confirm the mock is up and read product catalogue **term_months** LOV.",
+      "auth": {
+        "type": "noauth"
+      },
+      "item": [
+        {
+          "name": "Health",
+          "auth": {
+            "type": "noauth"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('UP', function () { pm.expect(j.status).to.eql('UP'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/health",
+            "description": "**GET /v1/health** — liveness, **environment**, **api_revision**. No Bearer."
+          },
+          "response": []
+        },
+        {
+          "name": "Loan product catalogue",
+          "auth": {
+            "type": "noauth"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Has products', function () { pm.expect(j.products && j.products.length).to.be.above(0); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/reference/loan-products",
+            "description": "**GET /v1/reference/loan-products** — approved **term_months** and limits. No Bearer."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Flow — Happy path (import & run in order)",
+      "description": "Same journey as **Swagger** operation order and **`DOCUMENTATION.md`** §**5.0**. Run **Collection Runner** on **this folder only** (top to bottom). Environment: **Loan Lifecycle — Local mock**. **Login** → **KYC** → numbered steps **1 … 14**; **15. Logout** is optional. Steps **1** and **7** save **application_id** and **loan_id** via Tests. If step **7** is **CONDITIONAL**, it also sets **`stipulation_ids_json`** and **`stipulation_id`** — run **Fulfill all stipulations** in folder **Conditional — fulfill stipulations** once, then **9. Fund** (after **8. Funding — authorize**).",
+      "item": [
+        {
+          "name": "Login",
+          "auth": {
+            "type": "noauth"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.access_token) {",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('access_token', j.access_token);",
+                  "        else pm.collectionVariables.set('access_token', j.access_token);",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{demo_login_email}}\",\n  \"password\": \"{{demo_login_password}}\"\n}"
+            },
+            "url": "{{api_root}}/auth/login",
+            "description": "Public — no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
+          },
+          "response": []
+        },
+        {
+          "name": "Customer KYC (onboarding)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.status) { pm.expect(j.status).to.eql('VERIFIED'); }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Alex Rivera\",\n  \"email\": \"alex.rivera@example.com\",\n  \"date_of_birth\": \"1992-06-15\",\n  \"national_id_last4\": \"4567\"\n}"
+            },
+            "url": "{{api_root}}/onboarding/kyc",
+            "description": "Requires **Login** first. Mandatory before **Create loan application** (otherwise **403**)."
+          },
+          "response": []
+        },
+        {
+          "name": "1. Create loan application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.id) {",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('application_id', j.id);",
+                  "        else pm.collectionVariables.set('application_id', j.id);",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_code\": \"TERM_36\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 12000000\n  }\n}"
+            },
+            "url": "{{api_root}}/loan-applications",
+            "description": "Creates a DRAFT application. **`term_months`** must be one of **6, 12, 18, 24, 32, 36** (product catalogue). Saves `application_id`."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Submit application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
+            "description": "Moves application to SUBMITTED for credit / ops."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Ops — accept for processing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.status).to.eql('IN_PROCESSING');",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/processing/accept",
+            "description": "LOS-style: **SUBMITTED** → **IN_PROCESSING** (ops / processing queue)."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Disclosures — acknowledge",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.disclosures_acknowledged_at).to.be.ok;",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"package_version\": \"LE-2026-Q2\"\n}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/disclosures/acknowledge",
+            "description": "Initial disclosure package acknowledged (sandbox gate before **credit-check**)."
+          },
+          "response": []
+        },
+        {
+          "name": "5. Run credit check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.status).to.eql('CREDIT_COMPLETED');",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"force_outcome\": \"PASS\"\n}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/credit-check",
+            "description": "Sandbox credit step. Use `force_outcome`: PASS or FAIL, or `simulated_credit_score` (below 620 declines without force)."
+          },
+          "response": []
+        },
+        {
+          "name": "6. Start underwriting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.status).to.eql('IN_UNDERWRITING');",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/start",
+            "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING** (underwriting queue) before **decision**."
+          },
+          "response": []
+        },
+        {
+          "name": "7. Underwriting decision (straight approve)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.loan && j.loan.id) {",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('loan_id', j.loan.id);",
+                  "        else pm.collectionVariables.set('loan_id', j.loan.id);",
+                  "    }",
+                  "    if (j && j.application && Array.isArray(j.application.stipulations)) {",
+                  "        var sidJson = JSON.stringify(j.application.stipulations.map(function (s) { return s.id; }));",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('stipulation_ids_json', sidJson);",
+                  "        else pm.collectionVariables.set('stipulation_ids_json', sidJson);",
+                  "        if (j.application.stipulations.length === 0) {",
+                  "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                  "            else pm.collectionVariables.set('stipulation_id', '');",
+                  "        } else {",
+                  "            var next = j.application.stipulations.find(function (s) { return !s.fulfilled; });",
+                  "            if (next && next.id) {",
+                  "                if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', next.id);",
+                  "                else pm.collectionVariables.set('stipulation_id', next.id);",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"outcome\": \"APPROVE\"\n}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/decision",
+            "description": "Straight **APPROVE** → **PENDING_FUNDING** (no stips). For **CONDITIONAL**, replace body with `outcome` + `stipulations[]` — Tests save **`loan_id`**, **`stipulation_ids_json`** (all UUIDs), and the first open **`stipulation_id`**. Clear all stips in **one** call: **POST …/stipulations/fulfill-all** (folder **Conditional — fulfill stipulations**). Or fulfill one-by-one with **`{{stipulation_id}}`**. Empty **`stipulation_id`** yields `.../stipulations//fulfill` → **404**."
+          },
+          "response": []
+        },
+        {
+          "name": "8. Funding — authorize (secondary approval)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.status) { pm.expect(j.status).to.eql('CLEARED_FOR_BOOKING'); }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/funding/authorize",
+            "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** — production-style **clear-to-fund** before **GL** booking."
+          },
+          "response": []
+        },
+        {
+          "name": "9. Fund loan (book on ledger)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.status) { pm.expect(j.status).to.eql('FUNDED'); }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/fund",
+            "description": "Books the loan: **CLEARED_FOR_BOOKING** → **FUNDED** (`funded_at`). Requires **8. Funding — authorize** first."
+          },
+          "response": []
+        },
+        {
+          "name": "10. Disburse loan (pay borrower)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.status) { pm.expect(j.status).to.eql('ACTIVE'); }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/disburse",
+            "description": "Sends proceeds to the borrower: **FUNDED** → **ACTIVE** (`disbursed_at`). Requires **9. Fund** first."
+          },
+          "response": []
+        },
+        {
+          "name": "11. Get loan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}",
+            "description": "After **Disburse**, expect **`status`: ACTIVE** and **`balance_cents`** for repayments."
+          },
+          "response": []
+        },
+        {
+          "name": "12. Get payment schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/payment-schedule",
+            "description": "Illustrative amortization-style schedule from the mock (demo only)."
+          },
+          "response": []
+        },
+        {
+          "name": "13. Record payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount_cents\": {{payment_amount_cents}},\n  \"method\": \"{{payment_method}}\"\n}"
+            },
+            "url": "{{api_root}}/loans/{{loan_id}}/payments",
+            "description": "Loan must be **ACTIVE** (run **10. Disburse** first). **`method`**: **ACH** (installments / NACHA-style) or **WIRE** (domestic wire / payoff-style). Set `payment_amount_cents`; use **Get loan** → `balance_cents` for a full payoff."
+          },
+          "response": []
+        },
+        {
+          "name": "14. Payoff / close loan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/payoff",
+            "description": "Closes the loan on the mock (**CLOSED**). Run after the loan is paid down or for demo teardown."
+          },
+          "response": []
+        },
+        {
+          "name": "15. Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204', function () {",
+                  "    pm.expect(pm.response.code).to.equal(204);",
+                  "});",
+                  "if (pm.environment && pm.environment.id) pm.environment.set('access_token', '');",
+                  "pm.collectionVariables.set('access_token', '');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/auth/logout",
+            "description": "Invalidates **access_token** — you must **Login** again for further protected calls. Clears **access_token** in the active environment (if any) and collection."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tests — stipulations (single & multiple)",
+      "description": "Automated checks for **CONDITIONAL** underwriting. Run **Tests — A** *or* **Tests — B** in **Collection Runner** (not together). Requires mock: **`npm run start:mock`**. Restart the mock between A and B if the same server session causes conflicts (fresh DB each process — in-memory reset on restart only if you restart).",
+      "item": [
+        {
+          "name": "Tests — A: Single stipulation (CONDITIONAL)",
+          "description": "**Collection Runner:** select **only this folder**. Fresh **`application_id`** each run. Chain ends at **FUNDED** (no disburse). Assertions: one stip after underwriting, **fulfill-all** returns one id, fund succeeds.",
+          "item": [
+            {
+              "name": "Login",
+              "auth": {
+                "type": "noauth"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.access_token) {",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('access_token', j.access_token);",
+                      "        else pm.collectionVariables.set('access_token', j.access_token);",
+                      "    }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{demo_login_email}}\",\n  \"password\": \"{{demo_login_password}}\"\n}"
+                },
+                "url": "{{api_root}}/auth/login",
+                "description": "Public — no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
+              },
+              "response": []
+            },
+            {
+              "name": "Customer KYC (onboarding)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.status) { pm.expect(j.status).to.eql('VERIFIED'); }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"full_name\": \"Alex Rivera\",\n  \"email\": \"alex.rivera@example.com\",\n  \"date_of_birth\": \"1992-06-15\",\n  \"national_id_last4\": \"4567\"\n}"
+                },
+                "url": "{{api_root}}/onboarding/kyc",
+                "description": "Requires **Login** first. Mandatory before **Create loan application** (otherwise **403**)."
+              },
+              "response": []
+            },
+            {
+              "name": "1. Create loan application",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.id) {",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('application_id', j.id);",
+                      "        else pm.collectionVariables.set('application_id', j.id);",
+                      "    }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_code\": \"TERM_36\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 12000000\n  }\n}"
+                },
+                "url": "{{api_root}}/loan-applications",
+                "description": "Creates a DRAFT application. **`term_months`** must be one of **6, 12, 18, 24, 32, 36** (product catalogue). Saves `application_id`."
+              },
+              "response": []
+            },
+            {
+              "name": "2. Submit application",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
+                "description": "Moves application to SUBMITTED for credit / ops."
+              },
+              "response": []
+            },
+            {
+              "name": "3. Ops — accept for processing",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loan-applications/{{application_id}}/processing/accept",
+                "description": "**SUBMITTED** → **IN_PROCESSING**."
+              },
+              "response": []
+            },
+            {
+              "name": "4. Disclosures — acknowledge",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"package_version\": \"LE-2026-Q2\"\n}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/disclosures/acknowledge",
+                "description": "Required before credit in this mock."
+              },
+              "response": []
+            },
+            {
+              "name": "5. Run credit check",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    pm.expect(j.status).to.eql('CREDIT_COMPLETED');",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"force_outcome\": \"PASS\"\n}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/credit-check",
+                "description": "Sandbox credit step. Use `force_outcome`: PASS or FAIL, or `simulated_credit_score` (below 620 declines without force)."
+              },
+              "response": []
+            },
+            {
+              "name": "6. Start underwriting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/start",
+                "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING**."
+              },
+              "response": []
+            },
+            {
+              "name": "7. Underwriting CONDITIONAL (1 stipulation)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.loan && j.loan.id) {",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('loan_id', j.loan.id);",
+                      "        else pm.collectionVariables.set('loan_id', j.loan.id);",
+                      "    }",
+                      "    if (j && j.application && Array.isArray(j.application.stipulations)) {",
+                      "        var sidJson = JSON.stringify(j.application.stipulations.map(function (s) { return s.id; }));",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('stipulation_ids_json', sidJson);",
+                      "        else pm.collectionVariables.set('stipulation_ids_json', sidJson);",
+                      "        if (j.application.stipulations.length === 0) {",
+                      "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                      "            else pm.collectionVariables.set('stipulation_id', '');",
+                      "        } else {",
+                      "            var next = j.application.stipulations.find(function (s) { return !s.fulfilled; });",
+                      "            if (next && next.id) {",
+                      "                if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', next.id);",
+                      "                else pm.collectionVariables.set('stipulation_id', next.id);",
+                      "            }",
+                      "        }",
+                      "    }",
+                      "} catch (e) {}",
+                      "pm.test('CONDITIONAL has 1 stipulation', function () {",
+                      "    var j = pm.response.json();",
+                      "    pm.expect(j.application.stipulations.length).to.eql(1);",
+                      "    pm.expect(j.application.status).to.eql('APPROVED_CONDITIONAL');",
+                      "    pm.expect(j.loan.status).to.eql('PENDING_STIPS');",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"outcome\": \"CONDITIONAL\",\n  \"stipulations\": [\n    { \"description\": \"Proof of income (W-2)\" }\n  ]\n}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/decision",
+                "description": "**Tests — A:** One stipulation; response must be **APPROVED_CONDITIONAL** / **PENDING_STIPS**; Tests save **loan_id** and **stipulation_ids_json**."
+              },
+              "response": []
+            },
+            {
+              "name": "Fulfill all stipulations (one request)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "pm.test('fulfilled_stipulation_ids has 1 id(s)', function () {",
+                      "    var j = pm.response.json();",
+                      "    pm.expect(j.fulfilled_stipulation_ids.length).to.eql(1);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.loan && j.loan.status === 'PENDING_FUNDING') {",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                      "        else pm.collectionVariables.set('stipulation_id', '');",
+                      "    }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/fulfill-all",
+                "description": "Clears **every** open stipulation; response includes **`fulfilled_stipulation_ids`**. Uses only **`application_id`** (from env). **409** if you used straight **APPROVE** or already cleared stips."
+              },
+              "response": []
+            },
+            {
+              "name": "8. Funding — authorize",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.status) { pm.expect(j.status).to.eql('CLEARED_FOR_BOOKING'); }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loans/{{loan_id}}/funding/authorize",
+                "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** before **fund**."
+              },
+              "response": []
+            },
+            {
+              "name": "9. Fund loan (after stips cleared)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "pm.test('Loan status is FUNDED', function () {",
+                      "    pm.expect(pm.response.json().status).to.eql('FUNDED');",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.status) { pm.expect(j.status).to.eql('FUNDED'); }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loans/{{loan_id}}/fund",
+                "description": "**CLEARED_FOR_BOOKING** → **FUNDED** — requires **8. Funding — authorize** first."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Tests — B: Multiple stipulations (CONDITIONAL ×3)",
+          "description": "**Collection Runner:** select **only this folder**. Same as **A** but three stips; **fulfill-all** clears all in one call; asserts three **`fulfilled_stipulation_ids`**.",
+          "item": [
+            {
+              "name": "Login",
+              "auth": {
+                "type": "noauth"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.access_token) {",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('access_token', j.access_token);",
+                      "        else pm.collectionVariables.set('access_token', j.access_token);",
+                      "    }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{demo_login_email}}\",\n  \"password\": \"{{demo_login_password}}\"\n}"
+                },
+                "url": "{{api_root}}/auth/login",
+                "description": "Public — no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
+              },
+              "response": []
+            },
+            {
+              "name": "Customer KYC (onboarding)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.status) { pm.expect(j.status).to.eql('VERIFIED'); }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"full_name\": \"Alex Rivera\",\n  \"email\": \"alex.rivera@example.com\",\n  \"date_of_birth\": \"1992-06-15\",\n  \"national_id_last4\": \"4567\"\n}"
+                },
+                "url": "{{api_root}}/onboarding/kyc",
+                "description": "Requires **Login** first. Mandatory before **Create loan application** (otherwise **403**)."
+              },
+              "response": []
+            },
+            {
+              "name": "1. Create loan application",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.id) {",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('application_id', j.id);",
+                      "        else pm.collectionVariables.set('application_id', j.id);",
+                      "    }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_code\": \"TERM_36\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 12000000\n  }\n}"
+                },
+                "url": "{{api_root}}/loan-applications",
+                "description": "Creates a DRAFT application. **`term_months`** must be one of **6, 12, 18, 24, 32, 36** (product catalogue). Saves `application_id`."
+              },
+              "response": []
+            },
+            {
+              "name": "2. Submit application",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
+                "description": "Moves application to SUBMITTED for credit / ops."
+              },
+              "response": []
+            },
+            {
+              "name": "3. Ops — accept for processing",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loan-applications/{{application_id}}/processing/accept",
+                "description": "**SUBMITTED** → **IN_PROCESSING**."
+              },
+              "response": []
+            },
+            {
+              "name": "4. Disclosures — acknowledge",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"package_version\": \"LE-2026-Q2\"\n}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/disclosures/acknowledge",
+                "description": "Required before credit in this mock."
+              },
+              "response": []
+            },
+            {
+              "name": "5. Run credit check",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    pm.expect(j.status).to.eql('CREDIT_COMPLETED');",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"force_outcome\": \"PASS\"\n}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/credit-check",
+                "description": "Sandbox credit step. Use `force_outcome`: PASS or FAIL, or `simulated_credit_score` (below 620 declines without force)."
+              },
+              "response": []
+            },
+            {
+              "name": "6. Start underwriting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/start",
+                "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING**."
+              },
+              "response": []
+            },
+            {
+              "name": "7. Underwriting CONDITIONAL (3 stipulations)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.loan && j.loan.id) {",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('loan_id', j.loan.id);",
+                      "        else pm.collectionVariables.set('loan_id', j.loan.id);",
+                      "    }",
+                      "    if (j && j.application && Array.isArray(j.application.stipulations)) {",
+                      "        var sidJson = JSON.stringify(j.application.stipulations.map(function (s) { return s.id; }));",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('stipulation_ids_json', sidJson);",
+                      "        else pm.collectionVariables.set('stipulation_ids_json', sidJson);",
+                      "        if (j.application.stipulations.length === 0) {",
+                      "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                      "            else pm.collectionVariables.set('stipulation_id', '');",
+                      "        } else {",
+                      "            var next = j.application.stipulations.find(function (s) { return !s.fulfilled; });",
+                      "            if (next && next.id) {",
+                      "                if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', next.id);",
+                      "                else pm.collectionVariables.set('stipulation_id', next.id);",
+                      "            }",
+                      "        }",
+                      "    }",
+                      "} catch (e) {}",
+                      "pm.test('CONDITIONAL has 3 stipulations', function () {",
+                      "    var j = pm.response.json();",
+                      "    pm.expect(j.application.stipulations.length).to.eql(3);",
+                      "    pm.expect(j.application.status).to.eql('APPROVED_CONDITIONAL');",
+                      "    pm.expect(j.loan.status).to.eql('PENDING_STIPS');",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"outcome\": \"CONDITIONAL\",\n  \"stipulations\": [\n    { \"description\": \"Proof of income (W-2)\" },\n    { \"description\": \"Signed disclosures\" },\n    { \"description\": \"Insurance binder\" }\n  ]\n}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/decision",
+                "description": "**Tests — B:** Three stips; **fulfill-all** must return three **`fulfilled_stipulation_ids`**; Tests save **loan_id** and **stipulation_ids_json**."
+              },
+              "response": []
+            },
+            {
+              "name": "Fulfill all stipulations (one request)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "pm.test('fulfilled_stipulation_ids has 3 id(s)', function () {",
+                      "    var j = pm.response.json();",
+                      "    pm.expect(j.fulfilled_stipulation_ids.length).to.eql(3);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.loan && j.loan.status === 'PENDING_FUNDING') {",
+                      "        if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                      "        else pm.collectionVariables.set('stipulation_id', '');",
+                      "    }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/fulfill-all",
+                "description": "Clears **every** open stipulation; response includes **`fulfilled_stipulation_ids`**. Uses only **`application_id`** (from env). **409** if you used straight **APPROVE** or already cleared stips."
+              },
+              "response": []
+            },
+            {
+              "name": "8. Funding — authorize",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.status) { pm.expect(j.status).to.eql('CLEARED_FOR_BOOKING'); }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loans/{{loan_id}}/funding/authorize",
+                "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** before **fund**."
+              },
+              "response": []
+            },
+            {
+              "name": "9. Fund loan (after stips cleared)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is successful', function () {",
+                      "    pm.expect(pm.response.code).to.equal(200);",
+                      "});",
+                      "pm.test('Loan status is FUNDED', function () {",
+                      "    pm.expect(pm.response.json().status).to.eql('FUNDED');",
+                      "});",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    if (j && j.status) { pm.expect(j.status).to.eql('FUNDED'); }",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{api_root}}/loans/{{loan_id}}/fund",
+                "description": "**CLEARED_FOR_BOOKING** → **FUNDED** — requires **8. Funding — authorize** first."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Conditional — fulfill stipulations (optional)",
+      "description": "After **step 7** (underwriting) with **CONDITIONAL**, Tests set **`stipulation_ids_json`** and **`stipulation_id`**. **Preferred:** run **Fulfill all stipulations** once. **Alternative:** per-stip fulfills. Then **8. Funding — authorize** and **9. Fund**. With **straight APPROVE**, skip this folder.",
+      "item": [
+        {
+          "name": "Fulfill all stipulations (one request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.loan && j.loan.status === 'PENDING_FUNDING') {",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                  "        else pm.collectionVariables.set('stipulation_id', '');",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/fulfill-all",
+            "description": "Clears **every** open stipulation; response includes **`fulfilled_stipulation_ids`**. Uses only **`application_id`** (from env). **409** if you used straight **APPROVE** or already cleared stips."
+          },
+          "response": []
+        },
+        {
+          "name": "Fulfill stipulation (1 of 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.application && Array.isArray(j.application.stipulations)) {",
+                  "        var nx = j.application.stipulations.find(function (s) { return !s.fulfilled; });",
+                  "        if (nx && nx.id) {",
+                  "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', nx.id);",
+                  "            else pm.collectionVariables.set('stipulation_id', nx.id);",
+                  "        } else {",
+                  "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                  "            else pm.collectionVariables.set('stipulation_id', '');",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/{{stipulation_id}}/fulfill",
+            "description": "Uses **`stipulation_id`** from underwriting or from the previous fulfill response."
+          },
+          "response": []
+        },
+        {
+          "name": "Fulfill stipulation (2 of 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.application && Array.isArray(j.application.stipulations)) {",
+                  "        var nx = j.application.stipulations.find(function (s) { return !s.fulfilled; });",
+                  "        if (nx && nx.id) {",
+                  "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', nx.id);",
+                  "            else pm.collectionVariables.set('stipulation_id', nx.id);",
+                  "        } else {",
+                  "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                  "            else pm.collectionVariables.set('stipulation_id', '');",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/{{stipulation_id}}/fulfill",
+            "description": "Skip in Runner if only one stipulation."
+          },
+          "response": []
+        },
+        {
+          "name": "Fulfill stipulation (3 of 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.application && Array.isArray(j.application.stipulations)) {",
+                  "        var nx = j.application.stipulations.find(function (s) { return !s.fulfilled; });",
+                  "        if (nx && nx.id) {",
+                  "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', nx.id);",
+                  "            else pm.collectionVariables.set('stipulation_id', nx.id);",
+                  "        } else {",
+                  "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                  "            else pm.collectionVariables.set('stipulation_id', '');",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/{{stipulation_id}}/fulfill",
+            "description": "Skip in Runner if you have fewer than three stips. After the last fulfill, **`loan.status`** should be **PENDING_FUNDING**."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Edge cases (manual QA)",
+      "description": "Run these **after** you understand the happy path. Expect **4xx** responses — that is correct for invalid actions.\n\n**Auth:** run **Login** (and **KYC** if the scenario touches loan create) before edge requests that need a token — or duplicate requests with **Login** + **KYC** in the same folder.\n\n**Setup tips:** EC3 needs **`loan_id`** from a full path through **10. Disburse** (loan **ACTIVE**). EC5: through **9. Fund**, skip **10. Disburse** (loan **FUNDED**). EC6: through **7** (underwriting) only — no **funding/authorize** or **fund** (loan **PENDING_FUNDING**). Restart the mock between setups if needed.",
+      "item": [
+        {
+          "name": "EC1. Submit bogus application id (expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 404', function () { pm.expect(pm.response.code).to.equal(404); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/00000000-0000-0000-0000-000000000001/submit"
+          },
+          "response": []
+        },
+        {
+          "name": "EC2. Create application — invalid principal (expect 422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 422', function () { pm.expect(pm.response.code).to.equal(422); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_code\": \"TERM_36\",\n  \"principal_cents\": 0,\n  \"term_months\": 12,\n  \"borrower\": {\n    \"full_name\": \"Test\",\n    \"email\": \"test@example.com\",\n    \"annual_income_cents\": 100\n  }\n}"
+            },
+            "url": "{{api_root}}/loan-applications"
+          },
+          "response": []
+        },
+        {
+          "name": "EC3. Payment larger than balance (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400', function () { pm.expect(pm.response.code).to.equal(400); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount_cents\": 999999999999,\n  \"method\": \"ACH\"\n}"
+            },
+            "url": "{{api_root}}/loans/{{loan_id}}/payments",
+            "description": "Requires **`loan_id`** from the full happy path **1 → 6** (including **Disburse**) so the loan is **ACTIVE**. Body overpays intentionally."
+          },
+          "response": []
+        },
+        {
+          "name": "EC4. Get non-existent loan (expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 404', function () { pm.expect(pm.response.code).to.equal(404); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/loans/00000000-0000-0000-0000-000000000002"
+          },
+          "response": []
+        },
+        {
+          "name": "EC5. Pay before disburse — loan FUNDED only (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409', function () { pm.expect(pm.response.code).to.equal(409); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount_cents\": 100,\n  \"method\": \"ACH\"\n}"
+            },
+            "url": "{{api_root}}/loans/{{loan_id}}/payments",
+            "description": "**Setup:** Through **9. Fund**, **do not** run **10. Disburse**. Loan is **FUNDED**; payments require **ACTIVE** — mock returns **409**."
+          },
+          "response": []
+        },
+        {
+          "name": "EC6. Disburse before fund (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409', function () { pm.expect(pm.response.code).to.equal(409); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/disburse",
+            "description": "**Setup:** Through **7. Underwriting decision** only (**no** **8. Funding — authorize** / **9. Fund**). Loan is **PENDING_FUNDING**; **disburse** requires **FUNDED** — mock returns **409**."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

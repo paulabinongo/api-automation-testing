@@ -1,0 +1,4 @@
+node_modules
+coverage
+postman
+package-lock.json
