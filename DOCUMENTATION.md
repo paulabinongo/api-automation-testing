@@ -33,7 +33,7 @@ npm install
 npm test
 ```
 
-Runs **7** checks with **MSW**. **27** “integration” checks are **skipped** unless `LOAN_API_BASE_URL` is **`http://127.0.0.1:<port>/v1`** (any port; default mock **`8765`**) — **34** tests total — see `javascript/config.js` → `isLocalMockConfigured`.
+Runs **MSW-backed** tests in memory; **integration** cases are **skipped** unless `LOAN_API_BASE_URL` is **`http://127.0.0.1:<port>/v1`** (any port; default mock **`8765`**) — see `javascript/config.js` → `isLocalMockConfigured`. Total test count grows over time (run **`npm test`** for the current tally).
 
 **Watch mode** (re-run when files change):
 
@@ -58,7 +58,7 @@ npm test
 
 **Windows PowerShell:** `$env:LOAN_API_BASE_URL="http://127.0.0.1:8765/v1"; npm test`
 
-You should see **34** tests pass (full **login → KYC → loan** behavior on the mock).
+You should see **all** tests pass (full **login → KYC → loan** behavior on the mock, plus catalogue/computation unit tests).
 
 ### 2.3 Vitest UI (browser dashboard)
 
@@ -106,11 +106,11 @@ Default: **http://127.0.0.1:8765** (`PORT` and `HOST` env vars optional).
 
 ### 3.2 Try in the browser
 
-| What                                | URL                                                                                                                                       |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Swagger UI** (“Try it out”)       | [http://127.0.0.1:8765/docs](http://127.0.0.1:8765/docs) — run **POST /auth/login** first, then **Authorize** with the **`access_token`** |
-| **OpenAPI JSON** (machine-readable) | [http://127.0.0.1:8765/openapi.json](http://127.0.0.1:8765/openapi.json)                                                                  |
-| **Root**                            | Redirects to `/docs`                                                                                                                      |
+| What                                | URL                                                                                                                                                                                                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Swagger UI** (“Try it out”)       | [http://127.0.0.1:8765/docs](http://127.0.0.1:8765/docs) — **Reference** tag has **health**, **loan-products**, **loan-computation-preview** (no auth); then **POST /auth/login** + **Authorize** for the rest |
+| **OpenAPI JSON** (machine-readable) | [http://127.0.0.1:8765/openapi.json](http://127.0.0.1:8765/openapi.json) — same contract Swagger renders (`info.version` tracks releases)                                                                      |
+| **Root**                            | Redirects to `/docs`                                                                                                                                                                                           |
 
 **Postman:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** (select that environment); full steps are in [§7 Postman](#7-postman).
 
@@ -169,7 +169,7 @@ node -e "JSON.parse(require('fs').readFileSync('javascript/mock-server/openapi.j
 
 ### 5.0 Step-by-step happy path
 
-Follow this order in **Swagger**, **Postman**, or your app. **Almost every** `/v1` call requires a **`Bearer` token** from **login**; **create application** also requires completed **KYC**.
+Follow this order in **Swagger**, **Postman**, or your app. **Almost every** `/v1` call requires a **`Bearer` token** from **login**; **create application** also requires completed **KYC**. **Before login**, you can call **`GET /v1/health`**, **`GET /v1/reference/loan-products`** (PHP **Personal Loan** catalogue), and **`GET /v1/reference/loan-computation-preview`** (add-on interest, fees, net proceeds, EIR) — all **public** (no Bearer).
 
 | #                             | What happens (plain English)                             | API call                                                                                                                   | Body / notes                                                                                                            | You need                                                                 | You get / save                                                                   |
 | ----------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
@@ -193,7 +193,7 @@ Follow this order in **Swagger**, **Postman**, or your app. **Almost every** `/v
 
 **Remember:** **`loan_id` does not exist until step 7** (underwriting decision) creates the loan. Until then only **`application_id`** matters. Helpers in **`javascript/test/flowHelpers.js`** (`throughCredit`, `throughUnderwritingDecision`, `activeLoan`) chain these steps for **Vitest**; **`LoanApiClient`** exposes each **POST** separately for Postman and app code.
 
-**HTTP:** Every **`/v1/...`** call except **`POST /auth/login`** must send the header **`Authorization: Bearer`** followed by the **`access_token`** from login (Postman and **`LoanApiClient.setAccessToken`** handle this).
+**HTTP:** Every **`/v1/...`** call except **`POST /auth/login`**, **`GET /health`**, **`GET /reference/loan-products`**, and **`GET /reference/loan-computation-preview`** must send **`Authorization: Bearer`** with the **`access_token`** from login (Postman and **`LoanApiClient.setAccessToken`** handle this).
 
 **Who am I?** Optional: `GET /v1/auth/me` or `GET /v1/onboarding/status` with Bearer — shows user + whether KYC is complete.
 
@@ -215,26 +215,30 @@ Use the same list whenever you change URLs, fields, or rules so **docs**, **test
 
 ### 5.1 Route cheat sheet (one line per step)
 
-| Step | Meaning                 | Example API (`/v1/...`)                                                     |
-| ---- | ----------------------- | --------------------------------------------------------------------------- |
-| —    | Login                   | `POST /auth/login` → **access_token**                                       |
-| —    | KYC                     | `POST /onboarding/kyc` → **VERIFIED**                                       |
-| —    | Optional profile        | `GET /auth/me`, `GET /onboarding/status`                                    |
-| 1    | Application draft       | `POST /loan-applications` → **DRAFT**                                       |
-| 2    | Submit                  | `POST .../submit` → **SUBMITTED**                                           |
-| 3    | Ops accept              | `POST .../processing/accept` → **IN_PROCESSING**                            |
-| 4    | Disclosures             | `POST .../disclosures/acknowledge`                                          |
-| 5    | Credit                  | `POST .../credit-check` → **CREDIT_COMPLETED** or **DECLINED**              |
-| 6    | Start underwriting      | `POST .../underwriting/start` → **IN_UNDERWRITING**                         |
-| 7    | Underwriting decision   | `POST .../underwriting/decision` → may create **loan**                      |
-| 8    | Clear stips (if any)    | `POST .../stipulations/fulfill-all` or `POST .../stipulations/{id}/fulfill` |
-| 9    | Funding authorize       | `POST /loans/{id}/funding/authorize` → **CLEARED_FOR_BOOKING**              |
-| 10   | Fund (book)             | `POST /loans/{id}/fund` → **FUNDED**                                        |
-| 11   | Disburse (pay borrower) | `POST /loans/{id}/disburse` → **ACTIVE**                                    |
-| 12   | Schedule preview        | `GET /loans/{id}/payment-schedule`                                          |
-| 13   | Payment                 | `POST /loans/{id}/payments`                                                 |
-| 14   | Payoff / close          | `POST /loans/{id}/payoff` → **CLOSED**                                      |
-| —    | Logout                  | `POST /auth/logout` → **204**                                               |
+| Step | Meaning                  | Example API (`/v1/...`)                                                                                                                                                   |
+| ---- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| —    | Health (liveness)        | `GET /health` — **public**                                                                                                                                                |
+| —    | Product catalogue        | `GET /reference/loan-products` — **public** (**PHP Personal Loan** JSON)                                                                                                  |
+| —    | Payment / EIR preview    | `GET /reference/loan-computation-preview?principal_cents=&term_months=` — **public** (see **`javascript/personalLoanComputation.js`**)                                    |
+| —    | Login                    | `POST /auth/login` → **access_token**                                                                                                                                     |
+| —    | KYC                      | `POST /onboarding/kyc` → **VERIFIED**                                                                                                                                     |
+| —    | Optional profile         | `GET /auth/me`, `GET /onboarding/status`                                                                                                                                  |
+| 1    | Application draft        | `POST /loan-applications` → **DRAFT**                                                                                                                                     |
+| 1b   | Preview from application | `GET /loan-applications/{applicationId}/computation-preview` — **Bearer**; uses **principal_cents** / **term_months** from that application (same math as public preview) |
+| 2    | Submit                   | `POST .../submit` → **SUBMITTED**                                                                                                                                         |
+| 3    | Ops accept               | `POST .../processing/accept` → **IN_PROCESSING**                                                                                                                          |
+| 4    | Disclosures              | `POST .../disclosures/acknowledge`                                                                                                                                        |
+| 5    | Credit                   | `POST .../credit-check` → **CREDIT_COMPLETED** or **DECLINED**                                                                                                            |
+| 6    | Start underwriting       | `POST .../underwriting/start` → **IN_UNDERWRITING**                                                                                                                       |
+| 7    | Underwriting decision    | `POST .../underwriting/decision` → may create **loan**                                                                                                                    |
+| 8    | Clear stips (if any)     | `POST .../stipulations/fulfill-all` or `POST .../stipulations/{id}/fulfill`                                                                                               |
+| 9    | Funding authorize        | `POST /loans/{id}/funding/authorize` → **CLEARED_FOR_BOOKING**                                                                                                            |
+| 10   | Fund (book)              | `POST /loans/{id}/fund` → **FUNDED**                                                                                                                                      |
+| 11   | Disburse (pay borrower)  | `POST /loans/{id}/disburse` → **ACTIVE**                                                                                                                                  |
+| 12   | Schedule preview         | `GET /loans/{id}/payment-schedule`                                                                                                                                        |
+| 13   | Payment                  | `POST /loans/{id}/payments`                                                                                                                                               |
+| 14   | Payoff / close           | `POST /loans/{id}/payoff` → **CLOSED**                                                                                                                                    |
+| —    | Logout                   | `POST /auth/logout` → **204**                                                                                                                                             |
 
 **Application statuses:** `DRAFT` → `SUBMITTED` → `IN_PROCESSING` → (disclosures) → `CREDIT_COMPLETED` → `IN_UNDERWRITING` → `APPROVED_*` / `DECLINED` (and conditional states in between).
 
@@ -242,14 +246,19 @@ Use the same list whenever you change URLs, fields, or rules so **docs**, **test
 
 ### 5.2 Product catalogue (terms) & payment rails (mock LOVs)
 
-Aligned with typical **core / LOS** constraints in this sandbox:
+The mock ships a single origination product: **`PERSONAL_LOAN`** (**PHP** only). Catalogue copy, rates, fees, and eligibility text live in **`javascript/loanProductCatalog.js`**. **`GET /v1/reference/loan-products`** returns that JSON for UIs and tests.
 
-| Field                                     | Allowed values            | Notes                                                                                                                                                  |
-| ----------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`term_months`** (on create application) | **6, 12, 18, 24, 32, 36** | Whole months only — anything else returns **422**.                                                                                                     |
-| **`method`** (on record payment)          | **ACH**, **WIRE**         | **ACH** — NACHA-style retail ACH; **WIRE** — domestic wire (e.g. payoff / same-day). Default **ACH** if omitted. Response echoes **`payment_method`**. |
+| Field                                      | Allowed values / rules  | Notes                                                                                              |
+| ------------------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------- |
+| **`product_code`** (on create application) | **`PERSONAL_LOAN`**     | Unknown codes → **422**.                                                                           |
+| **`principal_cents`**                      | **PHP centavos**        | **Min** PHP **20,000** (`2_000_000` centavos), **max** PHP **2,000,000** (`200_000_000` centavos). |
+| **`term_months`**                          | **12, 18, 24, 36**      | Must match a catalogue tenor row; anything else → **422**.                                         |
+| **`borrower.annual_income_cents`**         | **PHP centavos / year** | Must be **≥ PHP 250,000**/year (`25_000_000` centavos).                                            |
+| **`method`** (on record payment)           | **ACH**, **WIRE**       | **ACH** — NACHA-style retail ACH; **WIRE** — domestic wire. Default **ACH** if omitted.            |
 
-Constants live in **`javascript/loanConstants.js`** (server + docs should stay in sync).
+**Payment preview (calculator):** **`GET /v1/reference/loan-computation-preview`** with query **`principal_cents`** and **`term_months`** returns total interest (add-on model), monthly amortization (nearest centavo), disbursement + DST, net proceeds, and effective annual **EIR** (%). **After** the borrower creates an application, **`GET /v1/loan-applications/{applicationId}/computation-preview`** (Bearer required) returns the **same** payload using amounts from that application — response includes **`application_id`**. Implementation is in **`javascript/personalLoanComputation.js`**. **`LoanApiClient.getLoanComputationPreview({ … })`** and **`getLoanComputationPreviewForApplication(id)`** wrap the two routes.
+
+Term union for tooling is still re-exported from **`javascript/loanConstants.js`** as **`ALLOWED_LOAN_TERM_MONTHS`** (derived from the catalogue).
 
 #### Stipulation `description` text — full sandbox list (copy-paste)
 
@@ -329,7 +338,9 @@ Catalog columns reference **`javascript/test/loanEdgeCases.test.js`** and Postma
 
 | Scenario                                                     | Typical code | Automated |
 | ------------------------------------------------------------ | ------------ | --------- |
-| **`term_months`** not in **6, 12, 18, 24, 32, 36**           | `422`        | Yes       |
+| **`product_code`** not **`PERSONAL_LOAN`** / unknown code    | `422`        | Yes       |
+| **`term_months`** not in **12, 18, 24, 36**                  | `422`        | Yes       |
+| Principal / income outside catalogue min/max                 | `422`        | Yes       |
 | Unsupported **`method`** on payment (not **ACH** / **WIRE**) | `422`        | Yes       |
 
 #### H. Not in this sandbox
@@ -408,8 +419,10 @@ Use this list when communicating scope to **risk**, **ops**, or **compliance**: 
 | `.github/workflows/ci.yml`                                      | **GitHub Actions** merge gate                                                                                  |
 | `javascript/loanApiClient.js`                                   | HTTP client used in tests                                                                                      |
 | `javascript/config.js`                                          | Env: `LOAN_API_BASE_URL`, `LOAN_API_KEY`                                                                       |
-| `javascript/loanConstants.js`                                   | Term & payment **LOVs**; **`STIPULATION_DESCRIPTION_EXAMPLES`** (copy-paste stip text)                         |
-| `javascript/sampleData.js`                                      | Example payloads                                                                                               |
+| `javascript/loanConstants.js`                                   | Term union + payment **LOVs**; **`STIPULATION_DESCRIPTION_EXAMPLES`** (copy-paste stip text)                   |
+| `javascript/loanProductCatalog.js`                              | **PHP Personal Loan** catalogue + create-application validation rules                                          |
+| `javascript/personalLoanComputation.js`                         | Add-on interest, fees, net proceeds, **EIR** — used by **`GET /reference/loan-computation-preview`**           |
+| `javascript/sampleData.js`                                      | Example payloads (**`buildSampleLoanApplication`** = Personal Loan)                                            |
 | `javascript/mock-server/server.js`                              | Practice API + `/docs`                                                                                         |
 | `javascript/mock-server/openapi.json`                           | OpenAPI / Swagger source                                                                                       |
 | `javascript/test/*.test.js`                                     | Vitest + MSW                                                                                                   |
@@ -428,10 +441,10 @@ The repo ships an **import-ready flow**: the collection **`postman/collection/Lo
 
 ### 7.1 Files in `postman/`
 
-| File                                                    | Purpose                                                                                                                               |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `collection/Loan_Lifecycle_API.postman_collection.json` | Requests, **Flow — Happy path**, **Tests — stipulations**, **Conditional**, **Edge cases**                                            |
-| `environments/Local_Mock.postman_environment.json`      | Local URLs, demo login fields, placeholders for `access_token`, `application_id`, `loan_id`, `stipulation_id`, `stipulation_ids_json` |
+| File                                                    | Purpose                                                                                                                                                    |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `collection/Loan_Lifecycle_API.postman_collection.json` | **System & reference** (health, catalogue, **loan computation preview**), **Flow — Happy path**, **Tests — stipulations**, **Conditional**, **Edge cases** |
+| `environments/Local_Mock.postman_environment.json`      | Local URLs, demo login fields, placeholders for `access_token`, `application_id`, `loan_id`, `stipulation_id`, `stipulation_ids_json`                      |
 
 Paths are relative to the repo root (`postman/` is the parent of `collection/` and `environments/`).
 

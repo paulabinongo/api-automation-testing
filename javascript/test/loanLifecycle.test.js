@@ -11,6 +11,7 @@ import { LoanApiClient } from '../loanApiClient.js'
 import { isLocalMockConfigured } from '../config.js'
 import {
   buildConditionalUnderwritingExample,
+  buildPersonalLoanSampleApplication,
   buildSampleLoanApplication,
   buildPaymentBody,
   buildUnderwritingBody,
@@ -120,11 +121,11 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
         HttpResponse.json({ loan_id: loanId, term_months: 36, installments: [] }),
       ),
       http.get(`${MOCK_BASE}/loans/${loanId}`, () =>
-        HttpResponse.json({ id: loanId, status: 'ACTIVE', balance_cents: 2_500_000 }),
+        HttpResponse.json({ id: loanId, status: 'ACTIVE', balance_cents: principal }),
       ),
       http.post(`${MOCK_BASE}/loans/${loanId}/payments`, () =>
         HttpResponse.json({
-          loan: { id: loanId, status: 'ACTIVE', balance_cents: 1_500_000 },
+          loan: { id: loanId, status: 'ACTIVE', balance_cents: principal - 1_000_000 },
           payment_amount_cents: 1_000_000,
           payment_method: 'ACH',
         }),
@@ -180,7 +181,7 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
     expect(loan.status).toBe('ACTIVE')
 
     const pay = await client.recordPayment(loanId, buildPaymentBody(1_000_000))
-    expect(pay.loan.balance_cents).toBe(1_500_000)
+    expect(pay.loan.balance_cents).toBe(49_000_000)
 
     const closed = await client.payoffLoan(loanId)
     expect(closed.status).toBe('CLOSED')
@@ -208,8 +209,42 @@ describe.skipIf(!isLocalMockConfigured())(
       expect(health.status).toBe('UP')
       expect(health.api_revision).toBeTruthy()
       const ref = await client.getLoanProductReference()
-      expect(ref.currency).toBe('USD')
-      expect(ref.products?.[0]?.allowed_term_months?.length).toBeGreaterThan(0)
+      expect(ref.products).toHaveLength(1)
+      const personal = ref.products[0]
+      expect(personal?.product_code).toBe('PERSONAL_LOAN')
+      expect(personal?.currency).toBe('PHP')
+      expect(personal?.loan_type).toBe('personal')
+      expect(personal?.name).toBe('Personal Loan')
+      expect(personal?.term_options?.length).toBe(4)
+    })
+
+    it('loan computation preview matches add-on model for PHP 20k × 12', async () => {
+      const client = new LoanApiClient()
+      const out = await client.getLoanComputationPreview({
+        principal_cents: 2_000_000,
+        term_months: 12,
+      })
+      expect(out.total_interest_cents).toBe(420_000)
+      expect(out.monthly_amortization_cents).toBe(201_667)
+      expect(out.net_loan_proceeds_cents).toBe(1_850_000)
+    })
+
+    it('loan computation preview from application matches borrower principal and term', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const sample = buildPersonalLoanSampleApplication(24)
+      const created = await client.createApplication(sample)
+      const fromApp = await client.getLoanComputationPreviewForApplication(created.id)
+      const fromRef = await client.getLoanComputationPreview({
+        principal_cents: created.principal_cents,
+        term_months: created.term_months,
+      })
+      expect(fromApp.application_id).toBe(created.id)
+      expect(fromApp.monthly_amortization_cents).toBe(fromRef.monthly_amortization_cents)
+      expect(fromApp.net_loan_proceeds_cents).toBe(fromRef.net_loan_proceeds_cents)
+      expect(fromApp.effective_interest_rate_annual_percent).toBe(
+        fromRef.effective_interest_rate_annual_percent,
+      )
     })
 
     it('replays createApplication when Idempotency-Key and body match (bank retry semantics)', async () => {
@@ -231,6 +266,33 @@ describe.skipIf(!isLocalMockConfigured())(
       const b = { ...a, principal_cents: a.principal_cents + 1 }
       await client.createApplication(a, { idempotencyKey: key })
       await expectRejectsWithStatus(client.createApplication(b, { idempotencyKey: key }), 409)
+    })
+
+    it('accepts PERSONAL_LOAN when principal and income match the catalogue (PHP centavos)', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const created = await client.createApplication(buildPersonalLoanSampleApplication(24))
+      expect(created.status).toBe('DRAFT')
+      expect(created.product_code).toBe('PERSONAL_LOAN')
+    })
+
+    it('rejects PERSONAL_LOAN when annual income is below the catalogue minimum', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication()
+      const bad = {
+        ...base,
+        borrower: { ...base.borrower, annual_income_cents: 1 },
+      }
+      await expectRejectsWithStatus(client.createApplication(bad), 422)
+    })
+
+    it('rejects PERSONAL_LOAN when principal is below PHP 20,000', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication()
+      const bad = { ...base, principal_cents: 1_000_000 }
+      await expectRejectsWithStatus(client.createApplication(bad), 422)
     })
 
     it('runs the full story against the real mock URLs', async () => {

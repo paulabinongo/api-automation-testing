@@ -96,6 +96,30 @@ export class LoanApiClient {
     return this._request('GET', '/reference/loan-products', {}, { auth: false })
   }
 
+  /**
+   * Add-on interest preview + EIR — **principal_cents** / **term_months** (no auth).
+   * @param {{ principal_cents: number, term_months: number }} q
+   */
+  getLoanComputationPreview(q) {
+    const qs = new URLSearchParams({
+      principal_cents: String(q.principal_cents),
+      term_months: String(q.term_months),
+    })
+    return this._request('GET', `/reference/loan-computation-preview?${qs}`, {}, { auth: false })
+  }
+
+  /**
+   * Payment preview from the borrower’s application — uses **principal_cents** and **term_months** on file (auth).
+   * Response matches **getLoanComputationPreview** plus **application_id**.
+   * @param {string} applicationId
+   */
+  getLoanComputationPreviewForApplication(applicationId) {
+    return this._request(
+      'GET',
+      `/loan-applications/${encodeURIComponent(applicationId)}/computation-preview`,
+    )
+  }
+
   /** Demo sandbox: any email with password `demo` or `demo123`. */
   login(payload) {
     return this._request(

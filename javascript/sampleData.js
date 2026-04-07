@@ -7,19 +7,27 @@ import {
 export { ALLOWED_LOAN_TERM_MONTHS, PAYMENT_METHODS, STIPULATION_DESCRIPTION_EXAMPLES }
 
 /**
- * Example loan data you can reuse in tests or copy into Postman.
- * Amounts are in "cents" (e.g. 5_000_000 cents = $50,000.00 if your product uses USD cents).
- * **term_months** must be one of **ALLOWED_LOAN_TERM_MONTHS** on the mock API.
+ * Example loan application — **PERSONAL_LOAN**, **PHP centavos** (see **GET /v1/reference/loan-products**).
+ * **term_months** must be **12 | 18 | 24 | 36**.
  */
 export function buildSampleLoanApplication() {
+  return buildPersonalLoanSampleApplication(36)
+}
+
+/**
+ * **PERSONAL_LOAN** sample — **principal_cents** / **annual_income_cents** are **PHP centavos** (≥ PHP 250,000 income).
+ * Principal within **PHP 20,000**–**2,000,000**.
+ * @param {number} [termMonths=36] one of **12 | 18 | 24 | 36**
+ */
+export function buildPersonalLoanSampleApplication(termMonths = 36) {
   return {
-    product_code: 'TERM_36',
-    principal_cents: 5_000_000,
-    term_months: 36,
+    product_code: 'PERSONAL_LOAN',
+    principal_cents: 50_000_000,
+    term_months: termMonths,
     borrower: {
-      full_name: 'Alex Rivera',
-      email: 'alex.rivera@example.com',
-      annual_income_cents: 12_000_000,
+      full_name: 'Maria Santos',
+      email: 'maria.santos@example.com',
+      annual_income_cents: 40_000_000,
     },
   }
 }

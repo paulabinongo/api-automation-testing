@@ -83,6 +83,14 @@
     {
       "key": "idempotency_key",
       "value": ""
+    },
+    {
+      "key": "loan_preview_principal_cents",
+      "value": "2000000"
+    },
+    {
+      "key": "loan_preview_term_months",
+      "value": "12"
     }
   ],
   "event": [
@@ -93,7 +101,7 @@
         "exec": [
           "(function () {",
           "    var urlStr = pm.variables.replaceIn(String(pm.request.url));",
-          "    if (/\\/v1\\/health(\\?|#|$)/i.test(urlStr) || /\\/v1\\/reference\\/loan-products(\\?|#|$)/i.test(urlStr) || /\\/v1\\/auth\\/login(\\?|#|$)/i.test(urlStr)) {",
+          "    if (/\\/v1\\/health(\\?|#|$)/i.test(urlStr) || /\\/v1\\/reference\\/loan-products(\\?|#|$)/i.test(urlStr) || /\\/v1\\/reference\\/loan-computation-preview(\\?|#|$)/i.test(urlStr) || /\\/v1\\/auth\\/login(\\?|#|$)/i.test(urlStr)) {",
           "        pm.request.headers.remove('Authorization');",
           "    }",
           "})();",
@@ -181,6 +189,101 @@
             "header": [],
             "url": "{{api_root}}/reference/loan-products",
             "description": "**GET /v1/reference/loan-products** — approved **term_months** and limits. No Bearer."
+          },
+          "response": []
+        },
+        {
+          "name": "Loan computation preview",
+          "auth": {
+            "type": "noauth"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Expected math mirrors javascript/personalLoanComputation.js + loanProductCatalog.js (keep rates in sync).",
+                  "function queryVal(name) {",
+                  "    var v = '';",
+                  "    pm.request.url.query.each(function (p) { if (p.key === name) v = String(p.value); });",
+                  "    return v;",
+                  "}",
+                  "function pvOrdinaryAnnuity(r, n, payment) {",
+                  "    if (r <= 0) return payment * n;",
+                  "    return (payment * (1 - Math.pow(1 + r, -n))) / r;",
+                  "}",
+                  "function solveEir(netProceedsCents, monthlyPaymentCents, termMonths) {",
+                  "    var delta = function (r) { return pvOrdinaryAnnuity(r, termMonths, monthlyPaymentCents) - netProceedsCents; };",
+                  "    var lo = 1e-10, hi = 0.08, guard = 0;",
+                  "    if (delta(lo) <= 0) return null;",
+                  "    while (delta(hi) > 0 && hi < 2 && guard < 40) { hi *= 1.25; guard++; }",
+                  "    if (delta(hi) > 0) return null;",
+                  "    var i;",
+                  "    for (i = 0; i < 80; i++) {",
+                  "        var mid = (lo + hi) / 2;",
+                  "        if (delta(mid) > 0) lo = mid;",
+                  "        else hi = mid;",
+                  "    }",
+                  "    var rMonth = (lo + hi) / 2;",
+                  "    var annualDec = Math.pow(1 + rMonth, 12) - 1;",
+                  "    return Math.round(annualDec * 100000) / 1000;",
+                  "}",
+                  "var ADD_ON = { 12: 1.75, 18: 1.75, 24: 1.5, 36: 1.5 };",
+                  "var DISBURSEMENT_CENTS = 1500 * 100;",
+                  "var DST_THRESHOLD_PHP = 250000;",
+                  "var DST_RATE = 0.75;",
+                  "function expectedPreview(principalCents, termMonths) {",
+                  "    var addOn = ADD_ON[termMonths];",
+                  "    if (addOn == null) return null;",
+                  "    var totalInterestCents = Math.round((principalCents * (addOn / 100) * termMonths) / 1);",
+                  "    var totalRepaymentCents = principalCents + totalInterestCents;",
+                  "    var monthlyAmortizationCents = Math.round(totalRepaymentCents / termMonths);",
+                  "    var principalPhp = principalCents / 100;",
+                  "    var dstCents = principalPhp > DST_THRESHOLD_PHP ? Math.round((principalCents * DST_RATE) / 100) : 0;",
+                  "    var totalFeesCents = DISBURSEMENT_CENTS + dstCents;",
+                  "    var netLoanProceedsCents = principalCents - totalFeesCents;",
+                  "    var eir = solveEir(netLoanProceedsCents, monthlyAmortizationCents, termMonths);",
+                  "    return {",
+                  "        total_interest_cents: totalInterestCents,",
+                  "        monthly_amortization_cents: monthlyAmortizationCents,",
+                  "        net_loan_proceeds_cents: netLoanProceedsCents,",
+                  "        effective_interest_rate_annual_percent: eir,",
+                  "    };",
+                  "}",
+                  "var principalCents = parseInt(queryVal('principal_cents'), 10);",
+                  "var termMonths = parseInt(queryVal('term_months'), 10);",
+                  "var exp = expectedPreview(principalCents, termMonths);",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "if (pm.response.code !== 200) return;",
+                  "if (!exp) {",
+                  "    pm.test('term_months supported by preview', function () {",
+                  "        pm.expect.fail('Unsupported term_months — use 12, 18, 24, or 36 (see loanProductCatalog.js).');",
+                  "    });",
+                  "    return;",
+                  "}",
+                  "var j = pm.response.json();",
+                  "pm.test('Monthly amortization matches catalogue math', function () {",
+                  "    pm.expect(j.monthly_amortization_cents).to.eql(exp.monthly_amortization_cents);",
+                  "});",
+                  "pm.test('Net proceeds match catalogue math', function () {",
+                  "    pm.expect(j.net_loan_proceeds_cents).to.eql(exp.net_loan_proceeds_cents);",
+                  "});",
+                  "pm.test('Total interest matches catalogue math', function () {",
+                  "    pm.expect(j.total_interest_cents).to.eql(exp.total_interest_cents);",
+                  "});",
+                  "pm.test('EIR matches catalogue math', function () {",
+                  "    pm.expect(j.effective_interest_rate_annual_percent).to.eql(exp.effective_interest_rate_annual_percent);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/reference/loan-computation-preview?principal_cents={{loan_preview_principal_cents}}&term_months={{loan_preview_term_months}}",
+            "description": "**GET /v1/reference/loan-computation-preview** — add-on interest, fees, net proceeds, EIR.\n\n**Query (dynamic):** **`principal_cents`**, **`term_months`** — set environment **`loan_preview_principal_cents`** and **`loan_preview_term_months`** (or collection defaults). Allowed terms: **12, 18, 24, 36**.\n\n**Why centavos?** The API stores money as **integer PHP centavos** (1 PHP = 100 centavos) so amounts stay exact — no floating-point rounding bugs in principal, fees, or amortization. Same pattern as many ledgers and payment APIs."
           },
           "response": []
         }
@@ -300,10 +403,91 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"product_code\": \"TERM_36\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 12000000\n  }\n}"
+              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 40000000\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications",
-            "description": "Creates a DRAFT application. **`term_months`** must be one of **6, 12, 18, 24, 32, 36** (product catalogue). Saves `application_id`."
+            "description": "Creates a DRAFT application. **`term_months`** must be one of **12, 18, 24, 36** (**PHP** Personal Loan catalogue). Saves `application_id`."
+          },
+          "response": []
+        },
+        {
+          "name": "1b. Loan computation preview (from application)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Same catalogue math as **Loan computation preview** — inputs come from **POST …/loan-applications** (principal_cents, term_months).",
+                  "function pvOrdinaryAnnuity(r, n, payment) {",
+                  "    if (r <= 0) return payment * n;",
+                  "    return (payment * (1 - Math.pow(1 + r, -n))) / r;",
+                  "}",
+                  "function solveEir(netProceedsCents, monthlyPaymentCents, termMonths) {",
+                  "    var delta = function (r) { return pvOrdinaryAnnuity(r, termMonths, monthlyPaymentCents) - netProceedsCents; };",
+                  "    var lo = 1e-10, hi = 0.08, guard = 0;",
+                  "    if (delta(lo) <= 0) return null;",
+                  "    while (delta(hi) > 0 && hi < 2 && guard < 40) { hi *= 1.25; guard++; }",
+                  "    if (delta(hi) > 0) return null;",
+                  "    var i;",
+                  "    for (i = 0; i < 80; i++) {",
+                  "        var mid = (lo + hi) / 2;",
+                  "        if (delta(mid) > 0) lo = mid;",
+                  "        else hi = mid;",
+                  "    }",
+                  "    var rMonth = (lo + hi) / 2;",
+                  "    var annualDec = Math.pow(1 + rMonth, 12) - 1;",
+                  "    return Math.round(annualDec * 100000) / 1000;",
+                  "}",
+                  "var ADD_ON = { 12: 1.75, 18: 1.75, 24: 1.5, 36: 1.5 };",
+                  "var DISBURSEMENT_CENTS = 1500 * 100;",
+                  "var DST_THRESHOLD_PHP = 250000;",
+                  "var DST_RATE = 0.75;",
+                  "function expectedPreview(principalCents, termMonths) {",
+                  "    var addOn = ADD_ON[termMonths];",
+                  "    if (addOn == null) return null;",
+                  "    var totalInterestCents = Math.round((principalCents * (addOn / 100) * termMonths) / 1);",
+                  "    var totalRepaymentCents = principalCents + totalInterestCents;",
+                  "    var monthlyAmortizationCents = Math.round(totalRepaymentCents / termMonths);",
+                  "    var principalPhp = principalCents / 100;",
+                  "    var dstCents = principalPhp > DST_THRESHOLD_PHP ? Math.round((principalCents * DST_RATE) / 100) : 0;",
+                  "    var totalFeesCents = DISBURSEMENT_CENTS + dstCents;",
+                  "    var netLoanProceedsCents = principalCents - totalFeesCents;",
+                  "    var eir = solveEir(netLoanProceedsCents, monthlyAmortizationCents, termMonths);",
+                  "    return {",
+                  "        total_interest_cents: totalInterestCents,",
+                  "        monthly_amortization_cents: monthlyAmortizationCents,",
+                  "        net_loan_proceeds_cents: netLoanProceedsCents,",
+                  "        effective_interest_rate_annual_percent: eir,",
+                  "    };",
+                  "}",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "if (pm.response.code !== 200) return;",
+                  "var j = pm.response.json();",
+                  "var aid = pm.environment.get('application_id') || pm.collectionVariables.get('application_id');",
+                  "pm.test('application_id matches create step', function () { pm.expect(j.application_id).to.eql(aid); });",
+                  "var exp = expectedPreview(j.principal_cents, j.term_months);",
+                  "pm.test('Monthly amortization matches catalogue math', function () {",
+                  "    pm.expect(j.monthly_amortization_cents).to.eql(exp.monthly_amortization_cents);",
+                  "});",
+                  "pm.test('Net proceeds match catalogue math', function () {",
+                  "    pm.expect(j.net_loan_proceeds_cents).to.eql(exp.net_loan_proceeds_cents);",
+                  "});",
+                  "pm.test('Total interest matches catalogue math', function () {",
+                  "    pm.expect(j.total_interest_cents).to.eql(exp.total_interest_cents);",
+                  "});",
+                  "pm.test('EIR matches catalogue math', function () {",
+                  "    pm.expect(j.effective_interest_rate_annual_percent).to.eql(exp.effective_interest_rate_annual_percent);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/computation-preview",
+            "description": "**GET /v1/loan-applications/{applicationId}/computation-preview** — same numbers as the public reference preview, but **principal** and **term** are read from the borrower’s application (step **1**). Requires **Bearer**. Run **after** **1. Create loan application** so **`application_id`** is set."
           },
           "response": []
         },
@@ -837,10 +1021,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"product_code\": \"TERM_36\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 12000000\n  }\n}"
+                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 40000000\n  }\n}"
                 },
                 "url": "{{api_root}}/loan-applications",
-                "description": "Creates a DRAFT application. **`term_months`** must be one of **6, 12, 18, 24, 32, 36** (product catalogue). Saves `application_id`."
+                "description": "Creates a DRAFT application. **`term_months`** must be one of **12, 18, 24, 36** (**PHP** Personal Loan catalogue). Saves `application_id`."
               },
               "response": []
             },
@@ -1248,10 +1432,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"product_code\": \"TERM_36\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 12000000\n  }\n}"
+                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 40000000\n  }\n}"
                 },
                 "url": "{{api_root}}/loan-applications",
-                "description": "Creates a DRAFT application. **`term_months`** must be one of **6, 12, 18, 24, 32, 36** (product catalogue). Saves `application_id`."
+                "description": "Creates a DRAFT application. **`term_months`** must be one of **12, 18, 24, 36** (**PHP** Personal Loan catalogue). Saves `application_id`."
               },
               "response": []
             },
@@ -1738,7 +1922,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"product_code\": \"TERM_36\",\n  \"principal_cents\": 0,\n  \"term_months\": 12,\n  \"borrower\": {\n    \"full_name\": \"Test\",\n    \"email\": \"test@example.com\",\n    \"annual_income_cents\": 100\n  }\n}"
+              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 0,\n  \"term_months\": 12,\n  \"borrower\": {\n    \"full_name\": \"Test\",\n    \"email\": \"test@example.com\",\n    \"annual_income_cents\": 100\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications"
           },

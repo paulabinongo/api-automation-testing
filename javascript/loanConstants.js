@@ -1,8 +1,10 @@
 /**
  * Origination + servicing LOVs shared by the mock API, OpenAPI examples, and tests.
- * Terms = bank “product catalogue” months; payment methods = typical servicing rails.
+ * Terms = union of **term_months** across all products (**GET /v1/reference/loan-products**); payment methods = servicing rails.
  */
-export const ALLOWED_LOAN_TERM_MONTHS = Object.freeze([6, 12, 18, 24, 32, 36])
+import { ALL_CATALOG_TERM_MONTHS } from './loanProductCatalog.js'
+
+export const ALLOWED_LOAN_TERM_MONTHS = ALL_CATALOG_TERM_MONTHS
 
 /** Uppercase codes posted on POST …/payments */
 export const PAYMENT_METHODS = Object.freeze(['ACH', 'WIRE'])

@@ -3,7 +3,7 @@
   "info": {
     "title": "Retail Bank Loan API (Mock)",
     "description": "Practice API for **API automation** and demos.\n\n**Flow (production-shaped):** **login** → **KYC** → **DRAFT** → **submit** → **processing/accept** (**IN_PROCESSING**) → **disclosures/acknowledge** → **credit-check** → **underwriting/start** (**IN_UNDERWRITING**) → **underwriting/decision** → optional **stipulations** → **funding/authorize** (**CLEARED_FOR_BOOKING**) → **fund** (**FUNDED**) → **disburse** (**ACTIVE**) → **payments** → **payoff** (**CLOSED**) → **logout**.\n\n**Production alignment:** Extra steps mirror **ops intake**, **initial disclosures**, **underwriting queue**, and **funding authorization** before booking. **Phase map:** **`DOCUMENTATION.md`** §**5.0** / §**5.4**. **Postman:** **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** (§**7**).\n\n**Auth:** All `/v1/*` routes except **GET /health**, **GET /reference/loan-products**, and **POST /auth/login** require `Authorization: Bearer <access_token>`.\n\n**Ops headers (production-style):** Responses are tagged with **`X-Correlation-Id`**, **`X-Request-Id`** (echo or minted), **`X-API-Environment`** (default **sandbox**; set **`BANK_API_ENV`**), **`X-API-Revision`**, **`Cache-Control: no-store`**. Send **`X-Correlation-Id`** from the client to tie logs to your own trace (optional unless **`BANK_REQUIRE_CORRELATION_ID=1`**). Optional **`Idempotency-Key`** on **authenticated POST** retries: same key + same path + same body replays the first **2xx** (`Idempotent-Replayed: true`); a different body with the same key returns **409**. Optional **`BANK_API_RATE_LIMIT_PER_MINUTE`** (per client IP) returns **429** with **`Retry-After`**.\n\n**Implementation:** `javascript/mock-server/server.js`.",
-    "version": "0.7.0"
+    "version": "0.8.3"
   },
   "servers": [{ "url": "/", "description": "Same host as this Swagger page" }],
   "security": [{ "bearerAuth": [] }],
@@ -16,10 +16,22 @@
       "name": "Reference",
       "description": "**Read-only catalogue** data (product terms, rails) for intake UIs — **unauthenticated** in this sandbox."
     },
-    { "name": "Auth", "description": "Session — **login** first; **Bearer** on all other `/v1` calls. Maps to authenticated channels in production." },
-    { "name": "Onboarding", "description": "**KYC / customer onboarding** before origination (**403** on create application if skipped). In production: CIP, KYC, AML — here **POST /onboarding/kyc** returns **VERIFIED** instantly." },
-    { "name": "Applications", "description": "**Intake** → **ops processing** → **disclosures** → **credit** → **underwriting queue** → **decision** → **pre-close (stips)**. See **DOCUMENTATION.md** §5.0 / §5.4." },
-    { "name": "Loans", "description": "**Funding authorize** (secondary approval) → **fund** (book) → **disburse** → **servicing**. See **DOCUMENTATION.md** §5.4." }
+    {
+      "name": "Auth",
+      "description": "Session — **login** first; **Bearer** on all other `/v1` calls. Maps to authenticated channels in production."
+    },
+    {
+      "name": "Onboarding",
+      "description": "**KYC / customer onboarding** before origination (**403** on create application if skipped). In production: CIP, KYC, AML — here **POST /onboarding/kyc** returns **VERIFIED** instantly."
+    },
+    {
+      "name": "Applications",
+      "description": "**Intake** → **ops processing** → **disclosures** → **credit** → **underwriting queue** → **decision** → **pre-close (stips)**. See **DOCUMENTATION.md** §5.0 / §5.4."
+    },
+    {
+      "name": "Loans",
+      "description": "**Funding authorize** (secondary approval) → **fund** (book) → **disburse** → **servicing**. See **DOCUMENTATION.md** §5.4."
+    }
   ],
   "paths": {
     "/v1/health": {
@@ -38,7 +50,7 @@
                 "example": {
                   "status": "UP",
                   "environment": "sandbox",
-                  "api_revision": "0.7.0",
+                  "api_revision": "0.8.3",
                   "time": "2026-04-06T12:00:00.000Z"
                 }
               }
@@ -66,6 +78,43 @@
         }
       }
     },
+    "/v1/reference/loan-computation-preview": {
+      "get": {
+        "tags": ["Reference"],
+        "summary": "Personal loan payment preview (add-on model + EIR)",
+        "description": "**No auth.** Computes **total interest**, **monthly amortization**, **fees**, **net proceeds**, and **effective interest rate (annual %)** from catalogue rules. Query: **`principal_cents`** (PHP centavos), **`term_months`** (**12|18|24|36**). Example: **PHP 20,000** → **`principal_cents=2000000`**, **`term_months=12`**.",
+        "operationId": "loanComputationPreview",
+        "security": [],
+        "parameters": [
+          {
+            "name": "principal_cents",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 },
+            "description": "Face amount in **PHP centavos** (must fall within catalogue min/max)."
+          },
+          {
+            "name": "term_months",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "enum": [12, 18, 24, 36] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Computation breakdown + formula text",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoanComputationPreviewOut" }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid or out-of-range parameters"
+          }
+        }
+      }
+    },
     "/v1/auth/login": {
       "post": {
         "tags": ["Auth"],
@@ -85,7 +134,9 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoginOut" } }
+            }
           },
           "401": { "description": "Invalid credentials" },
           "422": { "description": "Missing email or password" }
@@ -113,9 +164,13 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthMeOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthMeOut" } }
+            }
           },
-          "401": { "description": "Missing or invalid Bearer token — login first, then add the header or use **Authorize**" }
+          "401": {
+            "description": "Missing or invalid Bearer token — login first, then add the header or use **Authorize**"
+          }
         }
       }
     },
@@ -128,7 +183,11 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OnboardingStatusOut" } } }
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OnboardingStatusOut" }
+              }
+            }
           },
           "401": { "description": "Missing or invalid Bearer token" }
         }
@@ -157,7 +216,9 @@
         "responses": {
           "200": {
             "description": "KYC verified (simulated)",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KycOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/KycOut" } }
+            }
           },
           "401": { "description": "Unauthorized" },
           "422": { "description": "Validation error" }
@@ -176,13 +237,13 @@
             "application/json": {
               "schema": { "$ref": "#/components/schemas/ApplicationIn" },
               "example": {
-                "product_code": "TERM_36",
+                "product_code": "PERSONAL_LOAN",
                 "principal_cents": 5000000,
                 "term_months": 36,
                 "borrower": {
                   "full_name": "Alex Rivera",
                   "email": "alex.rivera@example.com",
-                  "annual_income_cents": 12000000
+                  "annual_income_cents": 40000000
                 }
               }
             }
@@ -197,13 +258,13 @@
                 "example": {
                   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                   "status": "DRAFT",
-                  "product_code": "TERM_36",
+                  "product_code": "PERSONAL_LOAN",
                   "principal_cents": 5000000,
                   "term_months": 36,
                   "borrower": {
                     "full_name": "Alex Rivera",
                     "email": "alex.rivera@example.com",
-                    "annual_income_cents": 12000000
+                    "annual_income_cents": 40000000
                   },
                   "loan_id": null,
                   "stipulations": [],
@@ -217,7 +278,9 @@
           "403": { "description": "KYC not completed — call **POST /onboarding/kyc** first" },
           "422": {
             "description": "Validation error",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
           }
         }
       }
@@ -231,9 +294,39 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
           },
           "404": { "description": "Application not found" }
+        }
+      }
+    },
+    "/v1/loan-applications/{applicationId}/computation-preview": {
+      "get": {
+        "tags": ["Applications"],
+        "summary": "Personal loan payment preview from application",
+        "description": "Same body as **GET /reference/loan-computation-preview**, but **principal_cents** and **term_months** are taken from the borrower’s **DRAFT** (or later) application — no query params. Requires **Bearer**; only the session that **created** the application may call (**403** otherwise). Includes **`application_id`** in the response.",
+        "operationId": "loanComputationPreviewFromApplication",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "responses": {
+          "200": {
+            "description": "OK — **LoanComputationPreviewOut** plus **application_id**",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoanComputationPreviewOut" }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Application belongs to another session" },
+          "404": { "description": "Application not found" },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          }
         }
       }
     },
@@ -246,7 +339,9 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Invalid state (not DRAFT)" }
@@ -263,7 +358,9 @@
         "responses": {
           "200": {
             "description": "Application IN_PROCESSING",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Must be SUBMITTED" }
@@ -292,7 +389,9 @@
         "responses": {
           "200": {
             "description": "Ack recorded",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Must be IN_PROCESSING" }
@@ -317,7 +416,9 @@
         "responses": {
           "200": {
             "description": "CREDIT_COMPLETED or DECLINED",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Must be IN_PROCESSING with disclosures acknowledged" }
@@ -334,7 +435,9 @@
         "responses": {
           "200": {
             "description": "Application IN_UNDERWRITING",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Must be CREDIT_COMPLETED" }
@@ -378,13 +481,13 @@
                       "application": {
                         "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                         "status": "APPROVED_CLEAR_TO_CLOSE",
-                        "product_code": "TERM_36",
+                        "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
-                          "annual_income_cents": 12000000
+                          "annual_income_cents": 40000000
                         },
                         "loan_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
                         "stipulations": [],
@@ -397,7 +500,7 @@
                         "balance_cents": 5000000,
                         "principal_cents": 5000000,
                         "term_months": 36,
-                        "product_code": "TERM_36"
+                        "product_code": "PERSONAL_LOAN"
                       }
                     }
                   },
@@ -407,13 +510,13 @@
                       "application": {
                         "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                         "status": "APPROVED_CONDITIONAL",
-                        "product_code": "TERM_36",
+                        "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
-                          "annual_income_cents": 12000000
+                          "annual_income_cents": 40000000
                         },
                         "loan_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
                         "stipulations": [
@@ -432,7 +535,7 @@
                         "balance_cents": 5000000,
                         "principal_cents": 5000000,
                         "term_months": 36,
-                        "product_code": "TERM_36"
+                        "product_code": "PERSONAL_LOAN"
                       }
                     }
                   },
@@ -442,13 +545,13 @@
                       "application": {
                         "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                         "status": "DECLINED",
-                        "product_code": "TERM_36",
+                        "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
-                          "annual_income_cents": 12000000
+                          "annual_income_cents": 40000000
                         },
                         "loan_id": null,
                         "stipulations": [],
@@ -463,7 +566,9 @@
             }
           },
           "404": { "description": "Not found" },
-          "409": { "description": "Must be IN_UNDERWRITING (call POST …/underwriting/start after credit)" },
+          "409": {
+            "description": "Must be IN_UNDERWRITING (call POST …/underwriting/start after credit)"
+          },
           "422": { "description": "Invalid outcome or missing stips" }
         }
       }
@@ -497,7 +602,9 @@
             }
           },
           "404": { "description": "Application or loan not found" },
-          "409": { "description": "Not APPROVED_CONDITIONAL / not PENDING_STIPS / nothing left to fulfill" }
+          "409": {
+            "description": "Not APPROVED_CONDITIONAL / not PENDING_STIPS / nothing left to fulfill"
+          }
         }
       }
     },
@@ -521,7 +628,11 @@
         "responses": {
           "200": {
             "description": "Updated application and loan",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UnderwritingDecisionOut" } } }
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UnderwritingDecisionOut" }
+              }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Wrong application/loan state" }
@@ -537,7 +648,9 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } }
+            }
           },
           "404": { "description": "Not found" }
         }
@@ -553,7 +666,9 @@
         "responses": {
           "200": {
             "description": "Loan CLEARED_FOR_BOOKING",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Must be PENDING_FUNDING" }
@@ -570,7 +685,9 @@
         "responses": {
           "200": {
             "description": "Loan is FUNDED (not yet disbursed to borrower)",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Loan must be CLEARED_FOR_BOOKING" }
@@ -587,7 +704,9 @@
         "responses": {
           "200": {
             "description": "Loan is ACTIVE",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } }
+            }
           },
           "404": { "description": "Not found" },
           "409": { "description": "Loan must be FUNDED (call fund first)" }
@@ -603,7 +722,11 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaymentScheduleOut" } } }
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentScheduleOut" }
+              }
+            }
           },
           "404": { "description": "Not found" }
         }
@@ -627,12 +750,16 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PaymentResult" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/PaymentResult" } }
+            }
           },
           "400": { "description": "Payment exceeds balance" },
           "404": { "description": "Not found" },
           "409": { "description": "Loan must be ACTIVE" },
-          "422": { "description": "Invalid **amount_cents** or unsupported **method** (use **ACH** or **WIRE**)" }
+          "422": {
+            "description": "Invalid **amount_cents** or unsupported **method** (use **ACH** or **WIRE**)"
+          }
         }
       }
     },
@@ -645,7 +772,9 @@
         "responses": {
           "200": {
             "description": "OK (idempotent if already CLOSED)",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoanOut" } }
+            }
           },
           "404": { "description": "Not found" }
         }
@@ -699,29 +828,83 @@
         "type": "object",
         "properties": {
           "status": { "type": "string", "example": "UP" },
-          "environment": { "type": "string", "description": "From **X-API-Environment** / **`BANK_API_ENV`**" },
-          "api_revision": { "type": "string", "description": "Matches **`X-API-Revision`** (OpenAPI **info.version**)" },
+          "environment": {
+            "type": "string",
+            "description": "From **X-API-Environment** / **`BANK_API_ENV`**"
+          },
+          "api_revision": {
+            "type": "string",
+            "description": "Matches **`X-API-Revision`** (OpenAPI **info.version**)"
+          },
           "time": { "type": "string", "format": "date-time" }
         }
       },
       "LoanProductReferenceOut": {
         "type": "object",
         "properties": {
-          "currency": { "type": "string", "example": "USD" },
           "products": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/LoanProductCatalogEntry" }
+          },
+          "note": { "type": "string" }
+        }
+      },
+      "LoanComputationPreviewOut": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "currency": { "type": "string", "example": "PHP" },
+          "product_code": { "type": "string" },
+          "principal_cents": { "type": "integer" },
+          "term_months": { "type": "integer" },
+          "monthly_add_on_rate_percent": { "type": "number" },
+          "annual_contractual_rate_percent_on_file": { "type": "number" },
+          "formulas": { "type": "object", "additionalProperties": { "type": "string" } },
+          "total_interest_cents": { "type": "integer" },
+          "monthly_amortization_cents": { "type": "integer" },
+          "disbursement_fee_cents": { "type": "integer" },
+          "documentary_stamp_tax_cents": { "type": "integer" },
+          "total_fees_cents": { "type": "integer" },
+          "net_loan_proceeds_cents": { "type": "integer" },
+          "effective_interest_rate_annual_percent": { "type": "number", "nullable": true },
+          "application_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Present only on **GET /loan-applications/{applicationId}/computation-preview** — echoes the application used for inputs."
+          }
+        }
+      },
+      "LoanProductCatalogEntry": {
+        "type": "object",
+        "description": "**PERSONAL_LOAN** catalogue row (PHP) — Metrobank-style disclosure fields and rates.",
+        "additionalProperties": true,
+        "properties": {
+          "product_code": { "type": "string", "example": "PERSONAL_LOAN" },
+          "loan_type": { "type": "string", "example": "personal" },
+          "name": { "type": "string" },
+          "bank_marketing_name": { "type": "string" },
+          "currency": { "type": "string", "example": "PHP" },
+          "general_information": { "type": "string" },
+          "eligibility": { "type": "array", "items": { "type": "string" } },
+          "credit_evaluation_note": { "type": "string" },
+          "tenor_heading": { "type": "string" },
+          "term_options": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "product_code": { "type": "string" },
-                "name": { "type": "string" },
-                "allowed_term_months": { "type": "array", "items": { "type": "integer" } },
-                "min_principal_cents": { "type": "integer" },
-                "max_principal_cents": { "type": "integer" },
-                "disbursement_rails": { "type": "array", "items": { "type": "string" } }
+                "term_months": { "type": "integer" },
+                "monthly_add_on_rate_percent": { "type": "number" },
+                "annual_contractual_rate_percent": { "type": "number" }
               }
             }
           },
+          "fees_and_charges": { "type": "object", "additionalProperties": true },
+          "allowed_term_months": { "type": "array", "items": { "type": "integer" } },
+          "min_principal_cents": { "type": "integer" },
+          "max_principal_cents": { "type": "integer" },
+          "min_annual_income_cents": { "type": "integer", "nullable": true },
+          "disbursement_rails": { "type": "array", "items": { "type": "string" } },
           "note": { "type": "string" }
         }
       },
@@ -768,7 +951,10 @@
         "properties": {
           "kyc_complete": { "type": "boolean" },
           "kyc_id": { "type": "string", "nullable": true },
-          "status": { "type": "string", "description": "NOT_STARTED until KYC submitted, then VERIFIED in sandbox" }
+          "status": {
+            "type": "string",
+            "description": "NOT_STARTED until KYC submitted, then VERIFIED in sandbox"
+          }
         }
       },
       "KycIn": {
@@ -778,7 +964,12 @@
           "full_name": { "type": "string" },
           "email": { "type": "string" },
           "date_of_birth": { "type": "string", "description": "YYYY-MM-DD" },
-          "national_id_last4": { "type": "string", "minLength": 4, "maxLength": 4, "pattern": "^\\d{4}$" }
+          "national_id_last4": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 4,
+            "pattern": "^\\d{4}$"
+          }
         }
       },
       "KycOut": {
@@ -804,12 +995,12 @@
         "properties": {
           "product_code": {
             "type": "string",
-            "description": "Product / program code; often aligns with term (e.g. **TERM_36**)."
+            "description": "Must be **PERSONAL_LOAN** (sole product; **PHP** centavos). See **GET /v1/reference/loan-products**."
           },
           "principal_cents": { "type": "integer", "minimum": 1 },
           "term_months": {
             "type": "integer",
-            "enum": [6, 12, 18, 24, 32, 36],
+            "enum": [12, 18, 24, 36],
             "description": "Amortization term in **whole months** — bank **product catalogue** LOV only (no other values accepted)."
           },
           "borrower": { "$ref": "#/components/schemas/BorrowerIn" }
@@ -829,7 +1020,10 @@
         "type": "object",
         "description": "Application record. `loan_id` stays null until underwriting creates the loan.",
         "properties": {
-          "id": { "type": "string", "description": "Application id — use this for submit, credit, underwriting paths." },
+          "id": {
+            "type": "string",
+            "description": "Application id — use this for submit, credit, underwriting paths."
+          },
           "status": { "type": "string" },
           "product_code": { "type": "string" },
           "principal_cents": { "type": "integer" },
@@ -887,7 +1081,10 @@
         "properties": {
           "outcome": { "type": "string", "enum": ["APPROVE", "CONDITIONAL", "DECLINE"] },
           "decline_reason_code": { "type": "string" },
-          "stipulations": { "type": "array", "items": { "$ref": "#/components/schemas/StipulationIn" } }
+          "stipulations": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/StipulationIn" }
+          }
         }
       },
       "LoanOut": {
@@ -908,8 +1105,16 @@
             "nullable": true,
             "description": "Set when **POST …/funding/authorize** succeeds. **null** until then."
           },
-          "funded_at": { "type": "string", "nullable": true, "description": "Set when **fund** succeeds (booked). **null** until then." },
-          "disbursed_at": { "type": "string", "nullable": true, "description": "Set when **disburse** succeeds (proceeds sent). **null** until then." }
+          "funded_at": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set when **fund** succeeds (booked). **null** until then."
+          },
+          "disbursed_at": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set when **disburse** succeeds (proceeds sent). **null** until then."
+          }
         }
       },
       "UnderwritingDecisionOut": {

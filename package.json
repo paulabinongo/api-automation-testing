@@ -8,8 +8,8 @@
   "scripts": {
     "lint": "eslint javascript scripts",
     "lint:fix": "eslint javascript scripts --fix",
-    "format": "prettier --write \"javascript/**/*.js\" \"scripts/**/*.mjs\" \"*.{json,md}\" \"vitest.config.js\" \"eslint.config.js\"",
-    "format:check": "prettier --check \"javascript/**/*.js\" \"scripts/**/*.mjs\" \"vitest.config.js\" \"eslint.config.js\"",
+    "format": "prettier --write \"javascript/**/*.{js,json}\" \"scripts/**/*.mjs\" \"postman/**/*.json\" \"*.{json,md}\" \"vitest.config.js\" \"eslint.config.js\"",
+    "format:check": "prettier --check \"javascript/**/*.{js,json}\" \"scripts/**/*.mjs\" \"postman/**/*.json\" \"*.{json,md}\" \"vitest.config.js\" \"eslint.config.js\"",
     "validate:openapi": "node scripts/validate-openapi.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -10,7 +10,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'crypto'
 
-import { ALLOWED_LOAN_TERM_MONTHS, PAYMENT_METHODS } from '../loanConstants.js'
+import { PAYMENT_METHODS } from '../loanConstants.js'
+import {
+  buildLoanProductReferencePayload,
+  PERSONAL_LOAN_PRODUCT,
+  validateApplicationAgainstCatalog,
+} from '../loanProductCatalog.js'
+import { computePersonalLoanPreview } from '../personalLoanComputation.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const openApiSpec = JSON.parse(readFileSync(path.join(__dirname, 'openapi.json'), 'utf8'))
@@ -180,6 +186,13 @@ function getLoanRow(loanId) {
   return row
 }
 
+/** Strip internal **owner_user_id** from API responses. */
+function sanitizeApplicationOut(row) {
+  if (!row || typeof row !== 'object') return row
+  const { owner_user_id: _omit, ...rest } = row
+  return rest
+}
+
 /** First of month after "today + ~1 month" — matches prior Python demo logic. */
 function scheduleStartDate() {
   const d = new Date()
@@ -190,27 +203,7 @@ function scheduleStartDate() {
 }
 
 function validateCreateBody(body) {
-  const errs = []
-  if (!body || typeof body !== 'object') return ['Invalid body']
-  if (!body.product_code) errs.push('product_code required')
-  if (typeof body.principal_cents !== 'number' || body.principal_cents <= 0)
-    errs.push('principal_cents must be > 0')
-  const term = Number(body.term_months)
-  if (typeof body.term_months !== 'number' || !ALLOWED_LOAN_TERM_MONTHS.includes(term)) {
-    errs.push(
-      'term_months must be one of approved product terms (months): ' +
-        ALLOWED_LOAN_TERM_MONTHS.join(', '),
-    )
-  }
-  const b = body.borrower
-  if (!b || typeof b !== 'object') errs.push('borrower required')
-  else {
-    if (!b.full_name) errs.push('borrower.full_name required')
-    if (!b.email) errs.push('borrower.email required')
-    if (typeof b.annual_income_cents !== 'number' || b.annual_income_cents < 0)
-      errs.push('borrower.annual_income_cents must be >= 0')
-  }
-  return errs
+  return validateApplicationAgainstCatalog(body)
 }
 
 function authRequired(req, res, next) {
@@ -246,20 +239,49 @@ function sendHealth(_req, res) {
 }
 
 function sendLoanProductReference(_req, res) {
-  res.json({
-    currency: 'USD',
-    products: [
-      {
-        product_code: 'TERM_36',
-        name: 'Unsecured closed-end installment (representative)',
-        allowed_term_months: [...ALLOWED_LOAN_TERM_MONTHS],
-        min_principal_cents: 100_000,
-        max_principal_cents: 100_000_000,
-        disbursement_rails: ['ACH', 'WIRE'],
-      },
-    ],
-    note: 'Catalogue snapshot for integration tests; origination still validates term_months against allowed_term_months.',
-  })
+  res.json(buildLoanProductReferencePayload())
+}
+
+function sendLoanComputationPreview(req, res) {
+  const principalCents = req.query.principal_cents != null ? Number(req.query.principal_cents) : NaN
+  const termMonths = req.query.term_months != null ? Number(req.query.term_months) : NaN
+  const errs = []
+  if (!Number.isFinite(principalCents) || principalCents !== Math.round(principalCents)) {
+    errs.push('principal_cents must be a whole number (PHP centavos)')
+  }
+  if (
+    !Number.isFinite(termMonths) ||
+    !PERSONAL_LOAN_PRODUCT.allowed_term_months.includes(termMonths)
+  ) {
+    errs.push('term_months must be one of: ' + PERSONAL_LOAN_PRODUCT.allowed_term_months.join(', '))
+  }
+  if (errs.length) return sendError(req, res, 422, errs)
+  if (
+    principalCents < PERSONAL_LOAN_PRODUCT.min_principal_cents ||
+    principalCents > PERSONAL_LOAN_PRODUCT.max_principal_cents
+  ) {
+    return sendError(
+      req,
+      res,
+      422,
+      `principal_cents must be between ${PERSONAL_LOAN_PRODUCT.min_principal_cents} and ${PERSONAL_LOAN_PRODUCT.max_principal_cents} (catalogue limits)`,
+    )
+  }
+  const out = computePersonalLoanPreview(principalCents, termMonths)
+  if (!out) return sendError(req, res, 422, ['Unsupported term_months for computation'])
+  res.json(out)
+}
+
+/** Uses **principal_cents** and **term_months** from the borrower’s draft application (same session owner). */
+function sendLoanComputationPreviewFromApplication(req, res) {
+  const row = getApp(req.params.applicationId)
+  if (!row) return sendError(req, res, 404, 'Application not found')
+  if (row.owner_user_id != null && row.owner_user_id !== req.bankSession.user_id) {
+    return sendError(req, res, 403, 'Not allowed to access this application')
+  }
+  const out = computePersonalLoanPreview(row.principal_cents, row.term_months)
+  if (!out) return sendError(req, res, 422, ['Unsupported term_months for computation'])
+  res.json({ ...out, application_id: row.id })
 }
 
 /** Canonical paths + `/v1/...` aliases when `base_url` already ends with `/v1` (avoids falling through to auth). */
@@ -267,6 +289,8 @@ v1.get('/health', sendHealth)
 v1.get('/v1/health', sendHealth)
 v1.get('/reference/loan-products', sendLoanProductReference)
 v1.get('/v1/reference/loan-products', sendLoanProductReference)
+v1.get('/reference/loan-computation-preview', sendLoanComputationPreview)
+v1.get('/v1/reference/loan-computation-preview', sendLoanComputationPreview)
 
 v1.post('/auth/login', (req, res) => {
   const body = req.body || {}
@@ -376,16 +400,22 @@ v1.post('/loan-applications', (req, res) => {
     decline_reason_code: null,
     credit_reference_id: null,
     disclosures_acknowledged_at: null,
+    owner_user_id: req.bankSession.user_id,
   }
   applications.set(aid, row)
-  res.status(200).json(row)
+  res.status(200).json(sanitizeApplicationOut(row))
 })
 
 v1.get('/loan-applications/:applicationId', (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
-  res.json({ ...row })
+  res.json(sanitizeApplicationOut(row))
 })
+
+v1.get(
+  '/loan-applications/:applicationId/computation-preview',
+  sendLoanComputationPreviewFromApplication,
+)
 
 v1.post('/loan-applications/:applicationId/submit', (req, res) => {
   const row = getApp(req.params.applicationId)
@@ -394,7 +424,7 @@ v1.post('/loan-applications/:applicationId/submit', (req, res) => {
     return sendError(req, res, 409, 'Invalid state for submit')
   }
   row.status = 'SUBMITTED'
-  res.json(row)
+  res.json(sanitizeApplicationOut(row))
 })
 
 /** LOS: processing / ops accepts the file into the working queue (after borrower submit). */
@@ -412,7 +442,7 @@ v1.post('/loan-applications/:applicationId/processing/accept', (req, res) => {
     )
   }
   row.status = 'IN_PROCESSING'
-  res.json(row)
+  res.json(sanitizeApplicationOut(row))
 })
 
 /** Reg-TILA-style initial disclosure package acknowledged (sandbox: one POST). */
@@ -432,7 +462,7 @@ v1.post('/loan-applications/:applicationId/disclosures/acknowledge', (req, res) 
   if (!row.disclosures_acknowledged_at) {
     row.disclosures_acknowledged_at = new Date().toISOString()
   }
-  res.json(row)
+  res.json(sanitizeApplicationOut(row))
 })
 
 v1.post('/loan-applications/:applicationId/credit-check', (req, res) => {
@@ -460,22 +490,22 @@ v1.post('/loan-applications/:applicationId/credit-check', (req, res) => {
   if (body.force_outcome === 'FAIL') {
     row.status = 'DECLINED'
     row.decline_reason_code = 'CREDIT_POLICY'
-    return res.json(row)
+    return res.json(sanitizeApplicationOut(row))
   }
   if (body.force_outcome === 'PASS') {
     row.status = 'CREDIT_COMPLETED'
     row.credit_reference_id = creditRef()
-    return res.json(row)
+    return res.json(sanitizeApplicationOut(row))
   }
   const score = body.simulated_credit_score
   if (score != null && score < 620) {
     row.status = 'DECLINED'
     row.decline_reason_code = 'CREDIT_THRESHOLD'
-    return res.json(row)
+    return res.json(sanitizeApplicationOut(row))
   }
   row.status = 'CREDIT_COMPLETED'
   row.credit_reference_id = creditRef()
-  res.json(row)
+  res.json(sanitizeApplicationOut(row))
 })
 
 /** Underwriting queue: credit done, waiting for underwriter decision. */
@@ -493,7 +523,7 @@ v1.post('/loan-applications/:applicationId/underwriting/start', (req, res) => {
     )
   }
   row.status = 'IN_UNDERWRITING'
-  res.json(row)
+  res.json(sanitizeApplicationOut(row))
 })
 
 function createLoanRecord(applicationId, appRow, loanStatus) {
@@ -539,7 +569,7 @@ v1.post('/loan-applications/:applicationId/underwriting/decision', (req, res) =>
   if (outcome === 'DECLINE') {
     row.status = 'DECLINED'
     row.decline_reason_code = body.decline_reason_code || 'UNDERWRITING_DECLINE'
-    return res.json({ application: row, loan: null })
+    return res.json({ application: sanitizeApplicationOut(row), loan: null })
   }
   const stipsIn = Array.isArray(body.stipulations) ? body.stipulations : []
   if (outcome === 'CONDITIONAL' && stipsIn.length === 0) {
@@ -557,12 +587,12 @@ v1.post('/loan-applications/:applicationId/underwriting/decision', (req, res) =>
     }))
     row.status = 'APPROVED_CONDITIONAL'
     const loan = createLoanRecord(req.params.applicationId, row, 'PENDING_STIPS')
-    return res.json({ application: row, loan })
+    return res.json({ application: sanitizeApplicationOut(row), loan })
   }
   row.status = 'APPROVED_CLEAR_TO_CLOSE'
   row.stipulations = []
   const loan = createLoanRecord(req.params.applicationId, row, 'PENDING_FUNDING')
-  res.json({ application: row, loan })
+  res.json({ application: sanitizeApplicationOut(row), loan })
 })
 
 v1.post('/loan-applications/:applicationId/stipulations/fulfill-all', (req, res) => {
@@ -598,7 +628,7 @@ v1.post('/loan-applications/:applicationId/stipulations/fulfill-all', (req, res)
   row.status = 'APPROVED_CLEAR_TO_CLOSE'
   loan.status = 'PENDING_FUNDING'
   res.json({
-    application: row,
+    application: sanitizeApplicationOut(row),
     loan,
     fulfilled_stipulation_ids: row.stipulations.map((s) => s.id),
   })
@@ -634,7 +664,7 @@ v1.post('/loan-applications/:applicationId/stipulations/:stipulationId/fulfill',
     row.status = 'APPROVED_CLEAR_TO_CLOSE'
     loan.status = 'PENDING_FUNDING'
   }
-  res.json({ application: row, loan })
+  res.json({ application: sanitizeApplicationOut(row), loan })
 })
 
 v1.get('/loans/:loanId', (req, res) => {
