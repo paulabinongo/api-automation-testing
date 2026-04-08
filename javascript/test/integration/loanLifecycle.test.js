@@ -7,8 +7,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
-import { LoanApiClient } from '../loanApiClient.js'
-import { isLocalMockConfigured } from '../config.js'
+import { LoanApiClient } from '../../lib/loanApiClient.js'
+import { isLocalMockConfigured } from '../../lib/config.js'
 import {
   buildConditionalUnderwritingExample,
   buildPersonalLoanSampleApplication,
@@ -16,9 +16,10 @@ import {
   buildPaymentBody,
   buildUnderwritingBody,
   creditCheckForcePass,
-} from '../sampleData.js'
+} from '../../lib/sampleData.js'
 import { loginAndCompleteKyc } from './sessionHelpers.js'
-import { expectRejectsWithStatus } from './helpers/assertions.js'
+import { registerDocumentsForPayload } from './flowHelpers.js'
+import { expectRejectsWithStatus } from '../helpers/assertions.js'
 
 const MOCK_BASE = 'https://api.loan.test/v1'
 
@@ -57,6 +58,16 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
           },
           { status: 201 },
         ),
+      ),
+      http.post(`${MOCK_BASE}/loan-applications/${applicationId}/documents`, () =>
+        HttpResponse.json({
+          id: applicationId,
+          status: 'DRAFT',
+          document_intake: {
+            primary_id_document_type: sample.borrower.primary_id_document_type,
+            completed_at: '2026-01-01T00:00:00.000Z',
+          },
+        }),
       ),
       http.post(`${MOCK_BASE}/loan-applications/${applicationId}/submit`, () =>
         HttpResponse.json({ id: applicationId, status: 'SUBMITTED' }),
@@ -147,6 +158,8 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
 
     const created = await client.createApplication(sample)
     expect(created.status).toBe('DRAFT')
+
+    await registerDocumentsForPayload(client, applicationId, sample)
 
     const submitted = await client.submitApplication(applicationId)
     expect(submitted.status).toBe('SUBMITTED')
@@ -276,13 +289,13 @@ describe.skipIf(!isLocalMockConfigured())(
       expect(created.product_code).toBe('PERSONAL_LOAN')
     })
 
-    it('rejects PERSONAL_LOAN when annual income is below the catalogue minimum', async () => {
+    it('rejects PERSONAL_LOAN when gross monthly income implies below minimum annual income', async () => {
       const client = new LoanApiClient()
       await loginAndCompleteKyc(client)
       const base = buildPersonalLoanSampleApplication()
       const bad = {
         ...base,
-        borrower: { ...base.borrower, annual_income_cents: 1 },
+        employment: { ...base.employment, gross_monthly_income_cents: 100 },
       }
       await expectRejectsWithStatus(client.createApplication(bad), 422)
     })
@@ -295,6 +308,202 @@ describe.skipIf(!isLocalMockConfigured())(
       await expectRejectsWithStatus(client.createApplication(bad), 422)
     })
 
+    it('rejects PERSONAL_LOAN when borrower is not yet a Metrobank client (intake)', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication(12)
+      const bad = { ...base, metrobank_client_type: 'NOT_METROBANK_CLIENT' }
+      await expectRejectsWithStatus(client.createApplication(bad), 422)
+    })
+
+    it('rejects create when primary_id is outside Step 3 subset (use PATCH then upload for PRC, etc.)', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication(12)
+      const bad = {
+        ...base,
+        borrower: { ...base.borrower, primary_id_document_type: 'PRC' },
+      }
+      await expectRejectsWithStatus(client.createApplication(bad), 422)
+    })
+
+    it('rejects borrower.middle_name with leading or trailing spaces', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication(12)
+      const bad = {
+        ...base,
+        borrower: { ...base.borrower, middle_name: ' Ana ' },
+      }
+      await expectRejectsWithStatus(client.createApplication(bad), 422)
+    })
+
+    it('rejects Present Home Address when Province/City/Barangay/ZIP do not match catalogue rows', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication(12)
+      const bad = {
+        ...base,
+        borrower: {
+          ...base.borrower,
+          residential_address: {
+            ...base.borrower.residential_address,
+            barangay: 'Invalid Barangay Name',
+          },
+        },
+      }
+      await expectRejectsWithStatus(client.createApplication(bad), 422)
+    })
+
+    it('rejects EMPLOYED intake when employment.employer_address is missing', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication(12)
+      const { employer_address: _e, ...restEmp } = base.employment
+      const bad = { ...base, employment: restEmp }
+      await expectRejectsWithStatus(client.createApplication(bad), 422)
+    })
+
+    it('rejects employment.employer_address when Province/City/Barangay/ZIP do not match catalogue', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication(12)
+      const bad = {
+        ...base,
+        employment: {
+          ...base.employment,
+          employer_address: {
+            ...base.employment.employer_address,
+            barangay: 'Not In Catalogue',
+          },
+        },
+      }
+      await expectRejectsWithStatus(client.createApplication(bad), 422)
+    })
+
+    it('loan product reference includes Metrobank client prerequisite for Personal Loan', async () => {
+      const client = new LoanApiClient()
+      const ref = await client.getLoanProductReference()
+      const p = ref.products[0]
+      expect(p?.metrobank_client_prerequisite?.question).toContain('Metrobank')
+      expect(p?.metrobank_client_prerequisite?.choices?.length).toBe(3)
+    })
+
+    it('Personal Loan reference exposes intake_flow steps 1–7', async () => {
+      const client = new LoanApiClient()
+      const ref = await client.getLoanProductReference()
+      const steps = ref.products[0]?.intake_flow?.steps
+      expect(steps?.length).toBe(7)
+      expect(steps?.[5]?.key).toBe('additional_information')
+      expect(steps?.[6]?.key).toBe('document_requirements')
+    })
+
+    it('loan product reference exposes landline_area_code_options including 0882', async () => {
+      const client = new LoanApiClient()
+      const ref = await client.getLoanProductReference()
+      const opts = ref.products[0]?.landline_area_code_options
+      expect(Array.isArray(opts)).toBe(true)
+      const values = opts.map((o) => o.value)
+      expect(values).toContain('0882')
+      expect(values).toContain('082')
+      expect(values).toContain('002')
+    })
+
+    it('accepts home_phone and business_phone with area_code 0882', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildPersonalLoanSampleApplication(12)
+      body.borrower.home_phone = { area_code: '0882', subscriber_number: '12345678' }
+      body.employment.business_phone = { area_code: '0882', subscriber_number: '87654321' }
+      const created = await client.createApplication(body)
+      expect(created.status).toBe('DRAFT')
+    })
+
+    it('eligibility-preview returns eligible for full valid intake', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildPersonalLoanSampleApplication(24)
+      const prev = await client.previewApplicationEligibility(body)
+      expect(prev.eligible).toBe(true)
+      expect(prev.checks?.length).toBe(5)
+    })
+
+    it('rejects create when eligibility fails (e.g. under 21)', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildPersonalLoanSampleApplication(12)
+      body.borrower.date_of_birth = '2010-01-01'
+      await expectRejectsWithStatus(client.createApplication(body), 422)
+    })
+
+    it('PATCH draft updates amounts when still valid and eligible', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const created = await client.createApplication(buildPersonalLoanSampleApplication(24))
+      const nextPrincipal = created.principal_cents + 100
+      const upd = await client.updateDraftApplication(created.id, {
+        principal_cents: nextPrincipal,
+      })
+      expect(upd.principal_cents).toBe(nextPrincipal)
+    })
+
+    it('submit without document registration → 409 for Personal Loan', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const sample = buildPersonalLoanSampleApplication(12)
+      const created = await client.createApplication(sample)
+      await expectRejectsWithStatus(client.submitApplication(created.id), 409)
+    })
+
+    it('document upload rejects when selected ID type does not match declared', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const sample = buildPersonalLoanSampleApplication(12)
+      const created = await client.createApplication(sample)
+      await expectRejectsWithStatus(
+        client.registerApplicationDocuments(created.id, { primary_id_document_type: 'TIN' }),
+        422,
+      )
+    })
+
+    it('after PATCH changes declared ID before upload, documents must match the new type', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const sample = buildPersonalLoanSampleApplication(12)
+      expect(sample.borrower.primary_id_document_type).toBe('SSS')
+      const created = await client.createApplication(sample)
+      await client.updateDraftApplication(created.id, {
+        borrower: { primary_id_document_type: 'TIN' },
+      })
+      await expectRejectsWithStatus(
+        client.registerApplicationDocuments(created.id, { primary_id_document_type: 'SSS' }),
+        422,
+      )
+      await client.registerApplicationDocuments(created.id, { primary_id_document_type: 'TIN' })
+      const ready = await client.getApplication(created.id)
+      expect(ready.document_intake?.primary_id_document_type).toBe('TIN')
+    })
+
+    it('after PATCH changes declared ID, upload must use the new type', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const sample = buildPersonalLoanSampleApplication(12)
+      const created = await client.createApplication(sample)
+      await client.registerApplicationDocuments(created.id, {
+        primary_id_document_type: 'SSS',
+      })
+      await client.updateDraftApplication(created.id, {
+        borrower: { primary_id_document_type: 'TIN' },
+      })
+      const refreshed = await client.getApplication(created.id)
+      expect(refreshed.document_intake).toBeUndefined()
+      await client.registerApplicationDocuments(created.id, {
+        primary_id_document_type: 'TIN',
+      })
+      const done = await client.getApplication(created.id)
+      expect(done.document_intake?.primary_id_document_type).toBe('TIN')
+    })
+
     it('runs the full story against the real mock URLs', async () => {
       const client = new LoanApiClient()
       await loginAndCompleteKyc(client)
@@ -302,6 +511,7 @@ describe.skipIf(!isLocalMockConfigured())(
 
       const created = await client.createApplication(sample)
       const appId = created.id
+      await registerDocumentsForPayload(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)
@@ -336,6 +546,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const sample = buildSampleLoanApplication()
       const created = await client.createApplication(sample)
       const appId = created.id
+      await registerDocumentsForPayload(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)
@@ -368,6 +579,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const sample = buildSampleLoanApplication()
       const created = await client.createApplication(sample)
       const appId = created.id
+      await registerDocumentsForPayload(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)
@@ -397,6 +609,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const sample = buildSampleLoanApplication()
       const created = await client.createApplication(sample)
       const appId = created.id
+      await registerDocumentsForPayload(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)

@@ -14,20 +14,86 @@ export function buildSampleLoanApplication() {
   return buildPersonalLoanSampleApplication(36)
 }
 
+const SAMPLE_MOBILE = '+639171234567'
+const SAMPLE_ID_NUM = '12345678901'
+
 /**
- * **PERSONAL_LOAN** sample — **principal_cents** / **annual_income_cents** are **PHP centavos** (≥ PHP 250,000 income).
- * Principal within **PHP 20,000**–**2,000,000**.
+ * **PERSONAL_LOAN** sample — **principal_cents** and **employment.gross_monthly_income_cents** are **PHP centavos** (gross monthly × 12 ≥ PHP 250,000/year).
+ * Principal within **PHP 20,000**–**2,000,000** (whole pesos). Mirrors Metrobank-style intake (loan purpose, PEP, consents, Step 3 ID subset, employment LOVs).
  * @param {number} [termMonths=36] one of **12 | 18 | 24 | 36**
  */
 export function buildPersonalLoanSampleApplication(termMonths = 36) {
+  const grossMonthlyIncomeCents = Math.floor(40_000_000 / 12)
   return {
     product_code: 'PERSONAL_LOAN',
     principal_cents: 50_000_000,
     term_months: termMonths,
+    metrobank_client_type: 'EXISTING_CLIENT_CREDIT_CARD',
+    loan_purpose: 'PERSONAL_CONSUMPTION',
+    additional_information: {
+      pep_close_family_or_public_position: false,
+      pep_financial_transactions_on_behalf: false,
+    },
     borrower: {
-      full_name: 'Maria Santos',
+      first_name: 'Maria',
+      middle_name: 'Ana',
+      last_name: 'Santos',
+      full_name: 'Maria Ana Santos',
       email: 'maria.santos@example.com',
-      annual_income_cents: 40_000_000,
+      mobile_phone: SAMPLE_MOBILE,
+      date_of_birth: '1990-06-15',
+      citizenship: 'FILIPINO',
+      primary_id_document_type: 'SSS',
+      primary_id_document_number: SAMPLE_ID_NUM,
+      consents: {
+        terms_of_use_accepted: true,
+        terms_and_conditions_accepted: true,
+        data_privacy_policy_accepted: true,
+      },
+      gender: 'FEMALE',
+      marital_status: 'MARRIED',
+      education: 'COLLEGE_GRADUATE',
+      place_of_birth: 'Makati',
+      mailing_same_as_residential: true,
+      residential_address: {
+        street_line: 'Rizal Street',
+        subdivision_village: 'Greenwoods Subdivision',
+        province: 'NCR',
+        city_town: 'Makati',
+        barangay: 'San Antonio',
+        postal_code: '1200',
+        home_ownership: 'OWNED',
+      },
+      home_phone: {
+        area_code: '082',
+        subscriber_number: '12345678',
+      },
+    },
+    employment: {
+      status: 'EMPLOYED',
+      source_of_funds: 'EMPLOYED',
+      employment_status: 'REGULAR',
+      occupation: 'OFFICE_CLERK',
+      industry: 'Financial Services',
+      business_email: 'hr@sampleemployer.example.com',
+      years_working_total: 10,
+      gross_monthly_income_cents: grossMonthlyIncomeCents,
+      employer_name: 'Sample Employer Inc.',
+      employer_address: {
+        street_line: 'Ayala Avenue',
+        subdivision_building: 'Enterprise Tower',
+        province: 'NCR',
+        city_town: 'Makati',
+        barangay: 'Bel-Air',
+        postal_code: '1209',
+      },
+      years_with_current_employer: 3,
+      is_regular_employment: true,
+      business_mobile_phone: '+639181112233',
+      business_phone: {
+        area_code: '082',
+        subscriber_number: '87654321',
+      },
     },
   }
 }

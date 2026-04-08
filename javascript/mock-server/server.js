@@ -10,13 +10,15 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'crypto'
 
-import { PAYMENT_METHODS } from '../loanConstants.js'
+import { PAYMENT_METHODS } from '../lib/loanConstants.js'
 import {
   buildLoanProductReferencePayload,
+  PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES,
   PERSONAL_LOAN_PRODUCT,
   validateApplicationAgainstCatalog,
-} from '../loanProductCatalog.js'
-import { computePersonalLoanPreview } from '../personalLoanComputation.js'
+} from '../lib/loanProductCatalog.js'
+import { computePersonalLoanPreview } from '../lib/personalLoanComputation.js'
+import { evaluatePersonalLoanEligibility } from '../lib/personalLoanEligibility.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const openApiSpec = JSON.parse(readFileSync(path.join(__dirname, 'openapi.json'), 'utf8'))
@@ -137,6 +139,7 @@ function idempotencyForAuthedPosts(req, res, next) {
 }
 
 const app = express()
+app.set('json spaces', 2)
 if (process.env.BANK_TRUST_PROXY === '1') app.set('trust proxy', 1)
 app.use(correlationAndSecurityHeaders)
 app.use(rateLimitMiddleware)
@@ -202,8 +205,8 @@ function scheduleStartDate() {
   return start
 }
 
-function validateCreateBody(body) {
-  return validateApplicationAgainstCatalog(body)
+function validateCreateBody(body, options) {
+  return validateApplicationAgainstCatalog(body, options || {})
 }
 
 function authRequired(req, res, next) {
@@ -386,7 +389,25 @@ v1.post('/loan-applications', (req, res) => {
   if (errors.length) {
     return sendError(req, res, 422, errors)
   }
-  const { product_code, principal_cents, term_months, borrower } = req.body
+  const elig = evaluatePersonalLoanEligibility(req.body)
+  if (!elig.eligible) {
+    return sendError(
+      req,
+      res,
+      422,
+      elig.failed_checks.map((c) => 'Eligibility: ' + c),
+    )
+  }
+  const {
+    product_code,
+    principal_cents,
+    term_months,
+    borrower,
+    metrobank_client_type,
+    employment,
+    loan_purpose,
+    additional_information,
+  } = req.body
   const aid = uuid()
   const row = {
     id: aid,
@@ -394,7 +415,14 @@ v1.post('/loan-applications', (req, res) => {
     product_code,
     principal_cents,
     term_months,
+    metrobank_client_type,
+    loan_purpose,
+    additional_information:
+      additional_information && typeof additional_information === 'object'
+        ? { ...additional_information }
+        : null,
     borrower: { ...borrower },
+    employment: { ...employment },
     loan_id: null,
     stipulations: [],
     decline_reason_code: null,
@@ -404,6 +432,141 @@ v1.post('/loan-applications', (req, res) => {
   }
   applications.set(aid, row)
   res.status(200).json(sanitizeApplicationOut(row))
+})
+
+v1.post('/loan-applications/eligibility-preview', (req, res) => {
+  const k = req.bankSession.kyc
+  if (!k || k.status !== 'VERIFIED') {
+    return sendError(
+      req,
+      res,
+      403,
+      'Complete customer onboarding first: POST /v1/onboarding/kyc with a logged-in session, then run eligibility preview',
+    )
+  }
+  const errors = validateCreateBody(req.body)
+  if (errors.length) {
+    return sendError(req, res, 422, errors)
+  }
+  const result = evaluatePersonalLoanEligibility(req.body)
+  res.json({
+    eligible: result.eligible,
+    checks: result.checks,
+    failed_checks: result.failed_checks,
+  })
+})
+
+v1.patch('/loan-applications/:applicationId', (req, res) => {
+  const row = getApp(req.params.applicationId)
+  if (!row) return sendError(req, res, 404, 'Application not found')
+  if (row.owner_user_id !== req.bankSession.user_id) {
+    return sendError(req, res, 403, 'Application belongs to another session')
+  }
+  if (row.status !== 'DRAFT') {
+    return sendError(req, res, 409, 'PATCH allowed only when application status is DRAFT')
+  }
+  const p = req.body && typeof req.body === 'object' ? req.body : {}
+  const mergedAdditional =
+    p.additional_information && typeof p.additional_information === 'object'
+      ? {
+          ...(row.additional_information && typeof row.additional_information === 'object'
+            ? row.additional_information
+            : {}),
+          ...p.additional_information,
+        }
+      : row.additional_information
+  const mergedBody = {
+    product_code: p.product_code != null ? p.product_code : row.product_code,
+    principal_cents: p.principal_cents != null ? p.principal_cents : row.principal_cents,
+    term_months: p.term_months != null ? p.term_months : row.term_months,
+    metrobank_client_type:
+      p.metrobank_client_type != null ? p.metrobank_client_type : row.metrobank_client_type,
+    loan_purpose: p.loan_purpose != null ? p.loan_purpose : row.loan_purpose,
+    additional_information: mergedAdditional,
+    borrower: {
+      ...row.borrower,
+      ...(p.borrower && typeof p.borrower === 'object' ? p.borrower : {}),
+    },
+    employment: {
+      ...row.employment,
+      ...(p.employment && typeof p.employment === 'object' ? p.employment : {}),
+    },
+  }
+  const errors = validateCreateBody(mergedBody, { personalLoanPrimaryIdPolicy: 'full' })
+  if (errors.length) {
+    return sendError(req, res, 422, errors)
+  }
+  const elig = evaluatePersonalLoanEligibility(mergedBody)
+  if (!elig.eligible) {
+    return sendError(
+      req,
+      res,
+      422,
+      elig.failed_checks.map((c) => 'Eligibility: ' + c),
+    )
+  }
+  const oldPid = String(row.borrower?.primary_id_document_type || '')
+  const newPid = String(mergedBody.borrower?.primary_id_document_type || '')
+  if (row.document_intake?.completed_at && oldPid !== newPid) {
+    delete row.document_intake
+  }
+  Object.assign(row, {
+    product_code: mergedBody.product_code,
+    principal_cents: mergedBody.principal_cents,
+    term_months: mergedBody.term_months,
+    metrobank_client_type: mergedBody.metrobank_client_type,
+    loan_purpose: mergedBody.loan_purpose,
+    additional_information: mergedBody.additional_information,
+    borrower: mergedBody.borrower,
+    employment: mergedBody.employment,
+  })
+  res.json(sanitizeApplicationOut(row))
+})
+
+v1.post('/loan-applications/:applicationId/documents', (req, res) => {
+  const row = getApp(req.params.applicationId)
+  if (!row) return sendError(req, res, 404, 'Application not found')
+  if (row.owner_user_id !== req.bankSession.user_id) {
+    return sendError(req, res, 403, 'Application belongs to another session')
+  }
+  if (row.status !== 'DRAFT') {
+    return sendError(
+      req,
+      res,
+      409,
+      'documents registration allowed only when application status is DRAFT',
+    )
+  }
+  const body = req.body || {}
+  const uploaded = body.primary_id_document_type
+  if (uploaded == null || String(uploaded).trim() === '') {
+    return sendError(req, res, 422, 'primary_id_document_type required')
+  }
+  const u = String(uploaded)
+  if (!PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES.includes(u)) {
+    return sendError(
+      req,
+      res,
+      422,
+      'primary_id_document_type must be one of: ' +
+        PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES.join(', '),
+    )
+  }
+  const declared = row.borrower?.primary_id_document_type
+  const d = declared != null ? String(declared) : ''
+  if (u !== d) {
+    return sendError(
+      req,
+      res,
+      422,
+      `primary_id_document_type at upload (${u}) must match borrower.primary_id_document_type (${d || 'none'}). Update the declared ID via PATCH or select the same ID type you declared in personal details.`,
+    )
+  }
+  row.document_intake = {
+    primary_id_document_type: u,
+    completed_at: new Date().toISOString(),
+  }
+  res.json(sanitizeApplicationOut(row))
 })
 
 v1.get('/loan-applications/:applicationId', (req, res) => {
@@ -422,6 +585,17 @@ v1.post('/loan-applications/:applicationId/submit', (req, res) => {
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'DRAFT') {
     return sendError(req, res, 409, 'Invalid state for submit')
+  }
+  if (
+    row.product_code === 'PERSONAL_LOAN' &&
+    !(row.document_intake && row.document_intake.completed_at)
+  ) {
+    return sendError(
+      req,
+      res,
+      409,
+      'Personal Loan requires Step 7 document intake: POST /v1/loan-applications/{applicationId}/documents with primary_id_document_type equal to borrower.primary_id_document_type',
+    )
   }
   row.status = 'SUBMITTED'
   res.json(sanitizeApplicationOut(row))

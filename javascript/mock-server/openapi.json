@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Retail Bank Loan API (Mock)",
-    "description": "Practice API for **API automation** and demos.\n\n**Flow (production-shaped):** **login** → **KYC** → **DRAFT** → **submit** → **processing/accept** (**IN_PROCESSING**) → **disclosures/acknowledge** → **credit-check** → **underwriting/start** (**IN_UNDERWRITING**) → **underwriting/decision** → optional **stipulations** → **funding/authorize** (**CLEARED_FOR_BOOKING**) → **fund** (**FUNDED**) → **disburse** (**ACTIVE**) → **payments** → **payoff** (**CLOSED**) → **logout**.\n\n**Production alignment:** Extra steps mirror **ops intake**, **initial disclosures**, **underwriting queue**, and **funding authorization** before booking. **Phase map:** **`DOCUMENTATION.md`** §**5.0** / §**5.4**. **Postman:** **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** (§**7**).\n\n**Auth:** All `/v1/*` routes except **GET /health**, **GET /reference/loan-products**, and **POST /auth/login** require `Authorization: Bearer <access_token>`.\n\n**Ops headers (production-style):** Responses are tagged with **`X-Correlation-Id`**, **`X-Request-Id`** (echo or minted), **`X-API-Environment`** (default **sandbox**; set **`BANK_API_ENV`**), **`X-API-Revision`**, **`Cache-Control: no-store`**. Send **`X-Correlation-Id`** from the client to tie logs to your own trace (optional unless **`BANK_REQUIRE_CORRELATION_ID=1`**). Optional **`Idempotency-Key`** on **authenticated POST** retries: same key + same path + same body replays the first **2xx** (`Idempotent-Replayed: true`); a different body with the same key returns **409**. Optional **`BANK_API_RATE_LIMIT_PER_MINUTE`** (per client IP) returns **429** with **`Retry-After`**.\n\n**Implementation:** `javascript/mock-server/server.js`.",
-    "version": "0.8.3"
+    "description": "Practice API for **API automation** and demos.\n\n**Flow (production-shaped):** **login** → **KYC** → **DRAFT** → **submit** → **processing/accept** (**IN_PROCESSING**) → **disclosures/acknowledge** → **credit-check** → **underwriting/start** (**IN_UNDERWRITING**) → **underwriting/decision** → optional **stipulations** → **funding/authorize** (**CLEARED_FOR_BOOKING**) → **fund** (**FUNDED**) → **disburse** (**ACTIVE**) → **payments** → **payoff** (**CLOSED**) → **logout**.\n\n**Production alignment:** Extra steps mirror **ops intake**, **initial disclosures**, **underwriting queue**, and **funding authorization** before booking. **Phase map:** **`docs/DOCUMENTATION.md`** §**5.0** / §**5.4**. **Postman:** **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** (§**7**).\n\n**Auth:** All `/v1/*` routes except **GET /health**, **GET /reference/loan-products**, and **POST /auth/login** require `Authorization: Bearer <access_token>`.\n\n**Ops headers (production-style):** Responses are tagged with **`X-Correlation-Id`**, **`X-Request-Id`** (echo or minted), **`X-API-Environment`** (default **sandbox**; set **`BANK_API_ENV`**), **`X-API-Revision`**, **`Cache-Control: no-store`**. Send **`X-Correlation-Id`** from the client to tie logs to your own trace (optional unless **`BANK_REQUIRE_CORRELATION_ID=1`**). Optional **`Idempotency-Key`** on **authenticated POST** retries: same key + same path + same body replays the first **2xx** (`Idempotent-Replayed: true`); a different body with the same key returns **409**. Optional **`BANK_API_RATE_LIMIT_PER_MINUTE`** (per client IP) returns **429** with **`Retry-After`**.\n\n**Implementation:** `javascript/mock-server/server.js`.",
+    "version": "0.8.11"
   },
   "servers": [{ "url": "/", "description": "Same host as this Swagger page" }],
   "security": [{ "bearerAuth": [] }],
@@ -26,11 +26,11 @@
     },
     {
       "name": "Applications",
-      "description": "**Intake** → **ops processing** → **disclosures** → **credit** → **underwriting queue** → **decision** → **pre-close (stips)**. See **DOCUMENTATION.md** §5.0 / §5.4."
+      "description": "**Intake** → **ops processing** → **disclosures** → **credit** → **underwriting queue** → **decision** → **pre-close (stips)**. See **docs/DOCUMENTATION.md** §5.0 / §5.4."
     },
     {
       "name": "Loans",
-      "description": "**Funding authorize** (secondary approval) → **fund** (book) → **disburse** → **servicing**. See **DOCUMENTATION.md** §5.4."
+      "description": "**Funding authorize** (secondary approval) → **fund** (book) → **disburse** → **servicing**. See **docs/DOCUMENTATION.md** §5.4."
     }
   ],
   "paths": {
@@ -50,7 +50,7 @@
                 "example": {
                   "status": "UP",
                   "environment": "sandbox",
-                  "api_revision": "0.8.3",
+                  "api_revision": "0.8.4",
                   "time": "2026-04-06T12:00:00.000Z"
                 }
               }
@@ -229,7 +229,7 @@
       "post": {
         "tags": ["Applications"],
         "summary": "Create application (DRAFT)",
-        "description": "**Application intake** — first LOS step after KYC. Creates **DRAFT** with **`loan_id: null`** until **POST …/underwriting/decision** creates the loan (see **DOCUMENTATION.md** §5.4). Requires **completed KYC** (otherwise **403**).",
+        "description": "**Application intake** — first LOS step after KYC. Creates **DRAFT** with **`loan_id: null`** until **POST …/underwriting/decision** creates the loan (see **docs/DOCUMENTATION.md** §5.4). Requires **completed KYC** (otherwise **403**). For **PERSONAL_LOAN**, **metrobank_client_type** is required (see **GET /reference/loan-products** → **metrobank_client_prerequisite**); values **EXISTING_CLIENT_CREDIT_CARD** or **EXISTING_CLIENT_DEPOSIT_ACCOUNT** proceed; **NOT_METROBANK_CLIENT** returns **422**.",
         "operationId": "createApplication",
         "requestBody": {
           "required": true,
@@ -238,12 +238,73 @@
               "schema": { "$ref": "#/components/schemas/ApplicationIn" },
               "example": {
                 "product_code": "PERSONAL_LOAN",
-                "principal_cents": 5000000,
+                "principal_cents": 50000000,
                 "term_months": 36,
+                "metrobank_client_type": "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
+                "loan_purpose": "PERSONAL_CONSUMPTION",
+                "additional_information": {
+                  "pep_close_family_or_public_position": false,
+                  "pep_financial_transactions_on_behalf": false
+                },
                 "borrower": {
-                  "full_name": "Alex Rivera",
+                  "first_name": "Alex",
+                  "middle_name": "Jose",
+                  "last_name": "Rivera",
                   "email": "alex.rivera@example.com",
-                  "annual_income_cents": 40000000
+                  "mobile_phone": "+639171234567",
+                  "date_of_birth": "1990-06-15",
+                  "citizenship": "FILIPINO",
+                  "primary_id_document_type": "SSS",
+                  "primary_id_document_number": "12345678901",
+                  "consents": {
+                    "terms_of_use_accepted": true,
+                    "terms_and_conditions_accepted": true,
+                    "data_privacy_policy_accepted": true
+                  },
+                  "gender": "MALE",
+                  "marital_status": "SINGLE",
+                  "education": "COLLEGE_GRADUATE",
+                  "place_of_birth": "Makati",
+                  "mailing_same_as_residential": true,
+                  "residential_address": {
+                    "street_line": "Rizal Street",
+                    "subdivision_village": "Greenwoods Subdivision",
+                    "province": "NCR",
+                    "city_town": "Makati",
+                    "barangay": "San Antonio",
+                    "postal_code": "1200",
+                    "home_ownership": "OWNED"
+                  },
+                  "home_phone": {
+                    "area_code": "082",
+                    "subscriber_number": "12345678"
+                  }
+                },
+                "employment": {
+                  "status": "EMPLOYED",
+                  "source_of_funds": "EMPLOYED",
+                  "employment_status": "REGULAR",
+                  "occupation": "OFFICE_CLERK",
+                  "industry": "Financial Services",
+                  "business_email": "hr@examplecorp.com",
+                  "years_working_total": 10,
+                  "gross_monthly_income_cents": 3333333,
+                  "employer_name": "Example Corp",
+                  "employer_address": {
+                    "street_line": "Ayala Avenue",
+                    "subdivision_building": "Enterprise Tower",
+                    "province": "NCR",
+                    "city_town": "Makati",
+                    "barangay": "Bel-Air",
+                    "postal_code": "1209"
+                  },
+                  "years_with_current_employer": 3,
+                  "is_regular_employment": true,
+                  "business_mobile_phone": "+639181112233",
+                  "business_phone": {
+                    "area_code": "082",
+                    "subscriber_number": "87654321"
+                  }
                 }
               }
             }
@@ -259,13 +320,75 @@
                   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                   "status": "DRAFT",
                   "product_code": "PERSONAL_LOAN",
-                  "principal_cents": 5000000,
+                  "principal_cents": 50000000,
                   "term_months": 36,
-                  "borrower": {
-                    "full_name": "Alex Rivera",
-                    "email": "alex.rivera@example.com",
-                    "annual_income_cents": 40000000
+                  "metrobank_client_type": "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
+                  "loan_purpose": "PERSONAL_CONSUMPTION",
+                  "additional_information": {
+                    "pep_close_family_or_public_position": false,
+                    "pep_financial_transactions_on_behalf": false
                   },
+                  "borrower": {
+                    "first_name": "Alex",
+                    "middle_name": "Jose",
+                    "last_name": "Rivera",
+                    "email": "alex.rivera@example.com",
+                    "mobile_phone": "+639171234567",
+                    "date_of_birth": "1990-06-15",
+                    "citizenship": "FILIPINO",
+                    "primary_id_document_type": "SSS",
+                    "primary_id_document_number": "12345678901",
+                    "consents": {
+                      "terms_of_use_accepted": true,
+                      "terms_and_conditions_accepted": true,
+                      "data_privacy_policy_accepted": true
+                    },
+                    "gender": "MALE",
+                    "marital_status": "SINGLE",
+                    "education": "COLLEGE_GRADUATE",
+                    "place_of_birth": "Makati",
+                    "mailing_same_as_residential": true,
+                    "residential_address": {
+                      "street_line": "Rizal Street",
+                      "subdivision_village": "Greenwoods Subdivision",
+                      "province": "NCR",
+                      "city_town": "Makati",
+                      "barangay": "San Antonio",
+                      "postal_code": "1200",
+                      "home_ownership": "OWNED"
+                    },
+                    "home_phone": {
+                      "area_code": "082",
+                      "subscriber_number": "12345678"
+                    }
+                  },
+                  "employment": {
+                    "status": "EMPLOYED",
+                    "source_of_funds": "EMPLOYED",
+                    "employment_status": "REGULAR",
+                    "occupation": "OFFICE_CLERK",
+                    "industry": "Financial Services",
+                    "business_email": "hr@examplecorp.com",
+                    "years_working_total": 10,
+                    "gross_monthly_income_cents": 3333333,
+                    "employer_name": "Example Corp",
+                    "employer_address": {
+                      "street_line": "Ayala Avenue",
+                      "subdivision_building": "Enterprise Tower",
+                      "province": "NCR",
+                      "city_town": "Makati",
+                      "barangay": "Bel-Air",
+                      "postal_code": "1209"
+                    },
+                    "years_with_current_employer": 3,
+                    "is_regular_employment": true,
+                    "business_mobile_phone": "+639181112233",
+                    "business_phone": {
+                      "area_code": "082",
+                      "subscriber_number": "87654321"
+                    }
+                  },
+                  "document_intake": null,
                   "loan_id": null,
                   "stipulations": [],
                   "decline_reason_code": null,
@@ -285,7 +408,74 @@
         }
       }
     },
+    "/v1/loan-applications/eligibility-preview": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Preview Personal Loan eligibility (Step 6)",
+        "description": "**Dry-run** the same validation and **eligibility criteria** as **POST /loan-applications** (intake Steps 1–6). Does **not** create a draft. Use after **Additional information** review and before **document upload** / create. Requires **KYC**.",
+        "operationId": "previewApplicationEligibility",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApplicationIn" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Eligibility outcome and per-criterion results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EligibilityPreviewOut" }
+              }
+            }
+          },
+          "401": { "description": "Not logged in" },
+          "403": { "description": "KYC not completed" },
+          "422": {
+            "description": "Shape / catalogue validation error",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          }
+        }
+      }
+    },
     "/v1/loan-applications/{applicationId}": {
+      "patch": {
+        "tags": ["Applications"],
+        "summary": "Update DRAFT application (partial merge)",
+        "description": "Merge **principal_cents**, **term_months**, **metrobank_client_type**, **borrower**, and/or **employment** into an existing **DRAFT**. Re-validates catalogue rules and **eligibility**. **403** if not owner; **409** if not **DRAFT**.",
+        "operationId": "patchDraftApplication",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApplicationPatchIn" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated application",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Another session owns this application" },
+          "404": { "description": "Not found" },
+          "409": { "description": "Not DRAFT" },
+          "422": {
+            "description": "Validation or eligibility failure",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          }
+        }
+      },
       "get": {
         "tags": ["Applications"],
         "summary": "Get application by id",
@@ -330,10 +520,47 @@
         }
       }
     },
+    "/v1/loan-applications/{applicationId}/documents": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Register document upload intent (Step 7)",
+        "description": "Confirms the borrower’s **primary_id_document_type** for upload matches **borrower.primary_id_document_type** on the application (**422** if not — e.g. declared **SSS** but selected **TIN**). Call after edits (**PATCH**) so the upload matches the **current** declared ID. **403** if not owner; **409** if not **DRAFT**.",
+        "operationId": "registerApplicationDocuments",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DocumentRegistrationIn" },
+              "example": { "primary_id_document_type": "SSS" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document intake recorded on **DRAFT**",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Another session owns this application" },
+          "404": { "description": "Not found" },
+          "409": { "description": "Not DRAFT" },
+          "422": {
+            "description": "Missing field, unknown ID type, or mismatch with declared borrower ID",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          }
+        }
+      }
+    },
     "/v1/loan-applications/{applicationId}/submit": {
       "post": {
         "tags": ["Applications"],
         "summary": "Submit (DRAFT → SUBMITTED)",
+        "description": "For **PERSONAL_LOAN**, **POST …/documents** must have completed first (**409** otherwise).",
         "operationId": "submitApplication",
         "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
         "responses": {
@@ -344,7 +571,9 @@
             }
           },
           "404": { "description": "Not found" },
-          "409": { "description": "Invalid state (not DRAFT)" }
+          "409": {
+            "description": "Invalid state (not DRAFT) or document intake not completed (Personal Loan)"
+          }
         }
       }
     },
@@ -484,10 +713,37 @@
                         "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
+                        "metrobank_client_type": "EXISTING_CLIENT_CREDIT_CARD",
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
-                          "annual_income_cents": 40000000
+                          "date_of_birth": "1990-06-15",
+                          "citizenship": "FILIPINO",
+                          "primary_id_document_type": "SSS",
+                          "mailing_same_as_residential": true,
+                          "residential_address": {
+                            "line1": "123 Rizal Street",
+                            "city": "Makati",
+                            "province_region": "NCR",
+                            "postal_code": "1200"
+                          }
+                        },
+                        "employment": {
+                          "status": "EMPLOYED",
+                          "employer_name": "Example Corp",
+                          "employer_address": {
+                            "street_line": "Ayala Avenue",
+                            "province": "NCR",
+                            "city_town": "Makati",
+                            "barangay": "Bel-Air",
+                            "postal_code": "1209"
+                          },
+                          "years_with_current_employer": 3,
+                          "is_regular_employment": true
+                        },
+                        "document_intake": {
+                          "primary_id_document_type": "SSS",
+                          "completed_at": "2026-04-07T12:00:00.000Z"
                         },
                         "loan_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
                         "stipulations": [],
@@ -513,10 +769,37 @@
                         "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
+                        "metrobank_client_type": "EXISTING_CLIENT_CREDIT_CARD",
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
-                          "annual_income_cents": 40000000
+                          "date_of_birth": "1990-06-15",
+                          "citizenship": "FILIPINO",
+                          "primary_id_document_type": "SSS",
+                          "mailing_same_as_residential": true,
+                          "residential_address": {
+                            "line1": "123 Rizal Street",
+                            "city": "Makati",
+                            "province_region": "NCR",
+                            "postal_code": "1200"
+                          }
+                        },
+                        "employment": {
+                          "status": "EMPLOYED",
+                          "employer_name": "Example Corp",
+                          "employer_address": {
+                            "street_line": "Ayala Avenue",
+                            "province": "NCR",
+                            "city_town": "Makati",
+                            "barangay": "Bel-Air",
+                            "postal_code": "1209"
+                          },
+                          "years_with_current_employer": 3,
+                          "is_regular_employment": true
+                        },
+                        "document_intake": {
+                          "primary_id_document_type": "SSS",
+                          "completed_at": "2026-04-07T12:00:00.000Z"
                         },
                         "loan_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
                         "stipulations": [
@@ -548,10 +831,37 @@
                         "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
+                        "metrobank_client_type": "EXISTING_CLIENT_CREDIT_CARD",
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
-                          "annual_income_cents": 40000000
+                          "date_of_birth": "1990-06-15",
+                          "citizenship": "FILIPINO",
+                          "primary_id_document_type": "SSS",
+                          "mailing_same_as_residential": true,
+                          "residential_address": {
+                            "line1": "123 Rizal Street",
+                            "city": "Makati",
+                            "province_region": "NCR",
+                            "postal_code": "1200"
+                          }
+                        },
+                        "employment": {
+                          "status": "EMPLOYED",
+                          "employer_name": "Example Corp",
+                          "employer_address": {
+                            "street_line": "Ayala Avenue",
+                            "province": "NCR",
+                            "city_town": "Makati",
+                            "barangay": "Bel-Air",
+                            "postal_code": "1209"
+                          },
+                          "years_with_current_employer": 3,
+                          "is_regular_employment": true
+                        },
+                        "document_intake": {
+                          "primary_id_document_type": "SSS",
+                          "completed_at": "2026-04-07T12:00:00.000Z"
                         },
                         "loan_id": null,
                         "stipulations": [],
@@ -905,7 +1215,18 @@
           "max_principal_cents": { "type": "integer" },
           "min_annual_income_cents": { "type": "integer", "nullable": true },
           "disbursement_rails": { "type": "array", "items": { "type": "string" } },
-          "note": { "type": "string" }
+          "note": { "type": "string" },
+          "landline_area_code_options": {
+            "type": "array",
+            "description": "LOV for **home_phone** / **business_phone** **area_code** — **002** through **088** plus **0882**.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": { "type": "string" },
+                "label": { "type": "string" }
+              }
+            }
+          }
         }
       },
       "LoginIn": {
@@ -980,30 +1301,444 @@
           "message": { "type": "string" }
         }
       },
+      "AddressIn": {
+        "type": "object",
+        "required": ["line1", "city", "province_region", "postal_code"],
+        "properties": {
+          "line1": { "type": "string", "description": "Street / unit line" },
+          "city": { "type": "string" },
+          "province_region": { "type": "string" },
+          "postal_code": { "type": "string" }
+        }
+      },
+      "PresentHomeAddressIn": {
+        "type": "object",
+        "description": "**Present Home Address** (Step 4). **Canonical:** **street_line**, **province**, **city_town**, **barangay**, **postal_code** — the four geographic fields + ZIP must match one row in **GET /reference/loan-products** → **philippine_address_sample_rows** (sandbox sample of dependent PH LOVs). **Legacy:** **line1**, **city**, **province_region**, **postal_code** if **street_line** is omitted.",
+        "properties": {
+          "street_line": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "description": "**No./Blk./St.** — letters and spaces only (no digits or special characters); 1–30 chars; no leading/trailing spaces."
+          },
+          "subdivision_village": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "**Subdivision/Village** — optional; same character rules as **street_line** when provided."
+          },
+          "province": {
+            "type": "string",
+            "description": "**Province** — must pair with **city_town**, **barangay**, and **postal_code** per **philippine_address_sample_rows**."
+          },
+          "city_town": {
+            "type": "string",
+            "description": "**City/Town** — dependent on **province**."
+          },
+          "barangay": {
+            "type": "string",
+            "description": "**Barangay** — dependent on **city_town**."
+          },
+          "postal_code": {
+            "type": "string",
+            "pattern": "^\\d{4}$",
+            "description": "**ZIP Code** — 4-digit integer string; must match the Province/City/Barangay combination."
+          },
+          "home_ownership": {
+            "type": "string",
+            "enum": [
+              "LIVING_WITH_PARENTS_RELATIVES",
+              "MORTGAGE",
+              "OTHER_COMPANY_PROVIDED",
+              "OWNED",
+              "RENTED"
+            ],
+            "description": "**Home Ownership** — optional; labels on **GET /reference/loan-products** → **home_ownership_options** (e.g. Living with Parents/Relatives, Owned, Rented)."
+          },
+          "line1": {
+            "type": "string",
+            "description": "Legacy **street** line when not using **street_line** / triplet shape."
+          },
+          "city": {
+            "type": "string",
+            "description": "Legacy — maps to City/Town when using **line1** shape."
+          },
+          "province_region": {
+            "type": "string",
+            "description": "Legacy — maps to Province when using **line1** shape."
+          }
+        }
+      },
+      "EmployerAddressIn": {
+        "type": "object",
+        "description": "**Employer Address** (Step 5). **No./Blk./St.**, optional **Subdivision/Building**, **Province**, **City/Town**, **Barangay**, **ZIP** — the geographic quad + **postal_code** must match one row in **GET /reference/loan-products** → **philippine_address_sample_rows** (same dependent rules as **Present Home Address**). **Required** when **`employment.status`** is **EMPLOYED**.",
+        "required": ["street_line", "province", "city_town", "barangay", "postal_code"],
+        "properties": {
+          "street_line": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "description": "**No./Blk./St.** — letters and spaces only; 1–30 chars; no leading/trailing spaces."
+          },
+          "subdivision_building": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "**Subdivision/Building** — optional; same character rules as **street_line** when provided."
+          },
+          "province": {
+            "type": "string",
+            "description": "**Province** — pairs with city, barangay, ZIP per reference rows."
+          },
+          "city_town": {
+            "type": "string",
+            "description": "**City/Town** — dependent on **province**."
+          },
+          "barangay": {
+            "type": "string",
+            "description": "**Barangay** — dependent on **city_town**."
+          },
+          "postal_code": {
+            "type": "string",
+            "pattern": "^\\d{4}$",
+            "description": "**ZIP Code** — 4-digit string matching the Province/City/Barangay row."
+          }
+        }
+      },
+      "HomePhoneIn": {
+        "type": "object",
+        "description": "Optional landline (**home** or **business**): **area_code** + **subscriber_number** (8 digits). **area_code** must be in **GET /reference/loan-products** → **landline_area_code_options** (**002**–**088** or **0882**). If either field is sent, send both.",
+        "properties": {
+          "area_code": {
+            "type": "string",
+            "pattern": "^(?:0882|0(?:0[2-9]|[1-7]\\d|8[0-8]))$",
+            "description": "**002**–**088** (padded) or **0882** — full list on **landline_area_code_options**."
+          },
+          "subscriber_number": {
+            "type": "string",
+            "pattern": "^\\d{8}$",
+            "description": "8-digit local number."
+          }
+        }
+      },
+      "Step3PrimaryIdDocumentType": {
+        "type": "string",
+        "enum": ["GSIS", "SSS", "TIN", "DRIVERS_LICENSE", "PASSPORT", "UMID"],
+        "description": "**Step 3** “Choose an ID” — basic-details subset. **POST /loan-applications** accepts only these; **PATCH** may set any **PrimaryIdDocumentType** value before document upload. Mirrors **GET /reference/loan-products** → **step3_primary_id_document_types**."
+      },
+      "LoanPurpose": {
+        "type": "string",
+        "enum": [
+          "APPLIANCE_GADGETS",
+          "BUSINESS",
+          "CAR_REPAIR",
+          "DEBT_CONSOLIDATION",
+          "HOME_REPAIR",
+          "MEDICAL_EMERGENCY",
+          "PERSONAL_CONSUMPTION",
+          "TRAVEL",
+          "WEDDING"
+        ],
+        "description": "Loan purpose (Step 2). Catalogue rows: **GET /reference/loan-products** → **loan_purposes**."
+      },
+      "AdditionalInformationIn": {
+        "type": "object",
+        "required": ["pep_close_family_or_public_position", "pep_financial_transactions_on_behalf"],
+        "description": "Step 6 PEP-style questions (both mandatory **boolean**; UI often defaults **false**).",
+        "properties": {
+          "pep_close_family_or_public_position": {
+            "type": "boolean",
+            "description": "Family/self close relationship with prominent public or international-org position."
+          },
+          "pep_financial_transactions_on_behalf": {
+            "type": "boolean",
+            "description": "Substantial domestic/international financial transactions on behalf of such a person."
+          }
+        }
+      },
+      "BorrowerConsentsIn": {
+        "type": "object",
+        "required": [
+          "terms_of_use_accepted",
+          "terms_and_conditions_accepted",
+          "data_privacy_policy_accepted"
+        ],
+        "description": "All three must be **true** (sandbox mirrors checkbox gate).",
+        "properties": {
+          "terms_of_use_accepted": { "type": "boolean" },
+          "terms_and_conditions_accepted": { "type": "boolean" },
+          "data_privacy_policy_accepted": { "type": "boolean" }
+        }
+      },
+      "PrimaryIdDocumentType": {
+        "type": "string",
+        "enum": [
+          "GSIS",
+          "SSS",
+          "TIN",
+          "DRIVERS_LICENSE",
+          "PASSPORT",
+          "UMID",
+          "PRC",
+          "COMPANY_ID",
+          "EO226",
+          "VISA",
+          "WORK_PERMIT",
+          "POSTAL",
+          "SENIOR",
+          "VOTERS",
+          "OTHERS"
+        ],
+        "description": "**Step 7** upload picker and **PATCH**-allowed declared IDs — full LOV (**GET /reference/loan-products** → **primary_id_document_types**). **DocumentRegistrationIn** / upload must match **borrower.primary_id_document_type**. Synced with **`PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES`** in **`javascript/lib/loanProductCatalog.js`** (see repo test)."
+      },
       "BorrowerIn": {
         "type": "object",
-        "required": ["full_name", "email", "annual_income_cents"],
+        "required": [
+          "first_name",
+          "last_name",
+          "email",
+          "mobile_phone",
+          "date_of_birth",
+          "citizenship",
+          "primary_id_document_type",
+          "primary_id_document_number",
+          "consents",
+          "gender",
+          "marital_status",
+          "education",
+          "place_of_birth",
+          "mailing_same_as_residential",
+          "residential_address"
+        ],
+        "description": "Alternative: send **full_name** instead of **first_name**/**last_name** — server accepts either pattern (see **`validatePersonalLoanIntakeShape`**). OpenAPI lists structured names as canonical.",
         "properties": {
-          "full_name": { "type": "string" },
-          "email": { "type": "string" },
-          "annual_income_cents": { "type": "integer", "minimum": 0 }
+          "first_name": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "Letters and spaces; trimmed; 1–30 chars; no leading/trailing spaces."
+          },
+          "middle_name": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "Optional. When present: **1–30** characters, letters and spaces only (no digits or punctuation), single spaces between words; **no** leading or trailing spaces. Omit or leave empty to skip."
+          },
+          "last_name": { "type": "string", "maxLength": 30 },
+          "full_name": {
+            "type": "string",
+            "description": "Legacy single field if structured names are omitted (letters/spaces, trimmed)."
+          },
+          "email": { "type": "string", "format": "email" },
+          "mobile_phone": {
+            "type": "string",
+            "description": "Philippine mobile — **+639XXXXXXXXX**, **09XXXXXXXXX**, or **9XXXXXXXXX** (national first digit **9**)."
+          },
+          "date_of_birth": {
+            "type": "string",
+            "description": "**YYYY-MM-DD** — must be strictly **before** today (past date of birth)."
+          },
+          "citizenship": {
+            "type": "string",
+            "enum": ["FILIPINO"],
+            "description": "**Citizenship** — dropdown + search in production; this sandbox accepts **FILIPINO** only."
+          },
+          "primary_id_document_type": { "$ref": "#/components/schemas/Step3PrimaryIdDocumentType" },
+          "primary_id_document_number": {
+            "type": "string",
+            "pattern": "^\\d{11}$",
+            "description": "Declared ID number — **11 digits** in this sandbox."
+          },
+          "consents": { "$ref": "#/components/schemas/BorrowerConsentsIn" },
+          "gender": {
+            "type": "string",
+            "enum": ["FEMALE", "MALE", "UNKNOWN"],
+            "description": "**Gender** (Female, Male, Unknown) — **GET /reference/loan-products** → **gender_options**."
+          },
+          "marital_status": {
+            "type": "string",
+            "enum": ["DIVORCED_OR_SEPARATED", "MARRIED", "SINGLE", "WIDOWED", "UNKNOWN"],
+            "description": "**Marital status** (Divorced or Separated, Marriage, Single, …) — **GET /reference/loan-products** → **marital_status_options**."
+          },
+          "education": {
+            "type": "string",
+            "enum": [
+              "COLLEGE_GRADUATE",
+              "GRADE_SCHOOL",
+              "HIGH_SCHOOL",
+              "LIMITED_NONE",
+              "POSTGRADUATE",
+              "TECHNICAL_VOCATIONAL"
+            ],
+            "description": "**Education** — dropdown + search in production; labels on **GET /reference/loan-products** → **education_options** (College/Graduate, Grade School, …)."
+          },
+          "place_of_birth": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "**Place of Birth** — 3–30 chars, letters and spaces only (no digits or special characters); no leading/trailing spaces."
+          },
+          "mailing_same_as_residential": { "type": "boolean" },
+          "residential_address": { "$ref": "#/components/schemas/PresentHomeAddressIn" },
+          "home_phone": {
+            "$ref": "#/components/schemas/HomePhoneIn",
+            "description": "Optional **Home Phone** — **area_code** from **landline_area_code_options** (**002**–**088** or **0882**) + **subscriber_number** (8 digits)."
+          },
+          "mailing_address": {
+            "$ref": "#/components/schemas/AddressIn",
+            "description": "Required when **mailing_same_as_residential** is **false**."
+          }
+        }
+      },
+      "DocumentRegistrationIn": {
+        "type": "object",
+        "required": ["primary_id_document_type"],
+        "properties": {
+          "primary_id_document_type": { "$ref": "#/components/schemas/PrimaryIdDocumentType" }
+        }
+      },
+      "EmploymentIn": {
+        "type": "object",
+        "required": [
+          "status",
+          "source_of_funds",
+          "employment_status",
+          "occupation",
+          "industry",
+          "business_email",
+          "years_working_total",
+          "gross_monthly_income_cents"
+        ],
+        "description": "Metrobank **Employment details** — **source_of_funds** and **employment_status** per **GET /reference/loan-products**. **source_of_funds** must align with **status** (**EMPLOYED** / **SELF_EMPLOYED**). When **EMPLOYED**: **employer_name**, **employer_address** (**EmployerAddressIn**, PH reference row), **years_with_current_employer**, **is_regular_employment**. When **SELF_EMPLOYED**: **business_name**, **years_in_current_business** (no **employer_address**). Optional **business_mobile_phone** (PH mobile) and **business_phone** (same **area_code** + **subscriber_number** landline as **HomePhoneIn**).",
+        "properties": {
+          "status": { "type": "string", "enum": ["EMPLOYED", "SELF_EMPLOYED"] },
+          "source_of_funds": {
+            "type": "string",
+            "enum": ["EMPLOYED", "OTHERS", "RETIRED", "SELF_EMPLOYED", "UNEMPLOYED"]
+          },
+          "employment_status": {
+            "type": "string",
+            "enum": [
+              "COTERMINOUS",
+              "CONTRACTUAL",
+              "PROBATIONARY",
+              "PROJECT_BASED",
+              "REGULAR",
+              "ELECTED_OFFICIALS"
+            ]
+          },
+          "occupation": {
+            "type": "string",
+            "description": "Must be one of **occupations[].value** (catalogue)."
+          },
+          "industry": { "type": "string", "minLength": 2, "maxLength": 80 },
+          "business_email": { "type": "string", "format": "email" },
+          "years_working_total": { "type": "number", "minimum": 0 },
+          "gross_monthly_income_cents": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "**PHP centavos** — **Gross Monthly Income**; ×12 must meet product **min_annual_income_cents** (PHP **250,000**/year minimum)."
+          },
+          "employer_name": { "type": "string" },
+          "employer_address": {
+            "$ref": "#/components/schemas/EmployerAddressIn",
+            "description": "Required when **status** is **EMPLOYED** — validated against **philippine_address_sample_rows**."
+          },
+          "years_with_current_employer": { "type": "number", "minimum": 0 },
+          "is_regular_employment": { "type": "boolean" },
+          "business_mobile_phone": {
+            "type": "string",
+            "description": "Optional **Business Mobile Number** — **+639…**, **09…**, or **9XXXXXXXXX** (national digit **9**)."
+          },
+          "business_phone": {
+            "$ref": "#/components/schemas/HomePhoneIn",
+            "description": "Optional **Business Phone** — **area_code** (**002–088**) + **subscriber_number** (8 digits); both if either is sent."
+          },
+          "business_name": { "type": "string" },
+          "years_in_current_business": { "type": "number", "minimum": 0 }
         }
       },
       "ApplicationIn": {
         "type": "object",
-        "required": ["product_code", "principal_cents", "term_months", "borrower"],
+        "required": [
+          "product_code",
+          "principal_cents",
+          "term_months",
+          "metrobank_client_type",
+          "loan_purpose",
+          "additional_information",
+          "borrower",
+          "employment"
+        ],
         "properties": {
           "product_code": {
             "type": "string",
-            "description": "Must be **PERSONAL_LOAN** (sole product; **PHP** centavos). See **GET /v1/reference/loan-products**."
+            "description": "Must be **PERSONAL_LOAN** (sole product; **PHP** centavos). See **GET /v1/reference/loan-products** (**intake_flow**)."
           },
-          "principal_cents": { "type": "integer", "minimum": 1 },
+          "principal_cents": {
+            "type": "integer",
+            "minimum": 1,
+            "multipleOf": 100,
+            "description": "**Personal Loan:** whole **PHP** amounts only (**integer** centavos divisible by **100**). Range: catalogue **min_principal_cents**–**max_principal_cents**."
+          },
           "term_months": {
             "type": "integer",
             "enum": [12, 18, 24, 36],
             "description": "Amortization term in **whole months** — bank **product catalogue** LOV only (no other values accepted)."
           },
-          "borrower": { "$ref": "#/components/schemas/BorrowerIn" }
+          "metrobank_client_type": {
+            "type": "string",
+            "enum": [
+              "EXISTING_CLIENT_CREDIT_CARD",
+              "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
+              "NOT_METROBANK_CLIENT"
+            ],
+            "description": "**PERSONAL_LOAN** prerequisite from intake (**Are you an existing Metrobank Client?**). Only **EXISTING_CLIENT_CREDIT_CARD** and **EXISTING_CLIENT_DEPOSIT_ACCOUNT** are accepted — **NOT_METROBANK_CLIENT** returns **422**. Mirrors **`metrobank_client_prerequisite`** on **GET /reference/loan-products**."
+          },
+          "loan_purpose": { "$ref": "#/components/schemas/LoanPurpose" },
+          "additional_information": { "$ref": "#/components/schemas/AdditionalInformationIn" },
+          "borrower": { "$ref": "#/components/schemas/BorrowerIn" },
+          "employment": { "$ref": "#/components/schemas/EmploymentIn" }
+        }
+      },
+      "ApplicationPatchIn": {
+        "type": "object",
+        "description": "Any subset of application fields to merge into a **DRAFT**.",
+        "properties": {
+          "product_code": { "type": "string" },
+          "principal_cents": { "type": "integer", "minimum": 1 },
+          "term_months": { "type": "integer", "enum": [12, 18, 24, 36] },
+          "metrobank_client_type": {
+            "type": "string",
+            "enum": [
+              "EXISTING_CLIENT_CREDIT_CARD",
+              "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
+              "NOT_METROBANK_CLIENT"
+            ]
+          },
+          "loan_purpose": { "$ref": "#/components/schemas/LoanPurpose" },
+          "additional_information": { "$ref": "#/components/schemas/AdditionalInformationIn" },
+          "borrower": { "type": "object", "additionalProperties": true },
+          "employment": { "$ref": "#/components/schemas/EmploymentIn" }
+        }
+      },
+      "EligibilityPreviewOut": {
+        "type": "object",
+        "required": ["eligible", "checks", "failed_checks"],
+        "properties": {
+          "eligible": { "type": "boolean" },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "criterion", "passed"],
+              "properties": {
+                "id": { "type": "string" },
+                "criterion": { "type": "string" },
+                "passed": { "type": "boolean" }
+              }
+            }
+          },
+          "failed_checks": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Human-readable criteria that failed — same labels returned as **422** on create/PATCH when ineligible."
+          }
         }
       },
       "StipulationOut": {
@@ -1028,12 +1763,39 @@
           "product_code": { "type": "string" },
           "principal_cents": { "type": "integer" },
           "term_months": { "type": "integer" },
+          "metrobank_client_type": {
+            "type": "string",
+            "enum": [
+              "EXISTING_CLIENT_CREDIT_CARD",
+              "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
+              "NOT_METROBANK_CLIENT"
+            ],
+            "description": "Captured at intake; must be an **eligible** value for the application to be created."
+          },
           "borrower": {
             "type": "object",
+            "description": "Includes intake fields after Step 6.",
+            "additionalProperties": true,
             "properties": {
               "full_name": { "type": "string" },
               "email": { "type": "string" },
-              "annual_income_cents": { "type": "integer" }
+              "date_of_birth": { "type": "string" },
+              "citizenship": { "type": "string" },
+              "primary_id_document_type": { "$ref": "#/components/schemas/PrimaryIdDocumentType" },
+              "residential_address": { "type": "object", "additionalProperties": true }
+            }
+          },
+          "employment": {
+            "$ref": "#/components/schemas/EmploymentIn",
+            "description": "Captured at Step 5; echoed on reads."
+          },
+          "document_intake": {
+            "type": "object",
+            "nullable": true,
+            "description": "Set by **POST …/documents**; cleared when **borrower.primary_id_document_type** changes via **PATCH**.",
+            "properties": {
+              "primary_id_document_type": { "$ref": "#/components/schemas/PrimaryIdDocumentType" },
+              "completed_at": { "type": "string", "format": "date-time" }
             }
           },
           "loan_id": {
@@ -1066,7 +1828,7 @@
       "StipulationIn": {
         "type": "object",
         "required": ["description"],
-        "description": "Each item adds one outstanding requirement. **`description`** is free text — the sandbox does **not** enforce a fixed list. For a long **copy-paste list** of demo descriptions, see **`DOCUMENTATION.md` §5.2 and `javascript/loanConstants.js`** (`STIPULATION_DESCRIPTION_EXAMPLES`).",
+        "description": "Each item adds one outstanding requirement. **`description`** is free text — the sandbox does **not** enforce a fixed list. For a long **copy-paste list** of demo descriptions, see **`docs/DOCUMENTATION.md` §5.2 and `javascript/lib/loanConstants.js`** (`STIPULATION_DESCRIPTION_EXAMPLES`).",
         "properties": {
           "description": {
             "type": "string",
@@ -1094,7 +1856,7 @@
           "id": { "type": "string" },
           "status": {
             "type": "string",
-            "description": "**Sandbox loan status machine:** **PENDING_STIPS** → **PENDING_FUNDING** → **CLEARED_FOR_BOOKING** → **FUNDED** → **ACTIVE** → **PAID_OFF** → **CLOSED**. **funding/authorize** sits between clear-to-close and booking. See **DOCUMENTATION.md** §5.4."
+            "description": "**Sandbox loan status machine:** **PENDING_STIPS** → **PENDING_FUNDING** → **CLEARED_FOR_BOOKING** → **FUNDED** → **ACTIVE** → **PAID_OFF** → **CLOSED**. **funding/authorize** sits between clear-to-close and booking. See **docs/DOCUMENTATION.md** §5.4."
           },
           "balance_cents": { "type": "integer" },
           "principal_cents": { "type": "integer" },

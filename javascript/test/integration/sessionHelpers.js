@@ -1,4 +1,4 @@
-import { buildDemoKycPayload, buildDemoLogin } from '../sampleData.js'
+import { buildDemoKycPayload, buildDemoLogin } from '../../lib/sampleData.js'
 
 /** Log in and finish KYC so loan APIs work (mock + tests). */
 export async function loginAndCompleteKyc(client) {

@@ -6,8 +6,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
-import { LoanApiClient } from '../loanApiClient.js'
-import { getSettings, isLocalMockConfigured } from '../config.js'
+import { LoanApiClient } from '../../lib/loanApiClient.js'
+import { getSettings, isLocalMockConfigured } from '../../lib/config.js'
 import {
   buildDemoLogin,
   buildSampleLoanApplication,
@@ -15,9 +15,14 @@ import {
   buildUnderwritingBody,
   creditCheckForceFail,
   creditCheckForcePass,
-} from '../sampleData.js'
-import { expectRejectsWithStatus } from './helpers/assertions.js'
-import { activeLoan, throughCredit, throughUnderwritingDecision } from './flowHelpers.js'
+} from '../../lib/sampleData.js'
+import { expectRejectsWithStatus } from '../helpers/assertions.js'
+import {
+  activeLoan,
+  registerDocumentsForPayload,
+  throughCredit,
+  throughUnderwritingDecision,
+} from './flowHelpers.js'
 import { loginAndCompleteKyc } from './sessionHelpers.js'
 
 const MOCK_BASE = 'https://api.loan.test/v1'
@@ -126,15 +131,19 @@ describe.skipIf(!isLocalMockConfigured())(
     })
 
     it('submit twice → second time is rejected', async () => {
-      const created = await client.createApplication(buildSampleLoanApplication())
+      const payload = buildSampleLoanApplication()
+      const created = await client.createApplication(payload)
       const appId = created.id
+      await registerDocumentsForPayload(client, appId, payload)
       await client.submitApplication(appId)
       await expectRejectsWithStatus(client.submitApplication(appId), 409)
     })
 
     it('approve before credit → rejected', async () => {
-      const created = await client.createApplication(buildSampleLoanApplication())
+      const payload = buildSampleLoanApplication()
+      const created = await client.createApplication(payload)
       const appId = created.id
+      await registerDocumentsForPayload(client, appId, payload)
       await client.submitApplication(appId)
       await expectRejectsWithStatus(
         client.underwritingDecision(appId, buildUnderwritingBody('APPROVE')),
@@ -143,8 +152,10 @@ describe.skipIf(!isLocalMockConfigured())(
     })
 
     it('credit fail → application declined, no loan', async () => {
-      const created = await client.createApplication(buildSampleLoanApplication())
+      const payload = buildSampleLoanApplication()
+      const created = await client.createApplication(payload)
       const appId = created.id
+      await registerDocumentsForPayload(client, appId, payload)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)
@@ -153,8 +164,10 @@ describe.skipIf(!isLocalMockConfigured())(
     })
 
     it('credit before disclosures acknowledged → rejected', async () => {
-      const created = await client.createApplication(buildSampleLoanApplication())
+      const payload = buildSampleLoanApplication()
+      const created = await client.createApplication(payload)
       const appId = created.id
+      await registerDocumentsForPayload(client, appId, payload)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await expectRejectsWithStatus(client.runCreditCheck(appId, creditCheckForcePass), 409)
@@ -216,7 +229,7 @@ describe.skipIf(!isLocalMockConfigured())(
         product_code: 'X',
         principal_cents: 0,
         term_months: 12,
-        borrower: { full_name: 'A', email: 'a@b.co', annual_income_cents: 1 },
+        borrower: { full_name: 'A', email: 'a@b.co' },
       }
       const res = await fetch(`${baseUrl}/loan-applications`, {
         method: 'POST',

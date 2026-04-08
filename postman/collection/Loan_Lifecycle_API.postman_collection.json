@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-loan-lifecycle-001",
     "name": "Loan Lifecycle API",
-    "description": "**Lifecycle** matches **Swagger UI**, **`javascript/mock-server/openapi.json`**, and **`DOCUMENTATION.md`** §**5** (happy path §**5.0**, production phase map §**5.4**). **OpenAPI 0.7+** adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**.\n\n**Order:** **Login** → **KYC** → Create → Submit → **Ops accept** → **Disclosures acknowledge** → Credit → **Start underwriting** → **Underwriting decision** → (optional **stipulations**) → **Funding authorize** → **Fund** (book) → **Disburse** → Get loan → Schedule → Payment(s) → Payoff → optional **Logout**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack — see **`DOCUMENTATION.md`** §**5.4** for what real institutions add.\n\n**Import-ready flow:** folder **Flow — Happy path (import & run in order)** (this guide §**7**).\n\n**Stipulation tests:** **Tests — stipulations (single & multiple)** — Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** — select **Loan Lifecycle — Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`javascript/mock-server/openapi.json`** in Postman.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only — do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** — set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
+    "description": "**Lifecycle** matches **Swagger UI**, **`javascript/mock-server/openapi.json`**, and **`docs/DOCUMENTATION.md`** §**5** (happy path §**5.0**, production phase map §**5.4**). **OpenAPI 0.7+** adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**.\n\n**Order:** **Login** → **KYC** → **Create loan application** → **Submit** → **Ops accept** → **Disclosures acknowledge** → Credit → **Start underwriting** → **Underwriting decision** → (optional **stipulations**) → **Funding authorize** → **Fund** (book) → **Disburse** → Get loan → Schedule → Payment(s) → Payoff → optional **Logout**.\n\n**Personal Loan (DRAFT path):** optional **0a. Eligibility preview** → **1. Create** → **1b. Loan computation preview** → **1c. Register documents** (**`POST …/documents`**, **`primary_id_document_type`** via collection/env **`primary_id_document_type`**, must match **Create**) → **2. Submit**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack — see **`docs/DOCUMENTATION.md`** §**5.4** for what real institutions add.\n\n**Import-ready flow:** folder **Flow — Happy path (import & run in order)** (this guide §**7**).\n\n**Stipulation tests:** **Tests — stipulations (single & multiple)** — Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** — select **Loan Lifecycle — Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`javascript/mock-server/openapi.json`** in Postman.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only — do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** — set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -83,6 +83,10 @@
     {
       "key": "idempotency_key",
       "value": ""
+    },
+    {
+      "key": "primary_id_document_type",
+      "value": "SSS"
     },
     {
       "key": "loan_preview_principal_cents",
@@ -202,7 +206,7 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "// Expected math mirrors javascript/personalLoanComputation.js + loanProductCatalog.js (keep rates in sync).",
+                  "// Expected math mirrors javascript/lib/personalLoanComputation.js + javascript/lib/loanProductCatalog.js (keep rates in sync).",
                   "function queryVal(name) {",
                   "    var v = '';",
                   "    pm.request.url.query.each(function (p) { if (p.key === name) v = String(p.value); });",
@@ -291,7 +295,7 @@
     },
     {
       "name": "Flow — Happy path (import & run in order)",
-      "description": "Same journey as **Swagger** operation order and **`DOCUMENTATION.md`** §**5.0**. Run **Collection Runner** on **this folder only** (top to bottom). Environment: **Loan Lifecycle — Local mock**. **Login** → **KYC** → numbered steps **1 … 14**; **15. Logout** is optional. Steps **1** and **7** save **application_id** and **loan_id** via Tests. If step **7** is **CONDITIONAL**, it also sets **`stipulation_ids_json`** and **`stipulation_id`** — run **Fulfill all stipulations** in folder **Conditional — fulfill stipulations** once, then **9. Fund** (after **8. Funding — authorize**).",
+      "description": "Same journey as **Swagger** operation order and **`docs/DOCUMENTATION.md`** §**5.0**. Run **Collection Runner** on **this folder only** (top to bottom). Environment: **Loan Lifecycle — Local mock**. **Login** → **KYC** → optional **0a. Eligibility preview** → **1. Create** → **1b** → **1c** (**`{{primary_id_document_type}}`** on **`POST …/documents`**) → **2. Submit** → numbered steps **3 … 14**; **15. Logout** is optional. Steps **1** (create) and **7** (underwriting) save **application_id** and **loan_id** via Tests. If step **7** is **CONDITIONAL**, it also sets **`stipulation_ids_json`** and **`stipulation_id`** — run **Fulfill all stipulations** in folder **Conditional — fulfill stipulations** once, then **9. Fund** (after **8. Funding — authorize**).",
       "item": [
         {
           "name": "Login",
@@ -372,6 +376,40 @@
           "response": []
         },
         {
+          "name": "0a. Eligibility preview (optional, Step 6)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.test('eligible', function () { pm.expect(j.eligible).to.eql(true); });",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
+            },
+            "url": "{{api_root}}/loan-applications/eligibility-preview",
+            "description": "**Personal Loan intake:** **POST /v1/loan-applications/eligibility-preview** — same JSON as **1. Create**; dry-run catalogue + eligibility (UI **Step 6** **Next**). No draft. **Optional** in Runner."
+          },
+          "response": []
+        },
+        {
           "name": "1. Create loan application",
           "event": [
             {
@@ -403,10 +441,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 40000000\n  }\n}"
+              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications",
-            "description": "Creates a DRAFT application. **`term_months`** must be one of **12, 18, 24, 36** (**PHP** Personal Loan catalogue). Saves `application_id`."
+            "description": "**Personal Loan:** **DRAFT** after full intake (**docs/DOCUMENTATION.md** §5.0). **`loan_purpose`**, **additional_information** (PEP), **`borrower.primary_id_document_type`** = **`{{primary_id_document_type}}`** — **Step 3** subset (**step3_primary_id_document_types** on **GET /reference/loan-products**); Step 7 upload uses the full **primary_id_document_types** list. Saves **`application_id`**."
           },
           "response": []
         },
@@ -488,6 +526,40 @@
             "header": [],
             "url": "{{api_root}}/loan-applications/{{application_id}}/computation-preview",
             "description": "**GET /v1/loan-applications/{applicationId}/computation-preview** — same numbers as the public reference preview, but **principal** and **term** are read from the borrower’s application (step **1**). Requires **Bearer**. Run **after** **1. Create loan application** so **`application_id`** is set."
+          },
+          "response": []
+        },
+        {
+          "name": "1c. Register documents (Step 7)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.test('document_intake set', function () { pm.expect(j.document_intake && j.document_intake.completed_at).to.be.ok; });",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primary_id_document_type\": \"{{primary_id_document_type}}\"\n}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/documents",
+            "description": "**Personal Loan Step 7:** **`primary_id_document_type`** must match **`borrower`** on the draft (**{{primary_id_document_type}}**). Same LOV as Step 3. Required before **2. Submit** (**409** if skipped)."
           },
           "response": []
         },
@@ -1021,10 +1093,44 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 40000000\n  }\n}"
+                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
                 },
                 "url": "{{api_root}}/loan-applications",
                 "description": "Creates a DRAFT application. **`term_months`** must be one of **12, 18, 24, 36** (**PHP** Personal Loan catalogue). Saves `application_id`."
+              },
+              "response": []
+            },
+            {
+              "name": "1c. Register documents (Step 7)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    pm.test('document_intake set', function () { pm.expect(j.document_intake && j.document_intake.completed_at).to.be.ok; });",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"primary_id_document_type\": \"{{primary_id_document_type}}\"\n}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/documents",
+                "description": "**Personal Loan Step 7:** **`primary_id_document_type`** must match **`borrower`** on the draft (**{{primary_id_document_type}}**). Same LOV as Step 3. Required before **2. Submit** (**409** if skipped)."
               },
               "response": []
             },
@@ -1432,10 +1538,44 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 5000000,\n  \"term_months\": 36,\n  \"borrower\": {\n    \"full_name\": \"Alex Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"annual_income_cents\": 40000000\n  }\n}"
+                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
                 },
                 "url": "{{api_root}}/loan-applications",
                 "description": "Creates a DRAFT application. **`term_months`** must be one of **12, 18, 24, 36** (**PHP** Personal Loan catalogue). Saves `application_id`."
+              },
+              "response": []
+            },
+            {
+              "name": "1c. Register documents (Step 7)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                      "try {",
+                      "    var j = pm.response.json();",
+                      "    pm.test('document_intake set', function () { pm.expect(j.document_intake && j.document_intake.completed_at).to.be.ok; });",
+                      "} catch (e) {}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"primary_id_document_type\": \"{{primary_id_document_type}}\"\n}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/documents",
+                "description": "**Personal Loan Step 7:** **`primary_id_document_type`** must match **`borrower`** on the draft (**{{primary_id_document_type}}**). Same LOV as Step 3. Required before **2. Submit** (**409** if skipped)."
               },
               "response": []
             },
@@ -1922,7 +2062,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 0,\n  \"term_months\": 12,\n  \"borrower\": {\n    \"full_name\": \"Test\",\n    \"email\": \"test@example.com\",\n    \"annual_income_cents\": 100\n  }\n}"
+              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 0,\n  \"term_months\": 12,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Test\",\n    \"last_name\": \"User\",\n    \"email\": \"test@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Test Street\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Services\",\n    \"business_email\": \"hr@co.example\",\n    \"years_working_total\": 5,\n    \"gross_monthly_income_cents\": 1,\n    \"employer_name\": \"Co\",\n    \"employer_address\": {\n      \"street_line\": \"Test\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\"\n    },\n    \"years_with_current_employer\": 2,\n    \"is_regular_employment\": true\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications"
           },

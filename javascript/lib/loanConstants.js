@@ -12,7 +12,7 @@ export const PAYMENT_METHODS = Object.freeze(['ACH', 'WIRE'])
 /**
  * Suggested `description` values for CONDITIONAL underwriting **`stipulations[]`**.
  * The mock does **not** validate against this list — any string you send is stored as-is.
- * Listed in **DOCUMENTATION.md** §5.2 for copy-paste (demos, screen-reader friendly lookup).
+ * Listed in **docs/DOCUMENTATION.md** §5.2 for copy-paste (demos, screen-reader friendly lookup).
  */
 export const STIPULATION_DESCRIPTION_EXAMPLES = Object.freeze([
   // Income & employment

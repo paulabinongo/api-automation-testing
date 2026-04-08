@@ -1,4 +1,11 @@
-import { buildUnderwritingBody, creditCheckForcePass } from '../sampleData.js'
+import { buildUnderwritingBody, creditCheckForcePass } from '../../lib/sampleData.js'
+
+/** Step 7 — **personal** applications need document registration before **submit**. */
+export async function registerDocumentsForPayload(client, applicationId, payload) {
+  await client.registerApplicationDocuments(applicationId, {
+    primary_id_document_type: payload.borrower.primary_id_document_type,
+  })
+}
 
 /** Ops queue + Reg-TILA-style disclosure ack (production-shaped gates before credit). */
 export async function throughOpsAndDisclosures(client, applicationId) {
@@ -10,6 +17,7 @@ export async function throughOpsAndDisclosures(client, applicationId) {
 export async function throughCredit(client, payload) {
   const created = await client.createApplication(payload)
   const appId = created.id
+  await registerDocumentsForPayload(client, appId, payload)
   await client.submitApplication(appId)
   await throughOpsAndDisclosures(client, appId)
   await client.runCreditCheck(appId, creditCheckForcePass)

@@ -173,6 +173,36 @@ export class LoanApiClient {
     )
   }
 
+  /**
+   * Dry-run Personal Loan eligibility (Step 6 **Next**) — same validation as create, no persistence.
+   * Response: **eligible**, **checks**, **failed_checks**.
+   */
+  previewApplicationEligibility(payload) {
+    return this._request('POST', '/loan-applications/eligibility-preview', {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  }
+
+  /** Update a **DRAFT** application (merged fields; catalogue + eligibility re-validated). */
+  updateDraftApplication(applicationId, payload) {
+    return this._request('PATCH', `/loan-applications/${applicationId}`, {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  }
+
+  /**
+   * Step 7 — **`primary_id_document_type`** must match **borrower.primary_id_document_type** (**422** if not).
+   * Use the **same** LOV as Step 3: **GET /reference/loan-products** → **primary_id_document_types**. Required before **submit** for **PERSONAL_LOAN**.
+   */
+  registerApplicationDocuments(applicationId, payload) {
+    return this._request('POST', `/loan-applications/${applicationId}/documents`, {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  }
+
   /** Look up one application by id. */
   getApplication(applicationId) {
     return this._request('GET', `/loan-applications/${applicationId}`)
