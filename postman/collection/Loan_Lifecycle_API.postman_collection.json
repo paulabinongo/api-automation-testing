@@ -2271,8 +2271,43 @@
     },
     {
       "name": "Edge cases (manual QA)",
-      "description": "Run these **after** you understand the happy path. Expect **4xx** responses — that is correct for invalid actions.\n\n**Auth:** run **Login** (and **KYC** if the scenario touches loan create) before edge requests that need a token — or duplicate requests with **Login** + **KYC** in the same folder.\n\n**Setup tips:** EC3 needs **`loan_id`** from a full path through **10. Disburse** (loan **ACTIVE**). EC5: through **9. Fund**, skip **10. Disburse** (loan **FUNDED**). EC6: through **7** (underwriting) only — no **funding/authorize** or **fund** (loan **PENDING_FUNDING**). Restart the mock between setups if needed.",
+      "description": "Run these **after** you understand the happy path. Expect **4xx** responses — that is correct for invalid actions.\n\n**Auth:** run **Login** (and **KYC** if the scenario touches loan create) before edge requests that need a token — or duplicate requests with **Login** + **KYC** in the same folder.\n\n**EC-DEL:** run **Flow — Happy path** through **1. Create** (or run **Login**, **KYC**, then **1. Create** only) so **`application_id`** is set — **DELETE** immediately → **409** + **`Retry-After`** + **`type`** / **`title`** on the JSON error.\n\n**Setup tips:** EC3 needs **`loan_id`** from a full path through **10. Disburse** (loan **ACTIVE**). EC5: through **9. Fund**, skip **10. Disburse** (loan **FUNDED**). EC6: through **7** (underwriting) only — no **funding/authorize** or **fund** (loan **PENDING_FUNDING**). Restart the mock between setups if needed.",
       "item": [
+        {
+          "name": "EC-DEL. Cancel DRAFT too soon (expect 409 + Retry-After)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409 minimum retention', function () {",
+                  "    pm.expect(pm.response.code).to.equal(409);",
+                  "});",
+                  "pm.test('Retry-After header present', function () {",
+                  "    pm.expect(pm.response.headers.get('Retry-After')).to.be.ok;",
+                  "});",
+                  "if (pm.response.code === 409) {",
+                  "    var j = pm.response.json();",
+                  "    pm.test('Problem Details type', function () {",
+                  "        pm.expect(String(j.type || '')).to.include('draft-minimum-retention');",
+                  "    });",
+                  "    pm.test('retry_after_seconds in body', function () {",
+                  "        pm.expect(j.retry_after_seconds).to.be.at.least(1);",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}",
+            "description": "Requires **`application_id`** from **1. Create** (same session). **DELETE** within **`DRAFT_MIN_RETENTION_MS`** (default **60** s on **`npm run start:mock`**) → **409** — see **`docs/DOCUMENTATION.md`** §**3.1**."
+          },
+          "response": []
+        },
         {
           "name": "EC1. Submit bogus application id (expect 404)",
           "event": [

@@ -236,10 +236,17 @@ export class LoanApiClient {
 
   /**
    * Abandon a **DRAFT** (**DELETE**). **409** if the draft is younger than the server’s minimum retention (default **60** seconds).
+   * Optional **Idempotency-Key** replays **204** for safe retries.
+   * @param {{ idempotencyKey?: string }} [opts]
    * @returns {Promise<Record<string, never>>} empty object on **204**
    */
-  cancelDraftApplication(applicationId) {
-    return this._request('DELETE', `/loan-applications/${applicationId}`)
+  cancelDraftApplication(applicationId, opts = {}) {
+    return this._request(
+      'DELETE',
+      `/loan-applications/${encodeURIComponent(applicationId)}`,
+      {},
+      { idempotencyKey: opts.idempotencyKey },
+    )
   }
 
   /** Borrower or officer submits the application for processing. */

@@ -28,51 +28,22 @@ const openApiSpec = JSON.parse(readFileSync(path.join(__dirname, 'openapi.json')
 const API_SEMANTIC_VERSION = openApiSpec.info.version
 const BANK_ENV = process.env.BANK_API_ENV || 'sandbox'
 
-/** Minimum age (ms) before a **DRAFT** may be cancelled (**DELETE**) or system-removed. Override with **DRAFT_MIN_RETENTION_MS** (e.g. **100** in automated tests). Default **60000** (1 minute). */
-function draftMinRetentionMs() {
-  const raw = process.env.DRAFT_MIN_RETENTION_MS
-  if (raw != null && raw !== '') {
-    const n = Number(raw)
-    if (Number.isFinite(n) && n >= 0) return n
-  }
-  return 60_000
-}
-
 /**
- * When set to a positive number (ms), **DRAFT** rows are removed by the server after this age (but never before **draftMinRetentionMs()**).
- * Omit or **0** to disable automatic draft removal.
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {number} status
+ * @param {string | string[]} detail
+ * @param {Record<string, unknown>} [extra] optional **Problem Details**-style fields (**type**, **title**, **retry_after_seconds**, …)
  */
-function systemDraftCancelAfterMs() {
-  const raw = process.env.DRAFT_SYSTEM_CANCEL_AFTER_MS
-  if (raw == null || raw === '') return null
-  const n = Number(raw)
-  if (!Number.isFinite(n) || n <= 0) return null
-  return Math.max(draftMinRetentionMs(), n)
-}
-
-function shouldAutoRemoveDraft(row) {
-  if (row.status !== 'DRAFT') return false
-  const ttl = systemDraftCancelAfterMs()
-  if (ttl == null) return false
-  const bornMs = row.draft_created_at ? new Date(row.draft_created_at).getTime() : NaN
-  if (!Number.isFinite(bornMs)) return false
-  return Date.now() - bornMs >= ttl
-}
-
-function sweepAutoExpiredDrafts() {
-  if (systemDraftCancelAfterMs() == null) return
-  for (const [id, row] of applications) {
-    if (shouldAutoRemoveDraft(row)) applications.delete(id)
-  }
-}
-
-/** @param {import('express').Request} req @param {import('express').Response} res @param {number} status @param {string | string[]} detail */
-function sendError(req, res, status, detail) {
-  res.status(status).json({
+function sendError(req, res, status, detail, extra) {
+  /** @type {Record<string, unknown>} */
+  const body = {
     detail,
     correlation_id: req.correlationId,
     timestamp: new Date().toISOString(),
-  })
+  }
+  if (extra != null && typeof extra === 'object') Object.assign(body, extra)
+  res.status(status).json(body)
 }
 
 function correlationAndSecurityHeaders(req, res, next) {
@@ -133,14 +104,17 @@ function rateLimitMiddleware(req, res, next) {
 const idemStore = new Map()
 const IDEM_MAX = 2500
 
-function idempotencyForAuthedPosts(req, res, next) {
-  if (req.method !== 'POST') return next()
+/** **POST** (body hash) and **DELETE** `/v1/loan-applications/{uuid}` (no body) when **Idempotency-Key** is set. */
+function idempotencyForAuthedMutations(req, res, next) {
   const raw = req.headers['idempotency-key']
   if (raw == null || raw === '') return next()
   const idemKey = String(raw).trim().slice(0, 128)
   if (!idemKey) return next()
   const pathOnly = req.originalUrl.split('?')[0]
-  const bodyHash = JSON.stringify(req.body ?? {})
+  const isPost = req.method === 'POST'
+  const isDeleteDraft = req.method === 'DELETE' && /^\/v1\/loan-applications\/[^/]+$/.test(pathOnly)
+  if (!isPost && !isDeleteDraft) return next()
+  const bodyHash = isDeleteDraft ? '' : JSON.stringify(req.body ?? {})
   const scopedKey = `${req.accessToken}:${idemKey}:${pathOnly}`
   const hit = idemStore.get(scopedKey)
   if (hit) {
@@ -153,7 +127,23 @@ function idempotencyForAuthedPosts(req, res, next) {
       )
     }
     res.setHeader('Idempotent-Replayed', 'true')
+    if (hit.status === 204 || hit.body === null) {
+      return res.status(hit.status).end()
+    }
     return res.status(hit.status).json(hit.body)
+  }
+  if (isDeleteDraft) {
+    res.once('finish', () => {
+      const code = res.statusCode
+      if (code >= 200 && code < 300) {
+        if (idemStore.size >= IDEM_MAX) {
+          const first = idemStore.keys().next().value
+          idemStore.delete(first)
+        }
+        idemStore.set(scopedKey, { bodyHash: '', status: code, body: null })
+      }
+    })
+    return next()
   }
   const origJson = res.json.bind(res)
   res.json = (payload) => {
@@ -199,6 +189,52 @@ const applications = new Map()
 const loans = new Map()
 /** @type {Map<string, { user_id: string, email: string, kyc: null | object }>} */
 const sessions = new Map()
+
+/** Minimum age (ms) before a **DRAFT** may be cancelled (**DELETE**) or system-removed. Override with **DRAFT_MIN_RETENTION_MS** (e.g. **100** in automated tests). Default **60000** (1 minute). */
+function draftMinRetentionMs() {
+  const raw = process.env.DRAFT_MIN_RETENTION_MS
+  if (raw != null && raw !== '') {
+    const n = Number(raw)
+    if (Number.isFinite(n) && n >= 0) return n
+  }
+  return 60_000
+}
+
+/** Default **DRAFT** system expiry — **3 minutes** (after **`draft_created_at`**), never before **draftMinRetentionMs()**. */
+const DEFAULT_DRAFT_AUTO_CANCEL_MS = 180_000
+
+/**
+ * **DRAFT** rows are removed by the server after this age (≥ **draftMinRetentionMs()**).
+ * Default **180000** ms (**3** minutes) when **`DRAFT_SYSTEM_CANCEL_AFTER_MS`** is unset.
+ * Set to **0**, **false**, **off**, or **no** to disable automatic removal only.
+ */
+function systemDraftCancelAfterMs() {
+  const raw = process.env.DRAFT_SYSTEM_CANCEL_AFTER_MS
+  if (raw != null && String(raw).trim() !== '') {
+    const token = String(raw).trim().toLowerCase()
+    if (token === '0' || token === 'false' || token === 'off' || token === 'no') return null
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n <= 0) return null
+    return Math.max(draftMinRetentionMs(), n)
+  }
+  return Math.max(draftMinRetentionMs(), DEFAULT_DRAFT_AUTO_CANCEL_MS)
+}
+
+function shouldAutoRemoveDraft(row) {
+  if (row.status !== 'DRAFT') return false
+  const ttl = systemDraftCancelAfterMs()
+  if (ttl == null) return false
+  const bornMs = row.draft_created_at ? new Date(row.draft_created_at).getTime() : NaN
+  if (!Number.isFinite(bornMs)) return false
+  return Date.now() - bornMs >= ttl
+}
+
+function sweepAutoExpiredDrafts() {
+  if (systemDraftCancelAfterMs() == null) return
+  for (const [id, row] of applications) {
+    if (shouldAutoRemoveDraft(row)) applications.delete(id)
+  }
+}
 
 function uuid() {
   return randomUUID()
@@ -410,7 +446,7 @@ v1.post('/auth/login', (req, res) => {
 })
 
 v1.use(authRequired)
-v1.use(idempotencyForAuthedPosts)
+v1.use(idempotencyForAuthedMutations)
 
 v1.post('/auth/logout', (req, res) => {
   sessions.delete(req.accessToken)
@@ -793,15 +829,32 @@ v1.delete('/loan-applications/:applicationId', (req, res) => {
   const ageMs = Number.isFinite(bornMs) ? Date.now() - bornMs : Number.POSITIVE_INFINITY
   const minMs = draftMinRetentionMs()
   if (ageMs < minMs) {
-    const sec = Math.ceil(minMs / 1000)
+    const policySec = Math.ceil(minMs / 1000)
+    const waitSec = Math.max(1, Math.ceil((minMs - ageMs) / 1000))
+    res.setHeader('Retry-After', String(waitSec))
     return sendError(
       req,
       res,
       409,
-      `DRAFT applications cannot be cancelled until they are at least ${sec} second(s) old (policy minimum retention)`,
+      `DRAFT applications cannot be cancelled until they are at least ${policySec} second(s) old (policy minimum retention)`,
+      {
+        type: 'urn:problem-type:draft-minimum-retention-not-satisfied',
+        title: 'Draft minimum retention',
+        retry_after_seconds: waitSec,
+      },
     )
   }
-  applications.delete(req.params.applicationId)
+  const aid = req.params.applicationId
+  const uid = row.owner_user_id
+  applications.delete(aid)
+  console.info(
+    '[audit] draft_cancelled',
+    JSON.stringify({
+      application_id: aid,
+      user_id: uid,
+      at: new Date().toISOString(),
+    }),
+  )
   res.status(204).end()
 })
 

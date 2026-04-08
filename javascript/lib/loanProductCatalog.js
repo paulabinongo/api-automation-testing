@@ -330,11 +330,13 @@ export const PERSONAL_LOAN_PRODUCT = Object.freeze({
       }),
       Object.freeze({
         value: 'EXISTING_CLIENT_CREDIT_CARD',
-        label: 'Metrobank credit card holder — I will open/use a Metrobank deposit account for ADA repayments (confirm before approval)',
+        label:
+          'Metrobank credit card holder — I will open/use a Metrobank deposit account for ADA repayments (confirm before approval)',
       }),
       Object.freeze({
         value: 'NOT_METROBANK_CLIENT',
-        label: 'Not yet a Metrobank client — I will open a Metrobank deposit account for repayments (confirm before approval)',
+        label:
+          'Not yet a Metrobank client — I will open a Metrobank deposit account for repayments (confirm before approval)',
       }),
     ]),
   }),
@@ -776,7 +778,11 @@ export function validatePersonalLoanIntakeShape(body, options = {}) {
     if (needsDepositRepaymentPlan) {
       const plan = ai.metrobank_deposit_repayment_plan
       const P = METROBANK_DEPOSIT_REPAYMENT_PLAN
-      const validPlans = [P.WILL_OPEN_METROBANK_DEPOSIT, P.DECLINES_METROBANK_DEPOSIT, P.WILL_USE_OTHER_BANK_DEPOSIT_ONLY]
+      const validPlans = [
+        P.WILL_OPEN_METROBANK_DEPOSIT,
+        P.DECLINES_METROBANK_DEPOSIT,
+        P.WILL_USE_OTHER_BANK_DEPOSIT_ONLY,
+      ]
       if (plan != null && plan !== '' && !validPlans.includes(plan)) {
         errs.push(
           'additional_information.metrobank_deposit_repayment_plan must be one of: ' +

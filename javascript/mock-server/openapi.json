@@ -494,16 +494,33 @@
       "delete": {
         "tags": ["Applications"],
         "summary": "Cancel DRAFT application (borrower abandon)",
-        "description": "Removes a **DRAFT** owned by the session. **409** if **`status`** is not **DRAFT**, or if the draft is younger than the minimum retention (**60** seconds by default — configure **`DRAFT_MIN_RETENTION_MS`** on the mock). **404** after removal or if already auto-expired (**`DRAFT_SYSTEM_CANCEL_AFTER_MS`** when set).",
+        "description": "Removes a **DRAFT** owned by the session. **409** if **`status`** is not **DRAFT**, or if the draft is younger than the minimum retention (**60** seconds by default — configure **`DRAFT_MIN_RETENTION_MS`** on the mock); retention **409** includes **`Retry-After`** (seconds) and **Problem Details** fields (**type**, **title**, **retry_after_seconds**). **404** after removal or if already auto-expired (default **3** min idle; **`DRAFT_SYSTEM_CANCEL_AFTER_MS`** overrides, **0** / **off** disables). Successful cancels are logged server-side (**`[audit] draft_cancelled`**). Optional **Idempotency-Key** replays **204**.",
         "operationId": "cancelDraftApplication",
-        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "parameters": [
+          { "$ref": "#/components/parameters/applicationId" },
+          { "$ref": "#/components/parameters/idempotencyKey" }
+        ],
         "responses": {
-          "204": { "description": "Draft cancelled — no response body" },
+          "204": {
+            "description": "Draft cancelled — no response body",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "**true** when this response was replayed from an earlier **Idempotency-Key**",
+                "schema": { "type": "string", "enum": ["true"] }
+              }
+            }
+          },
           "401": { "description": "Unauthorized" },
           "403": { "description": "Application belongs to another session" },
           "404": { "description": "Not found (or expired per server policy)" },
           "409": {
             "description": "Not **DRAFT**, or minimum retention not met",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before **DELETE** may succeed (retention **409** only)",
+                "schema": { "type": "integer" }
+              }
+            },
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
             }
@@ -1221,7 +1238,7 @@
         "name": "Idempotency-Key",
         "in": "header",
         "required": false,
-        "description": "On **authenticated POST**, duplicate key + same JSON body replays the first successful response. Different body → **409**.",
+        "description": "On **authenticated POST**, duplicate key + same JSON body replays the first successful response (different body → **409**). On **DELETE** `/v1/loan-applications/{applicationId}`, same key + path replays the first successful **204** (response header **Idempotent-Replayed: true**).",
         "schema": { "type": "string", "maxLength": 128 }
       },
       "applicationId": {
@@ -2067,7 +2084,16 @@
       },
       "ErrorBody": {
         "type": "object",
+        "description": "JSON error payload; **type** / **title** follow RFC 7807-style **Problem Details** where applicable.",
         "properties": {
+          "type": {
+            "type": "string",
+            "description": "Stable problem type URI or **URN** (e.g. **`urn:problem-type:draft-minimum-retention-not-satisfied`**)."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short human-readable title for the problem."
+          },
           "detail": {
             "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
           },
@@ -2078,7 +2104,7 @@
           "timestamp": { "type": "string", "format": "date-time" },
           "retry_after_seconds": {
             "type": "integer",
-            "description": "Present on **429** when **`BANK_API_RATE_LIMIT_PER_MINUTE`** is set."
+            "description": "Echo of **Retry-After** hint: **429** (rate limit) or **409** (**DELETE** draft retention)."
           }
         }
       }

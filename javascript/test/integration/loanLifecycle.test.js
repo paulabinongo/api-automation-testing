@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
-import { LoanApiClient } from '../../lib/loanApiClient.js'
+import { LoanApiClient, LoanApiError } from '../../lib/loanApiClient.js'
 import { isLocalMockConfigured } from '../../lib/config.js'
 import {
   buildConditionalUnderwritingExample,
@@ -331,28 +331,48 @@ describe.skipIf(!isLocalMockConfigured())(
       expect(created.product_code).toBe('PERSONAL_LOAN')
     })
 
-    it('rejects DELETE DRAFT before minimum retention (policy)', async () => {
+    it('rejects DELETE DRAFT before minimum retention (policy, Problem Details + retry hint)', async () => {
       const client = new LoanApiClient()
       await loginAndCompleteKyc(client)
       const created = await client.createApplication(buildPersonalLoanSampleApplication(12))
       expect(created.draft_created_at).toBeTruthy()
-      await expectRejectsWithStatus(client.cancelDraftApplication(created.id), 409)
+      try {
+        await client.cancelDraftApplication(created.id)
+        expect.fail('expected LoanApiError 409')
+      } catch (e) {
+        expect(e).toBeInstanceOf(LoanApiError)
+        expect(e.statusCode).toBe(409)
+        expect(e.body).toMatchObject({
+          type: 'urn:problem-type:draft-minimum-retention-not-satisfied',
+          title: 'Draft minimum retention',
+        })
+        expect(e.body.retry_after_seconds).toBeGreaterThanOrEqual(1)
+      }
     })
 
-    it(
-      'allows DELETE DRAFT after minimum retention then GET returns 404',
-      async () => {
-        const client = new LoanApiClient()
-        await loginAndCompleteKyc(client)
-        const created = await client.createApplication(buildPersonalLoanSampleApplication(12))
-        const minMs = Number(process.env.DRAFT_MIN_RETENTION_MS)
-        const waitMs = Number.isFinite(minMs) && minMs >= 0 ? minMs + 150 : 60_150
-        await new Promise((r) => setTimeout(r, waitMs))
-        await client.cancelDraftApplication(created.id)
-        await expectRejectsWithStatus(client.getApplication(created.id), 404)
-      },
-      125_000,
-    )
+    it('allows DELETE DRAFT after minimum retention then GET returns 404', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const created = await client.createApplication(buildPersonalLoanSampleApplication(12))
+      const minMs = Number(process.env.DRAFT_MIN_RETENTION_MS)
+      const waitMs = Number.isFinite(minMs) && minMs >= 0 ? minMs + 150 : 60_150
+      await new Promise((r) => setTimeout(r, waitMs))
+      await client.cancelDraftApplication(created.id)
+      await expectRejectsWithStatus(client.getApplication(created.id), 404)
+    }, 125_000)
+
+    it('replays successful DELETE DRAFT when Idempotency-Key matches', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const created = await client.createApplication(buildPersonalLoanSampleApplication(12))
+      const minMs = Number(process.env.DRAFT_MIN_RETENTION_MS)
+      const waitMs = Number.isFinite(minMs) && minMs >= 0 ? minMs + 150 : 60_150
+      await new Promise((r) => setTimeout(r, waitMs))
+      const key = randomUUID()
+      await client.cancelDraftApplication(created.id, { idempotencyKey: key })
+      await client.cancelDraftApplication(created.id, { idempotencyKey: key })
+      await expectRejectsWithStatus(client.getApplication(created.id), 404)
+    }, 125_000)
 
     it.each([
       [
