@@ -234,6 +234,14 @@ export class LoanApiClient {
     return this._request('GET', `/loan-applications/${applicationId}`)
   }
 
+  /**
+   * Abandon a **DRAFT** (**DELETE**). **409** if the draft is younger than the server’s minimum retention (default **60** seconds).
+   * @returns {Promise<Record<string, never>>} empty object on **204**
+   */
+  cancelDraftApplication(applicationId) {
+    return this._request('DELETE', `/loan-applications/${applicationId}`)
+  }
+
   /** Borrower or officer submits the application for processing. */
   submitApplication(applicationId) {
     return this._request('POST', `/loan-applications/${applicationId}/submit`)

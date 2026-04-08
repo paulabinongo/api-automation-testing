@@ -331,6 +331,29 @@ describe.skipIf(!isLocalMockConfigured())(
       expect(created.product_code).toBe('PERSONAL_LOAN')
     })
 
+    it('rejects DELETE DRAFT before minimum retention (policy)', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const created = await client.createApplication(buildPersonalLoanSampleApplication(12))
+      expect(created.draft_created_at).toBeTruthy()
+      await expectRejectsWithStatus(client.cancelDraftApplication(created.id), 409)
+    })
+
+    it(
+      'allows DELETE DRAFT after minimum retention then GET returns 404',
+      async () => {
+        const client = new LoanApiClient()
+        await loginAndCompleteKyc(client)
+        const created = await client.createApplication(buildPersonalLoanSampleApplication(12))
+        const minMs = Number(process.env.DRAFT_MIN_RETENTION_MS)
+        const waitMs = Number.isFinite(minMs) && minMs >= 0 ? minMs + 150 : 60_150
+        await new Promise((r) => setTimeout(r, waitMs))
+        await client.cancelDraftApplication(created.id)
+        await expectRejectsWithStatus(client.getApplication(created.id), 404)
+      },
+      125_000,
+    )
+
     it.each([
       [
         'pep_close_family_or_public_position only',

@@ -490,6 +490,25 @@
           },
           "404": { "description": "Application not found" }
         }
+      },
+      "delete": {
+        "tags": ["Applications"],
+        "summary": "Cancel DRAFT application (borrower abandon)",
+        "description": "Removes a **DRAFT** owned by the session. **409** if **`status`** is not **DRAFT**, or if the draft is younger than the minimum retention (**60** seconds by default — configure **`DRAFT_MIN_RETENTION_MS`** on the mock). **404** after removal or if already auto-expired (**`DRAFT_SYSTEM_CANCEL_AFTER_MS`** when set).",
+        "operationId": "cancelDraftApplication",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "responses": {
+          "204": { "description": "Draft cancelled — no response body" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Application belongs to another session" },
+          "404": { "description": "Not found (or expired per server policy)" },
+          "409": {
+            "description": "Not **DRAFT**, or minimum retention not met",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          }
+        }
       }
     },
     "/v1/loan-applications/{applicationId}/computation-preview": {
@@ -1860,6 +1879,11 @@
           "id": {
             "type": "string",
             "description": "Application id — use this for submit, credit, underwriting paths."
+          },
+          "draft_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the **DRAFT** was created (**POST /loan-applications**). Used for minimum retention before **DELETE** or optional system expiry."
           },
           "status": { "type": "string" },
           "product_code": { "type": "string" },

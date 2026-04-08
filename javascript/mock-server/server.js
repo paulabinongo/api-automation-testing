@@ -28,6 +28,44 @@ const openApiSpec = JSON.parse(readFileSync(path.join(__dirname, 'openapi.json')
 const API_SEMANTIC_VERSION = openApiSpec.info.version
 const BANK_ENV = process.env.BANK_API_ENV || 'sandbox'
 
+/** Minimum age (ms) before a **DRAFT** may be cancelled (**DELETE**) or system-removed. Override with **DRAFT_MIN_RETENTION_MS** (e.g. **100** in automated tests). Default **60000** (1 minute). */
+function draftMinRetentionMs() {
+  const raw = process.env.DRAFT_MIN_RETENTION_MS
+  if (raw != null && raw !== '') {
+    const n = Number(raw)
+    if (Number.isFinite(n) && n >= 0) return n
+  }
+  return 60_000
+}
+
+/**
+ * When set to a positive number (ms), **DRAFT** rows are removed by the server after this age (but never before **draftMinRetentionMs()**).
+ * Omit or **0** to disable automatic draft removal.
+ */
+function systemDraftCancelAfterMs() {
+  const raw = process.env.DRAFT_SYSTEM_CANCEL_AFTER_MS
+  if (raw == null || raw === '') return null
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.max(draftMinRetentionMs(), n)
+}
+
+function shouldAutoRemoveDraft(row) {
+  if (row.status !== 'DRAFT') return false
+  const ttl = systemDraftCancelAfterMs()
+  if (ttl == null) return false
+  const bornMs = row.draft_created_at ? new Date(row.draft_created_at).getTime() : NaN
+  if (!Number.isFinite(bornMs)) return false
+  return Date.now() - bornMs >= ttl
+}
+
+function sweepAutoExpiredDrafts() {
+  if (systemDraftCancelAfterMs() == null) return
+  for (const [id, row] of applications) {
+    if (shouldAutoRemoveDraft(row)) applications.delete(id)
+  }
+}
+
 /** @param {import('express').Request} req @param {import('express').Response} res @param {number} status @param {string | string[]} detail */
 function sendError(req, res, status, detail) {
   res.status(status).json({
@@ -182,6 +220,10 @@ function allStipulationsFulfilled(stips) {
 function getApp(applicationId) {
   const row = applications.get(applicationId)
   if (!row) return null
+  if (shouldAutoRemoveDraft(row)) {
+    applications.delete(applicationId)
+    return null
+  }
   return row
 }
 
@@ -474,6 +516,7 @@ v1.post('/loan-applications', (req, res) => {
     disclosures_acknowledged_at: null,
     pep_compliance_clearance_at: null,
     metrobank_deposit_account_confirmed_at: null,
+    draft_created_at: new Date().toISOString(),
     owner_user_id: req.bankSession.user_id,
   }
   applications.set(aid, row)
@@ -727,6 +770,39 @@ v1.post('/loan-applications/:applicationId/compliance/pep-clearance', (req, res)
   }
   row.pep_compliance_clearance_at = new Date().toISOString()
   res.json(sanitizeApplicationOut(row))
+})
+
+/**
+ * Borrower abandons a **DRAFT** — not allowed until the draft is at least **draftMinRetentionMs()** old.
+ */
+v1.delete('/loan-applications/:applicationId', (req, res) => {
+  const row = getApp(req.params.applicationId)
+  if (!row) return sendError(req, res, 404, 'Application not found')
+  if (row.owner_user_id !== req.bankSession.user_id) {
+    return sendError(req, res, 403, 'Application belongs to another session')
+  }
+  if (row.status !== 'DRAFT') {
+    return sendError(
+      req,
+      res,
+      409,
+      'Only DRAFT applications can be cancelled this way — submitted files follow ops / decline flows',
+    )
+  }
+  const bornMs = row.draft_created_at ? new Date(row.draft_created_at).getTime() : NaN
+  const ageMs = Number.isFinite(bornMs) ? Date.now() - bornMs : Number.POSITIVE_INFINITY
+  const minMs = draftMinRetentionMs()
+  if (ageMs < minMs) {
+    const sec = Math.ceil(minMs / 1000)
+    return sendError(
+      req,
+      res,
+      409,
+      `DRAFT applications cannot be cancelled until they are at least ${sec} second(s) old (policy minimum retention)`,
+    )
+  }
+  applications.delete(req.params.applicationId)
+  res.status(204).end()
 })
 
 v1.get('/loan-applications/:applicationId', (req, res) => {
@@ -1166,6 +1242,11 @@ const HOST = process.env.HOST || '127.0.0.1'
 
 const server = app.listen(PORT, HOST, () => {
   console.log('Mock loan API at http://' + HOST + ':' + PORT + ' (Swagger: /docs)')
+  if (systemDraftCancelAfterMs() != null) {
+    const every = Math.min(60_000, systemDraftCancelAfterMs() || 60_000)
+    const sweepTimer = setInterval(sweepAutoExpiredDrafts, every)
+    if (typeof sweepTimer.unref === 'function') sweepTimer.unref()
+  }
 })
 
 server.on('error', (err) => {

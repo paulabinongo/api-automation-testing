@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "cross-env PORT=9876 start-server-and-test start:mock http://127.0.0.1:9876/openapi.json \"cross-env LOAN_API_BASE_URL=http://127.0.0.1:9876/v1 npm run test\"",
+    "test:integration": "cross-env PORT=9876 DRAFT_MIN_RETENTION_MS=100 start-server-and-test start:mock http://127.0.0.1:9876/openapi.json \"cross-env LOAN_API_BASE_URL=http://127.0.0.1:9876/v1 DRAFT_MIN_RETENTION_MS=100 npm run test\"",
     "ci": "npm run validate:openapi && npm run lint && npm run format:check && npm run test:coverage && npm run test:integration",
     "start:mock": "node javascript/mock-server/server.js"
   },
