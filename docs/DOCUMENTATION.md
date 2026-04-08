@@ -1,31 +1,115 @@
 # Loan lifecycle API automation — complete guide
 
-**JavaScript only** (Node **20+**): automated tests ([Vitest](https://vitest.dev/)), HTTP client, and a practice bank API with **Swagger UI**.
+**Stack:** **JavaScript only**, **Node.js 20+**. **Vitest** runs tests; a small **HTTP client** calls the API; a **practice bank server** answers locally; **Swagger UI** shows the same contract as **`openapi.json`**.
 
-| If you are…                     | Jump to                                                                                                                                                                      |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **QA / new to the repo**        | [Run tests (terminal & UI)](#2-run-tests), [API automation standards](#11-api-automation-standards-this-repo), [Practice API & Swagger](#3-practice-api--swagger)            |
-| **Changing routes or payloads** | [Modify the project](#4-modify-the-project), [Update Swagger](#34-update-swagger-and-openapi)                                                                                |
-| **PM / BA**                     | [Step-by-step lifecycle](#50-step-by-step-happy-path), [Production bank mapping §5.4](#54-mapping-to-production-bank-lifecycle), [Edge-case catalog](#53-edge-cases-catalog) |
+This guide walks through **install**, **tests**, **mock API**, and the **loan lifecycle** (login → … → payoff) in accurate, easy-to-read language.
+
+**Canonical location:** **`docs/DOCUMENTATION.md`** is the **only** full guide. **[README.md](../README.md)** links here in one sentence.
+
+---
+
+## What you get (at a glance)
+
+| Piece | Plain-English purpose |
+| ----- | --------------------- |
+| **Vitest** | Automated checks so changes do not silently break API behavior. |
+| **HTTP client** (`loanApiClient.js`) | Same URLs as Postman/Swagger, usable from Node tests or scripts. |
+| **Practice API + Swagger** | A local “fake bank” plus a browser page to **Try it out** — no real core banking system required. |
+| **OpenAPI** (`javascript/mock-server/openapi.json`) | Machine-readable **contract** (paths, JSON shapes). CI validates it. **Swagger** at **`/docs`** loads this file. |
+
+**Sandbox warning:** The **story** matches how many banks talk (KYC, underwriting, funding, disbursement). The **depth** is for **learning and automation**, **not** for regulatory or production sign-off.
+
+---
+
+## How this guide is organized
+
+| Section | What it is for |
+| ------- | -------------- |
+| **§1–2** | Install Node, `npm install`, and understand **`npm test`** vs **integration** (real server). |
+| **§3** | Start the mock, open Swagger, fix **port in use**, update OpenAPI when the API changes. |
+| **§4** | **Where to edit** paths, sample data, MSW handlers, env vars. |
+| **§5** | **Business view**: happy-path table, routes cheat sheet, Personal Loan fields, **PEP** gate, edge cases, **real bank vs mock**. |
+| **§6–7** | **File map** and **Postman** (import, environment, Runner). |
+| **§8–11** | **Commands**, **glossary**, **PM/BA checklist**, **automation standards**. |
+
+**Suggested path:** do **[Quick start](#quick-start-five-minutes)**, then open **[§5.0](#50-step-by-step-happy-path)** when you need the exact call order.
+
+---
+
+## Who should read what?
+
+| If you are… | Start here |
+| ----------- | ---------- |
+| **QA or new to the repo** | [Run tests](#2-run-tests), [Practice API and Swagger](#3-practice-api--swagger), [Glossary](#9-glossary), [§11 Standards](#11-api-automation-standards-this-repo) |
+| **Developer changing routes or payloads** | [Modify the project](#4-modify-the-project), [Update Swagger / OpenAPI](#34-update-swagger-and-openapi); then use the **checklist table** under [§5.0](#50-step-by-step-happy-path) (*When your real product differs*). |
+| **PM or BA** | [§5 overview](#5-loan-lifecycle-business-view), [§5.0 happy path](#50-step-by-step-happy-path), [§5.4 production mapping](#54-mapping-to-production-bank-lifecycle), [§5.3 edge cases](#53-edge-cases-catalog), [§10 checklist](#10-pm--ba-checklist) |
+
+---
+
+## Table of contents
+
+1. [Prerequisites and setup](#1-prerequisites--setup)
+2. [Run tests](#2-run-tests)
+3. [Practice API and Swagger](#3-practice-api--swagger)
+4. [Modify the project](#4-modify-the-project)
+5. [Loan lifecycle (business view)](#5-loan-lifecycle-business-view)
+6. [Who uses what and file map](#6-who-uses-what--file-map)
+7. [Postman](#7-postman)
+8. [Command cheat sheet](#8-command-cheat-sheet)
+9. [Glossary](#9-glossary)
+10. [PM / BA checklist](#10-pm--ba-checklist)
+11. [API automation standards](#11-api-automation-standards-this-repo)
+
+### Quick start (five minutes)
+
+1. Open a terminal, `cd` to the project folder, run **`npm install`**.
+2. Run **`npm test`** — many tests use **MSW** and need **no** running server ([§2.1](#21-terminal--default-fast-no-server)).
+3. Optional: **`npm run start:mock`** → browser **[http://127.0.0.1:8765/docs](http://127.0.0.1:8765/docs)** for **Swagger**.
 
 ---
 
 ## 1. Prerequisites & setup
 
-1. **Node.js 20+** — [nodejs.org](https://nodejs.org/) or **nvm**: `nvm install 20` then `nvm use` (see **`.nvmrc`**).
-2. Clone or copy this project folder.
-3. One-time install:
+### 1.0 In plain words
+
+You need a **computer that can run Node.js**. The project assumes **Node 20+** so scripts, Vitest, and the mock server behave the same on your laptop and in **GitHub Actions**.
+
+You do **not** need Java, Docker, or a database for the default workflow: **JavaScript** + **npm** + this repo are enough.
+
+### 1.1 Install steps
+
+**Why Node 20+?** The project pins a modern LTS-style Node version in **`.nvmrc`** so everyone (and CI) runs the same JavaScript and tooling behavior.
+
+1. **Install Node.js 20 or newer** — from [nodejs.org](https://nodejs.org/) or with **nvm**: `nvm install 20` then `nvm use` (reads **`.nvmrc`**).
+2. **Get the project** — clone the repository or copy this folder to your machine. See the script below for cloning via Local HTTPS.
+
+```bash
+git clone https://github.com/paulabinongo/api-automation-testing.git
+```
+
+3. **Install packages once** (downloads test and dev tools listed in `package.json`):
 
 ```bash
 cd "/path/to/API AUtomation Testing"
 npm install
 ```
 
-**Default test run** does **not** need a running server (it uses **MSW** to fake HTTP). Some tests need the practice API — see §2.2.
+**After install:** The usual **`npm test`** command does **not** need the practice server running. Many tests use **MSW** (Mock Service Worker) to **pretend** the HTTP responses happened, which keeps local runs fast and CI reliable. To also exercise the **real** local socket against the mock API, see [§2.2](#22-terminal--full-suite-practice-api--real-http).
 
 ---
 
 ## 2. Run tests
+
+**Why two modes?** **Fast checks** (no server) run on every save in many teams; **integration** proves the **mock server** and **client** still agree on URLs and JSON. Both matter.
+
+### 2.0 Two ways tests hit the API (read this first)
+
+| Mode | Server needed? | What happens |
+| ---- | ---------------- | ------------ |
+| **Default (`npm test`)** | Usually **no** | Vitest runs. **MSW** intercepts HTTP from the test and returns fixed mock responses, so logic and client code are checked **in memory**. |
+| **Full integration** | **Yes** — practice API | You set **`LOAN_API_BASE_URL`** to something like **`http://127.0.0.1:8765/v1`**. The same tests (where applicable) now make **real HTTP** to your running mock server. |
+
+**Rule of thumb:** If integration tests show as **skipped**, you probably have not set **`LOAN_API_BASE_URL`** to a loopback URL ending in **`/v1`**. The exact check lives in **`javascript/lib/config.js`** (`isLocalMockConfigured`).
 
 ### 2.1 Terminal — default (fast, no server)
 
@@ -33,7 +117,12 @@ npm install
 npm test
 ```
 
-Runs **MSW-backed** tests in memory; **integration** cases are **skipped** unless `LOAN_API_BASE_URL` is **`http://127.0.0.1:<port>/v1`** (any port; default mock **`8765`**) — see `javascript/lib/config.js` → `isLocalMockConfigured`. **`javascript/test/unit/`** is pure logic (catalog, eligibility, computation); **`javascript/test/integration/`** is Vitest + **MSW** against the HTTP client. Total test count grows over time (run **`npm test`** for the current tally).
+Runs **MSW-backed** tests in memory. **Integration** cases stay **skipped** unless **`LOAN_API_BASE_URL`** is exactly a loopback base like **`http://127.0.0.1:<port>/v1`** (any port; the mock’s default port is **`8765`**) — see **`javascript/lib/config.js`** → **`isLocalMockConfigured`**.
+
+- **`javascript/test/unit/`** — exercises **pure logic** (product catalogue rules, eligibility math, loan computation) with **no** fake HTTP layer.
+- **`javascript/test/integration/`** — exercises the **HTTP client** with Vitest, using **MSW** unless the real mock URL is configured.
+
+The printed **test count** changes as the suite grows; run **`npm test`** to see the current number.
 
 **Watch mode** (re-run when files change):
 
@@ -58,7 +147,9 @@ npm test
 
 **Windows PowerShell:** `$env:LOAN_API_BASE_URL="http://127.0.0.1:8765/v1"; npm test`
 
-You should see **all** tests pass (full **login → KYC → loan** behavior on the mock, plus catalogue/computation unit tests).
+You should see **all** tests pass: the flow exercises **login → KYC → full loan lifecycle** against the running mock, and **unit** tests still cover **catalogue**, **eligibility**, and **computation** logic.
+
+**Why two terminals?** The practice API is a **separate process**. Integration tests need something listening on the URL you set in **`LOAN_API_BASE_URL`**.
 
 ### 2.3 Vitest UI (browser dashboard)
 
@@ -92,9 +183,19 @@ This is for **tests**, not for calling the loan API (use **Swagger** or **Postma
 
 Node **20+** is required (see **`.nvmrc`**); CI uses **ubuntu-latest** + **Node 20**.
 
+**Typical daily flow for developers:** **`npm test`** while coding; **`npm run ci`** (or push to a PR) before merge; **`npm run test:integration`** when you touched **`server.js`** or **`openapi.json`**.
+
 ---
 
 ## 3. Practice API & Swagger
+
+The **practice API** is a small **Express**-style server in **`javascript/mock-server/server.js`**. It exposes the same JSON routes your tests and Postman use, and serves **Swagger UI** so you can explore and try endpoints in a browser.
+
+**Typical uses**
+
+- **Learning** — click through the lifecycle in order with **Try it out**.
+- **Debugging** — compare your request body with what **422** validation errors expect.
+- **Demos** — show stakeholders a **working** API without wiring to a real bank.
 
 ### 3.1 Start the server
 
@@ -138,8 +239,8 @@ Swagger is driven by **`javascript/mock-server/openapi.json`** (served as `/open
 2. **Change the contract docs** — edit **`javascript/mock-server/openapi.json`**:
    - **`paths`** — add or adjust URL templates (`/v1/...`), methods, `requestBody`, `responses`, examples.
    - **`components.schemas`** — reuse field shapes; add new schemas for new bodies.
-3. **Restart** — `npm run start:mock` and hard-refresh **`/docs`** in the browser.
-4. **Keep clients aligned** — update **`javascript/lib/loanApiClient.js`**, **`javascript/test/**/\*.test.js`** (and **MSW** handler URLs/bodies), and **Postman\*\* if paths or JSON differ.
+3. **Restart** — `npm run start:mock` and hard-refresh **`/docs`** in the browser (Swagger always loads the same **`openapi.json`**).
+4. **Keep clients aligned** — update **`javascript/lib/loanApiClient.js`**, **`javascript/test/**/\*.test.js`** (and **MSW** handler URLs/bodies), and **Postman** if paths or JSON differ. **PEP gate:** keep **`POST …/compliance/pep-clearance`**, **`ApplicationOut`**, and **submit** error text aligned with **`server.js`** and **§5.0** / Step **7b** in this guide.
 
 **Tip:** Valid JSON is required. Validate with:
 
@@ -151,54 +252,110 @@ node -e "JSON.parse(require('fs').readFileSync('javascript/mock-server/openapi.j
 
 ## 4. Modify the project
 
-| Goal                           | Files                                                                                                                      |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| **Paths / HTTP methods**       | `javascript/lib/loanApiClient.js`, `javascript/mock-server/server.js`, `javascript/mock-server/openapi.json`, Postman JSON |
-| **Sample data**                | `javascript/lib/sampleData.js`                                                                                             |
-| **Fake responses (no server)** | MSW handlers in `javascript/test/integration/loanLifecycle.test.js`, `javascript/test/integration/loanEdgeCases.test.js`   |
-| **When integration tests run** | `javascript/lib/config.js` (`isLocalMockConfigured`, env vars)                                                             |
-| **Env / secrets**              | `.env` (not committed), `LOAN_API_BASE_URL`, `LOAN_API_KEY`                                                                |
+When you add an endpoint or change a JSON field, **one change is rarely enough**: the **server** must implement it, **OpenAPI** must describe it, the **client** and **tests** must use it, and **Postman** should stay demo-ready.
 
-**Real staging API:** set `LOAN_API_BASE_URL` (and optional `LOAN_API_KEY`) before `npm test`. Paths must match `loanApiClient.js`.
+| Goal | Files | Why it matters |
+| ---- | ----- | -------------- |
+| **Paths / HTTP methods** | `javascript/lib/loanApiClient.js`, `javascript/mock-server/server.js`, `javascript/mock-server/openapi.json`, Postman JSON | **Single URL shape** everywhere — otherwise tests pass locally but demos fail. |
+| **Sample data** | `javascript/lib/sampleData.js` | Builders for **examples** in tests and copy-paste bodies. |
+| **Fake responses (no server)** | MSW handlers in `javascript/test/integration/loanLifecycle.test.js`, `javascript/test/integration/loanEdgeCases.test.js` | Keeps **`npm test`** fast when the mock is **not** running. |
+| **When integration tests run** | `javascript/lib/config.js` (`isLocalMockConfigured`, env vars) | Flips tests from **mocked HTTP** to **real HTTP** when `LOAN_API_BASE_URL` is set. |
+| **Env / secrets** | `.env` (not committed), `LOAN_API_BASE_URL`, `LOAN_API_KEY` | Point at **local mock** or a **staging** host without committing secrets. |
+
+**Real staging API:** set **`LOAN_API_BASE_URL`** (and optional **`LOAN_API_KEY`**) before **`npm test`**. Paths and headers must still match **`loanApiClient.js`**.
 
 ---
 
 ## 5. Loan lifecycle (business view)
 
-**Origination + servicing** in a single, teachable API. The **order of steps and the language** (KYC → intake → **ops / processing** → **initial disclosures** → credit → **underwriting queue** → decision → clear-to-close → **funding authorization** → **book / fund** → **disburse** → **pay** → **close**) mirrors common **LOS** and **funding-desk** handoffs — still a **sandbox**, but closer to how teams describe production. See §5.4 for a **production mapping** and honest limits.
+This section is written for **anyone** who needs to understand **what the API is modeling**, not only engineers.
+
+**Two halves of the same story**
+
+- **Origination (front half):** everything from **“new customer / new application”** through **underwriting decision** — is the bank willing to lend, and on what conditions?
+- **Servicing (back half):** after money moves — **payments**, **balance**, and **closing** the loan when it is paid off.
+
+Both are in **one API** so you can practice the **full arc** in one place.
+
+**Origination + servicing** are combined in one **teachable** API. The **order of steps** and the **words we use** follow a path many banks recognize:
+
+KYC → customer **intake** → **operations / processing** → **initial disclosures** → **credit check** → **underwriting queue** → **decision** → **clear to close** → **funding approval** → **book / fund** on the ledger → **disburse** cash to the borrower → **collect payments** → **close** the loan.
+
+That mirrors how **Loan Origination Systems (LOS)** — software used to take applications and decisions — and **funding desks** often hand work to each other. This is still a **sandbox**: steps are **compressed** (seconds, not weeks), outside vendors are **not** really called, and rules are **simplified**. For **how this compares to real production**, read [§5.4](#54-mapping-to-production-bank-lifecycle).
+
+**IDs to remember**
+
+- After you **create an application**, you mainly care about **`application_id`**.
+- **`loan_id` appears only after underwriting approves (or conditionally approves)** and the system creates a **loan** record. Until then, routes under **`/loans/...`** do not apply.
 
 ### 5.0 Step-by-step happy path
 
-Follow this order in **Swagger**, **Postman**, or your app. **Almost every** `/v1` call requires a **`Bearer` token** from **login**; **create application** also requires completed **KYC**. **Before login**, you can call **`GET /v1/health`**, **`GET /v1/reference/loan-products`** (PHP **Personal Loan** catalogue), and **`GET /v1/reference/loan-computation-preview`** (add-on interest, fees, net proceeds, EIR) — all **public** (no Bearer).
+#### Context (read this before the table)
 
-| #                             | What happens (plain English)                             | API call                                                                                                                   | Body / notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | You need                                                                 | You get / save                                                                   |
-| ----------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| **—**                         | **Log in** (session).                                    | `POST /v1/auth/login`                                                                                                      | **Public** — no `Authorization` header. JSON: **`email`**, **`password`**. Sandbox accepts **`demo`** or **`demo123`**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | —                                                                        | **`access_token`** — send as `Authorization: Bearer <token>` on all later steps. |
-| **—**                         | **Customer KYC** (onboarding).                           | `POST /v1/onboarding/kyc`                                                                                                  | **`full_name`**, **`email`**, **`date_of_birth`** (YYYY-MM-DD), **`national_id_last4`** (4 digits).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Bearer                                                                   | **`VERIFIED`** (simulated). **403** on create loan if skipped.                   |
-| **1**                         | Start a new application (draft).                         | `POST /v1/loan-applications`                                                                                               | Full **Metrobank-style** intake: **`loan_purpose`**, **`additional_information`** (PEP booleans), **`borrower`** (names or **`full_name`**, consents, **Step 3** ID subset, **11-digit** ID number, PH **mobile**, gender / marital / education / place of birth, **Present Home Address** + optional **home_phone**), **`employment`** (**employer_address** when **EMPLOYED**, optional **business_mobile_phone** / **business_phone**, **source_of_funds**, **employment_status**, catalogue **occupation**, **industry**, **business_email**, tenure, **gross_monthly_income_cents** (×12 ≥ catalogue **min_annual_income_cents**, PHP **250,000**/year min). Principal = **whole PHP** (centavos **÷ 100**). Eligibility must pass (**422** if not). See **§5.2**. | Bearer + KYC done                                                        | **`application_id`** ← response **`id`**. **`loan_id` is `null`** (normal).      |
-| **1a** _(optional)_           | Check eligibility only (review screen **Next**).         | `POST /v1/loan-applications/eligibility-preview`                                                                           | Same JSON as create; **no** draft persisted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Bearer + KYC                                                             | **`eligible`**, **`checks`**, **`failed_checks`**.                               |
-| **1b** _(optional)_           | Fix **DRAFT** after review (**Edit** / back).            | `PATCH /v1/loan-applications/{applicationId}`                                                                              | Partial merge of amount / term / **borrower** / **employment** / prerequisite; re-validates. Changing **borrower.primary_id_document_type** clears prior document registration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Bearer + **application_id** (**DRAFT**, same session)                    | Updated **DRAFT**.                                                               |
-| **1c**                        | Confirm document upload ID (**Step 7**).                 | `POST /v1/loan-applications/{applicationId}/documents`                                                                     | **`primary_id_document_type`** must equal **borrower.primary_id_document_type** (**422** if not).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Bearer + **application_id** (**DRAFT**)                                  | **`document_intake`** set — required before **submit**.                          |
-| **2**                         | Send the application to processing.                      | `POST /v1/loan-applications/{applicationId}/submit`                                                                        | No body. **Personal Loan:** document step **1c** must be done first (**409** if skipped).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | **application_id** from step 1                                           | Status **SUBMITTED**.                                                            |
-| **3**                         | Ops / processing accepts the file (LOS queue).           | `POST /v1/loan-applications/{applicationId}/processing/accept`                                                             | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **application_id**                                                       | Status **IN_PROCESSING**.                                                        |
-| **4**                         | Initial disclosures acknowledged (sandbox gate).         | `POST /v1/loan-applications/{applicationId}/disclosures/acknowledge`                                                       | Optional: `{ "package_version": "…" }` (ignored by validation).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | **application_id**                                                       | **`disclosures_acknowledged_at`** set — required before credit.                  |
-| **5**                         | Run credit (sandbox pass/fail).                          | `POST /v1/loan-applications/{applicationId}/credit-check`                                                                  | e.g. `{ "force_outcome": "PASS" }` for demos.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | **application_id**                                                       | **CREDIT_COMPLETED** (or **DECLINED** — **stop**).                               |
-| **6**                         | Underwriting queue (file with underwriter).              | `POST /v1/loan-applications/{applicationId}/underwriting/start`                                                            | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **application_id**                                                       | Status **IN_UNDERWRITING**.                                                      |
-| **7**                         | Underwriter approves (or adds conditions).               | `POST /v1/loan-applications/{applicationId}/underwriting/decision`                                                         | e.g. `{ "outcome": "APPROVE" }` OR conditional with **stipulations** array.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | **application_id**                                                       | **`loan_id`** ← **`loan.id`**. If **DECLINE**, **`loan`** is null — stop.        |
-| **8** _(only if conditional)_ | Clear stips — **all at once** or **one UUID at a time**. | `POST /v1/loan-applications/{applicationId}/stipulations/fulfill-all` **or** `POST …/stipulations/{stipulationId}/fulfill` | **fulfill-all:** no body; response has **`fulfilled_stipulation_ids`**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **application_id**; per-stip needs each **`stipulation.id`** from step 7 | Application **APPROVED_CLEAR_TO_CLOSE**, loan **PENDING_FUNDING**.               |
-| **9**                         | Funding desk clears loan to book (secondary approval).   | `POST /v1/loans/{loanId}/funding/authorize`                                                                                | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **loan_id**                                                              | Loan **CLEARED_FOR_BOOKING**; **`funding_authorized_at`** set.                   |
-| **10**                        | Book the loan on the bank’s books (“fund”).              | `POST /v1/loans/{loanId}/fund`                                                                                             | No body. Only after **authorize**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | **loan_id**                                                              | Loan **FUNDED**; **`funded_at`** set (proceeds **not** sent yet).                |
-| **11**                        | Pay the borrower (“disburse”).                           | `POST /v1/loans/{loanId}/disburse`                                                                                         | No body. Only after **fund**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | **loan_id**                                                              | Loan **ACTIVE**; **`disbursed_at`**.                                             |
-| **12** _(optional)_           | Preview payment dates.                                   | `GET /v1/loans/{loanId}/payment-schedule`                                                                                  | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **loan_id**                                                              | Demo schedule JSON.                                                              |
-| **13**                        | Customer pays down balance.                              | `POST /v1/loans/{loanId}/payments`                                                                                         | `{ "amount_cents": N, "method": "ACH" }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **loan_id**                                                              | Balance drops; **PAID_OFF** if balance hits 0.                                   |
-| **14**                        | Close the loan on the system.                            | `POST /v1/loans/{loanId}/payoff`                                                                                           | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **loan_id**                                                              | Status **CLOSED**.                                                               |
-| **—**                         | **Log out** (invalidate token).                          | `POST /v1/auth/logout`                                                                                                     | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Bearer                                                                   | **204** — reuse requires **login** again.                                        |
+**The lifecycle in one breath:** prove who you are (**KYC**) → fill a **draft application** → (**optional** eligibility preview, **optional** PATCH edits → **optional** payment preview) → register **which ID you will upload** → if **PEP** answers are “yes”, complete a **compliance clearance** call → **submit** → ops **accept** → sign off **disclosures** → **credit** → **underwriting** (decision may add **stips**) → **fund** path (**authorize** → **book** → **disburse**) → **payments** → **payoff**/**close**.
+
+**Application vs loan — think “file” vs “contract”**
+
+| Concept | Think of it as… |
+| ------- | ---------------- |
+| **Application** | The borrower’s **folder** while the bank is still deciding — all **`.../loan-applications/...`** steps until **funding** work uses **`loan_id`**. |
+| **Loan** | The **legal / booked obligation** once underwriting creates it — **`/loans/{loanId}/...`** for funding, disbursement, payments. |
+
+**Postman step labels vs this guide**
+
+- In the **Postman** happy-path folder, **“1d”** is **PEP compliance clearance** (`POST …/compliance/pep-clearance`).
+- In the **table below**, the same step is **1c-PEP** so it sits **right after** document step **1c** (easier to read in a spec).
+- **Computation preview** tied to an existing application is **`GET .../loan-computation-preview`**; in **§5.1** that row is **1d** — different from Postman’s **1d** name. When in doubt, follow the **HTTP method + path**, not only the step number.
+
+**How to use this table:** Work **top to bottom**. Use the same order in **Swagger**, **Postman**, or your own app. Almost every **`/v1`** call needs a **Bearer token** from **login**. **Creating a loan application** also needs **KYC** completed first, or the server responds with **403**.
+
+**Calls you can make before login (no Bearer):**
+
+- **`GET /v1/health`** — simple alive check.
+- **`GET /v1/reference/loan-products`** — PHP **Personal Loan** catalogue for forms and validation hints.
+- **`GET /v1/reference/loan-computation-preview`** — preview of interest, fees, net proceeds, and **EIR** for sample amounts and terms.
+
+Everything else in the happy path expects **`Authorization: Bearer <access_token>`**.
+
+| #                             | What happens (plain English)                                    | API call                                                                                                                   | Body / notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | You need                                                                 | You get / save                                                                   |
+| ----------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| **—**                         | **Log in** (session).                                           | `POST /v1/auth/login`                                                                                                      | **Public** — no `Authorization` header. JSON: **`email`**, **`password`**. Sandbox accepts **`demo`** or **`demo123`**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | —                                                                        | **`access_token`** — send as `Authorization: Bearer <token>` on all later steps. |
+| **—**                         | **Customer KYC** (onboarding).                                  | `POST /v1/onboarding/kyc`                                                                                                  | **`full_name`**, **`email`**, **`date_of_birth`** (YYYY-MM-DD), **`national_id_last4`** (4 digits).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Bearer                                                                   | **`VERIFIED`** (simulated). **403** on create loan if skipped.                   |
+| **1**                         | Start a new application (draft).                                | `POST /v1/loan-applications`                                                                                               | Full **Metrobank-style** intake: **`loan_purpose`**, **`additional_information`** (PEP booleans), **`borrower`** (names or **`full_name`**, consents, **Step 3** ID subset, **11-digit** ID number, PH **mobile**, gender / marital / education / place of birth, **Present Home Address** + optional **home_phone**), **`employment`** (**employer_address** when **EMPLOYED**, optional **business_mobile_phone** / **business_phone**, **source_of_funds**, **employment_status**, catalogue **occupation**, **industry**, **business_email**, tenure, **gross_monthly_income_cents** (×12 ≥ catalogue **min_annual_income_cents**, PHP **250,000**/year min). Principal = **whole PHP** (centavos **÷ 100**). Eligibility must pass (**422** if not). See **§5.2**. | Bearer + KYC done                                                        | **`application_id`** ← response **`id`**. **`loan_id` is `null`** (normal).      |
+| **1a** _(optional)_           | Check eligibility only (review screen **Next**).                | `POST /v1/loan-applications/eligibility-preview`                                                                           | Same JSON as create; **no** draft persisted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Bearer + KYC                                                             | **`eligible`**, **`checks`**, **`failed_checks`**.                               |
+| **1b** _(optional)_           | Fix **DRAFT** after review (**Edit** / back).                   | `PATCH /v1/loan-applications/{applicationId}`                                                                              | Partial merge of amount / term / **borrower** / **employment** / prerequisite; re-validates. Changing **borrower.primary_id_document_type** clears prior document registration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Bearer + **application_id** (**DRAFT**, same session)                    | Updated **DRAFT**.                                                               |
+| **1c**                        | Confirm document upload ID (**Step 7**).                        | `POST /v1/loan-applications/{applicationId}/documents`                                                                     | **`primary_id_document_type`** must equal **borrower.primary_id_document_type** (**422** if not).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Bearer + **application_id** (**DRAFT**)                                  | **`document_intake`** set — required before **submit**.                          |
+| **1c-PEP** _(conditional)_    | Compliance / EDD gate (**Step 7b**) when Step **6** is **Yes**. | `POST /v1/loan-applications/{applicationId}/compliance/pep-clearance`                                                      | Body `{}`. **Only** if **either** **`additional_information`** PEP boolean is **`true`** (**400** if both **`false`**). **409** if **1c** not done or not **DRAFT**. Sets **`pep_compliance_clearance_at`**; **PATCH** to **`additional_information`** clears it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Bearer + **application_id** (**DRAFT**) after **1c**                     | May **`GET`** application to confirm **`pep_compliance_clearance_at`**.          |
+| **2**                         | Send the application to processing.                             | `POST /v1/loan-applications/{applicationId}/submit`                                                                        | No body. **Personal Loan:** **1c** required (**409** if skipped). If **either** PEP boolean **`true`**, **1c-PEP** (**pep-clearance**) required (**409** if skipped).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | **application_id** from step 1                                           | Status **SUBMITTED**.                                                            |
+| **3**                         | Ops / processing accepts the file (LOS queue).                  | `POST /v1/loan-applications/{applicationId}/processing/accept`                                                             | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **application_id**                                                       | Status **IN_PROCESSING**.                                                        |
+| **4**                         | Initial disclosures acknowledged (sandbox gate).                | `POST /v1/loan-applications/{applicationId}/disclosures/acknowledge`                                                       | Optional: `{ "package_version": "…" }` (ignored by validation).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | **application_id**                                                       | **`disclosures_acknowledged_at`** set — required before credit.                  |
+| **5**                         | Run credit (sandbox pass/fail).                                 | `POST /v1/loan-applications/{applicationId}/credit-check`                                                                  | e.g. `{ "force_outcome": "PASS" }` for demos.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | **application_id**                                                       | **CREDIT_COMPLETED** (or **DECLINED** — **stop**).                               |
+| **6**                         | Underwriting queue (file with underwriter).                     | `POST /v1/loan-applications/{applicationId}/underwriting/start`                                                            | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **application_id**                                                       | Status **IN_UNDERWRITING**.                                                      |
+| **7**                         | Underwriter approves (or adds conditions).                      | `POST /v1/loan-applications/{applicationId}/underwriting/decision`                                                         | e.g. `{ "outcome": "APPROVE" }` OR conditional with **stipulations** array.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | **application_id**                                                       | **`loan_id`** ← **`loan.id`**. If **DECLINE**, **`loan`** is null — stop.        |
+| **8** _(only if conditional)_ | Clear stips — **all at once** or **one UUID at a time**.        | `POST /v1/loan-applications/{applicationId}/stipulations/fulfill-all` **or** `POST …/stipulations/{stipulationId}/fulfill` | **fulfill-all:** no body; response has **`fulfilled_stipulation_ids`**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **application_id**; per-stip needs each **`stipulation.id`** from step 7 | Application **APPROVED_CLEAR_TO_CLOSE**, loan **PENDING_FUNDING**.               |
+| **9**                         | Funding desk clears loan to book (secondary approval).          | `POST /v1/loans/{loanId}/funding/authorize`                                                                                | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **loan_id**                                                              | Loan **CLEARED_FOR_BOOKING**; **`funding_authorized_at`** set.                   |
+| **10**                        | Book the loan on the bank’s books (“fund”).                     | `POST /v1/loans/{loanId}/fund`                                                                                             | No body. Only after **authorize**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | **loan_id**                                                              | Loan **FUNDED**; **`funded_at`** set (proceeds **not** sent yet).                |
+| **11**                        | Pay the borrower (“disburse”).                                  | `POST /v1/loans/{loanId}/disburse`                                                                                         | No body. Only after **fund**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | **loan_id**                                                              | Loan **ACTIVE**; **`disbursed_at`**.                                             |
+| **12** _(optional)_           | Preview payment dates.                                          | `GET /v1/loans/{loanId}/payment-schedule`                                                                                  | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **loan_id**                                                              | Demo schedule JSON.                                                              |
+| **13**                        | Customer pays down balance.                                     | `POST /v1/loans/{loanId}/payments`                                                                                         | `{ "amount_cents": N, "method": "ACH" }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **loan_id**                                                              | Balance drops; **PAID_OFF** if balance hits 0.                                   |
+| **14**                        | Close the loan on the system.                                   | `POST /v1/loans/{loanId}/payoff`                                                                                           | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **loan_id**                                                              | Status **CLOSED**.                                                               |
+| **—**                         | **Log out** (invalidate token).                                 | `POST /v1/auth/logout`                                                                                                     | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Bearer                                                                   | **204** — reuse requires **login** again.                                        |
 
 **Remember:** **`loan_id` does not exist until step 7** (underwriting decision) creates the loan. Until then only **`application_id`** matters. Helpers in **`javascript/test/integration/flowHelpers.js`** (`throughCredit`, `throughUnderwritingDecision`, `activeLoan`) chain these steps for **Vitest**; **`LoanApiClient`** exposes each **POST** separately for Postman and app code.
 
 **HTTP:** Every **`/v1/...`** call except **`POST /auth/login`**, **`GET /health`**, **`GET /reference/loan-products`**, and **`GET /reference/loan-computation-preview`** must send **`Authorization: Bearer`** with the **`access_token`** from login (Postman and **`LoanApiClient.setAccessToken`** handle this).
 
 **Who am I?** Optional: `GET /v1/auth/me` or `GET /v1/onboarding/status` with Bearer — shows user + whether KYC is complete.
+
+#### Same journey, told as a short story
+
+1. You **log in** and get a **token**; almost every later call sends **`Authorization: Bearer …`**.
+2. You complete **KYC** once — the mock **pretends** you are verified; skipping KYC blocks **create application**.
+3. You **create** a **DRAFT** with full Personal Loan intake; the server checks **catalogue rules** (amount, term, client type, eligibility).
+4. (**Optional**) **Eligibility preview** checks the same body **without** saving; (**optional**) **PATCH** fixes typos on the **DRAFT**; (**optional**) **Computation preview** shows rates and fees.
+5. You **POST /documents** to lock in **which ID type** you will use — the server will not let you **submit** without this step.
+6. If either **PEP** boolean is **true**, you **POST pep-clearance** with an **empty JSON body** `{}` after step 5 and **before submit**; if both are **false**, **do not** call it (you get **400**). Changing PEP answers via **PATCH** **clears** clearance — call **pep-clearance** again.
+7. **Submit** moves the file to **SUBMITTED**; the mock then walks through **ops**, **disclosures**, **credit**, **underwriting**, optional **stips**, then **funding** (authorize → fund → disburse), then you can **pay** and **close**.
 
 #### When your real product differs — what to update (checklist)
 
@@ -230,8 +387,9 @@ Use the same list whenever you change URLs, fields, or rules so **docs**, **test
 | 1a   | Eligibility preview      | `POST /loan-applications/eligibility-preview` — same body as create; no persistence (**Step 6** **Next**)                                                                 |
 | 1b   | Update draft             | `PATCH /loan-applications/{applicationId}` — **DRAFT** only; merge fields                                                                                                 |
 | 1c   | Document upload (ID)     | `POST /loan-applications/{applicationId}/documents` — **primary_id_document_type** must match **borrower.primary_id_document_type**                                       |
+| —    | PEP clearance (if Yes)   | `POST /loan-applications/{applicationId}/compliance/pep-clearance` — after **1c**, before **submit**, when Step **6** PEP is **Yes** (**see §5.0** row **1c-PEP**)        |
 | 1d   | Preview from application | `GET /loan-applications/{applicationId}/computation-preview` — **Bearer**; uses **principal_cents** / **term_months** from that application (same math as public preview) |
-| 2    | Submit                   | `POST .../submit` → **SUBMITTED**                                                                                                                                         |
+| 2    | Submit                   | `POST .../submit` → **SUBMITTED** (Personal Loan: **1c** + conditional **pep-clearance**)                                                                                 |
 | 3    | Ops accept               | `POST .../processing/accept` → **IN_PROCESSING**                                                                                                                          |
 | 4    | Disclosures              | `POST .../disclosures/acknowledge`                                                                                                                                        |
 | 5    | Credit                   | `POST .../credit-check` → **CREDIT_COMPLETED** or **DECLINED**                                                                                                            |
@@ -252,31 +410,95 @@ Use the same list whenever you change URLs, fields, or rules so **docs**, **test
 
 ### 5.2 Product catalogue (terms) & payment rails (mock LOVs)
 
-The mock ships a single origination product: **`PERSONAL_LOAN`** (**PHP** only). Catalogue copy, rates, fees, and eligibility text live in **`javascript/lib/loanProductCatalog.js`**. **`GET /v1/reference/loan-products`** returns that JSON for UIs and tests.
+**Read this first (plain English)**
 
-**Wizard (personal loan):** **`intake_flow`** on the product describes UI steps **1–7** (prerequisite through document upload). Steps **1–6** map to API fields on **`POST /loan-applications`** (and **`eligibility-preview`**). Step **6** (**Additional information**) is the review screen; **`POST …/eligibility-preview`** mirrors **Next** before persisting. **`PATCH …/loan-applications/{id}`** supports edits on a **DRAFT** after review.
+1. **Catalogue** = the single definition of the **Personal Loan** product: allowed amounts, terms, labels, fees, and validation. Developers edit **`javascript/lib/loanProductCatalog.js`**; the API exposes the same data at **`GET /v1/reference/loan-products`** so UIs and tests stay in sync.
+2. **LOV** (“list of values”) = the **dropdown codes** in that JSON (purposes, ID types, address rows, and so on). Your app should **not** hard-code lists that contradict the catalogue.
+3. **Payment rails** here only means: when you post a repayment, you label **how** it was paid using an allowed **`method`** (this mock knows **`ACH`** and **`WIRE`**).
 
-**Metrobank intake (personal loan):** The catalogue includes **`metrobank_client_prerequisite`** — the first question is effectively **“Are you an existing Metrobank Client?”** with three answers: **Metrobank client with credit card**, **Metrobank client with deposit account**, or **not yet a Metrobank client**. Only the first two may proceed; **`NOT_METROBANK_CLIENT`** is rejected on **create application** (**422**) because servicing assumes a Metrobank channel for proceeds/repayments. Eligibility evaluation (**`javascript/lib/personalLoanEligibility.js`**) enforces the published **eligibility** bullets (citizenship, ages, income, relationship, employment tenure).
+---
 
-**Primary government ID (Step 3 vs upload):** Step **3** (“Choose an ID” in basic details) uses a **six-option subset** only: **`GET /v1/reference/loan-products`** → **`step3_primary_id_document_types`** (GSIS, SSS, TIN, Driver’s License, Passport, UMID). **POST /loan-applications** rejects other codes (**422**); **`PATCH`** on a **DRAFT** may set **`borrower.primary_id_document_type`** to **any** value from the **full** LOV (**`primary_id_document_types`** — e.g. PRC, Company ID, …) so the borrower can change ID type before Step 7. Step **7** upload uses the **full** list; **`POST …/documents`** must still **match** the **current** **`borrower.primary_id_document_type`** (**422** on mismatch). If **`PATCH`** changes the ID after documents were registered, **`document_intake`** is cleared until **`POST …/documents`** runs again.
+**A. Only one loan product in the sandbox**
 
-**Present Home Address (mock):** **`borrower.residential_address`** supports the Metrobank-style **No./Blk./St.** through **ZIP** using **`GET /reference/loan-products`** → **`philippine_address_sample_rows`**. The legacy shape (**`line1`**, **`city`**, **`province_region`**, **`postal_code`**) remains valid when **`street_line`** is omitted. **Employer Address** is **`employment.employer_address`** (optional **Subdivision/Building** via **`subdivision_building`**) — same PH row rules when **`employment.status`** is **EMPLOYED**. Optional **`employment.business_mobile_phone`** and **`employment.business_phone`** (landline **area_code** from **`landline_area_code_options`** + **subscriber_number** — same shape as **`borrower.home_phone`**).
+- **Product code:** **`PERSONAL_LOAN`**
+- **Money:** **Philippine pesos (PHP)** only (`principal_cents` and other cent fields).
 
-#### 5.2.1 Personal Loan — prerequisite & field map (existing Metrobank client, credit card path)
+---
 
-The **same** intake fields and create body apply when the borrower is an **existing Metrobank client with a deposit account**; only **`metrobank_client_type`** differs from the credit-card path at Step 1.
+**B. How the 7-step wizard lines up with the API**
 
-**Step 1 — Pre-requisite (“Are you an existing Metrobank Client?”)** → **`metrobank_client_type`** on **POST /loan-applications**: **Yes — credit card** = **`EXISTING_CLIENT_CREDIT_CARD`**; **Yes — deposit account** = **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**; **Not yet a Metrobank client** = **`NOT_METROBANK_CLIENT`** (rejected **422**). Details in **`metrobank_client_prerequisite`** on **GET /reference/loan-products**.
+The catalogue field **`intake_flow`** describes **screens 1 → 7** (first question through confirming ID upload). You do **not** need to memorize field names to understand the flow:
 
-**Step 2 — Loan application details**
+| You are on the screen… | What happens in the API (simple) |
+| ---------------------- | -------------------------------- |
+| **Steps 1–6** (questions before “confirm ID”) | User fills the form. You either **save a draft** with **`POST /v1/loan-applications`**, or **check only** with **`POST /v1/loan-applications/eligibility-preview`** (same JSON, **no row saved** — like “Next” on review). |
+| **Step 6** | “Additional information” (includes PEP yes/no). Still part of the same body as above. |
+| **User goes back to fix answers** | **`PATCH /v1/loan-applications/{id}`** on a **DRAFT** only; server re-checks rules. |
+| **Step 7 (confirm which ID was uploaded)** | **`POST /v1/loan-applications/{id}/documents`** — see the main flow table in [§5.0](#50-step-by-step-happy-path). |
 
-| UI label         | JSON                  | Rules (this mock)                                                                                                                                                              |
-| ---------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Loan Amount**  | **`principal_cents`** | Integer **PHP centavos**; whole pesos only (**multiple of 100**); **not** zero; **PHP 20,000**–**2,000,000**.                                                                  |
-| **Loan Purpose** | **`loan_purpose`**    | Required; dropdown — Appliance/Gadgets, Business, Car Repair, Debt Consolidation, Home Repair, Medical Emergency, Personal Consumption, Travel, Wedding (**`loan_purposes`**). |
-| **Loan Term**    | **`term_months`**     | Required; **12**, **18**, **24**, or **36** (UI labels e.g. **12 months** … **36 months**).                                                                                    |
+---
 
-**Computation (system output, no intake inputs):** **GET /v1/reference/loan-computation-preview** (public) or **GET /v1/loan-applications/{applicationId}/computation-preview** (Bearer) returns **loan amount**, **monthly add-on interest rate** (from the chosen term), **effective interest rate (EIR)**, **monthly amortization**, **total interest**, **total fees and charges** (disbursement fee + documentary stamp tax where applicable), and **net loan proceeds**. Implemented in **`javascript/lib/personalLoanComputation.js`**.
+**C. First screen: “Are you already a Metrobank client?”**
+
+This is **`metrobank_client_prerequisite`** in the catalogue. **Only two answers are allowed** if you want **`POST /loan-applications`** to succeed. “Not a client yet” is **rejected (422)** in this project because the mock pretends payouts/repayments go through **Metrobank-style** channels.
+
+| If the user says… | Put this in **`metrobank_client_type`** | Result |
+| ----------------- | --------------------------------------- | ------ |
+| I have a **Metrobank credit card** | **`EXISTING_CLIENT_CREDIT_CARD`** | Allowed |
+| I have a **Metrobank deposit account** | **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** | Allowed |
+| **I am not** a Metrobank client yet | **`NOT_METROBANK_CLIENT`** | **422** — cannot create application here |
+
+**Separate idea — “is this person eligible?”** After product rules pass, **`javascript/lib/personalLoanEligibility.js`** checks age, income, citizenship, tenure, and the other **eligibility** bullets in the catalogue.
+
+---
+
+**D. ID type (the rule people misunderstand)**
+
+**Golden rule:** The ID type stored on the application must **match** the ID type you send on **`POST …/documents`**. If they differ → **422**.
+
+- **On first create (`POST /loan-applications`), “Choose an ID”** — only **six** types allowed. Read them from **`step3_primary_id_document_types`** on **`GET /v1/reference/loan-products`** (GSIS, SSS, TIN, Driver’s License, Passport, UMID).
+- **If the user edits the draft (`PATCH`)** — you may set **`borrower.primary_id_document_type`** to **any** type listed in **`primary_id_document_types`** (longer list: PRC, Company ID, …).
+- **After `PATCH` changes the ID type**, any previous document confirmation is wiped (**`document_intake`** cleared) until **`POST …/documents`** runs again.
+
+---
+
+**E. Addresses and phones**
+
+- **Home:** **`borrower.residential_address`** uses sample Philippine rows from **`philippine_address_sample_rows`** in the catalogue (street / province / city / barangay / ZIP must match a valid row).
+- **Old format still works:** **`line1`**, **`city`**, **`province_region`**, **`postal_code`** if you **omit** **`street_line`**.
+- **Employer (if employed):** **`employment.employer_address`** — same row rules; optional **`subdivision_building`**.
+- **Office phone:** **`employment.business_phone`** uses the same **area code + 8-digit** pattern as **`borrower.home_phone`** (**`landline_area_code_options`** + **`subscriber_number`**).
+
+---
+
+**F. Paying the loan back (payment “rail”)**
+
+On **`POST /v1/loans/{loanId}/payments`**, set **`method`** to **`ACH`** or **`WIRE`** (see **`javascript/lib/loanConstants.js`**). That is only a **label** in the practice API, not a real bank transfer.
+
+---
+
+#### 5.2.1 Quick field map — Steps 1 & 2, plus calculator
+
+Use this when you are building JSON for **`POST /v1/loan-applications`**.
+
+**Deposit vs credit card customer:** Every other field is the **same**. **Only** **`metrobank_client_type`** changes, as in **section C** above.
+
+**Step 2 — amount, purpose, term**
+
+| Screen label | JSON field | Allowed in this mock |
+| ------------ | ---------- | -------------------- |
+| Loan amount | **`principal_cents`** | Whole pesos only (multiple of **100**). **PHP 20,000**–**2,000,000**. |
+| Loan purpose | **`loan_purpose`** | One of **`loan_purposes`** in the catalogue (e.g. Medical Emergency, Travel, …). |
+| Loan term | **`term_months`** | **12**, **18**, **24**, or **36** only. |
+
+**Calculator (nothing to type except amount + term)**
+
+The server computes interest, fees, amortization, EIR, and net proceeds.
+
+- **Before login / without an application:** **`GET /v1/reference/loan-computation-preview?principal_cents=…&term_months=…`**
+- **When you already have a draft:** **`GET /v1/loan-applications/{applicationId}/computation-preview`** with **Bearer** (reads amount and term from that application).
+
+Logic lives in **`javascript/lib/personalLoanComputation.js`**.
 
 **Step 3 — Basic details**
 
@@ -330,7 +552,7 @@ The **same** intake fields and create body apply when the borrower is an **exist
 | **`borrower.place_of_birth`**               | **3–30** chars, letters/spaces                                                                       | **Place of Birth** — no digits or special characters; **no** leading/trailing spaces.                                                                                                                                                                                                                                                                                                                                                                                               |
 | **`borrower.residential_address`**          | **Present Home Address**                                                                             | **street_line** (No./Blk./St.), optional **subdivision_village**, **province**, **city_town**, **barangay**, **postal_code** (ZIP), optional **home_ownership**. Quad + ZIP must match **GET /reference/loan-products** → **philippine_address_sample_rows**. Legacy **line1** / **city** / **province_region** if **street_line** omitted.                                                                                                                                         |
 | **`borrower.home_phone`**                   | Optional                                                                                             | **area_code** from **GET /reference/loan-products** → **landline_area_code_options** (**002**–**088** and **0882**) + **subscriber_number** (8 digits).                                                                                                                                                                                                                                                                                                                             |
-| **`borrower.primary_id_document_type`**     | **Step 3** subset on **POST**; full LOV on **PATCH**                                                 | **`step3_primary_id_document_types`** vs **`primary_id_document_types`** — see paragraph above. Must match **`POST …/documents`**.                                                                                                                                                                                                                                                                                                                                                  |
+| **`borrower.primary_id_document_type`**     | **Step 3** subset on **POST**; full LOV on **PATCH**                                                 | **`step3_primary_id_document_types`** vs **`primary_id_document_types`** — see **§5.2** (ID rules) and **Step 7** below. Must match **`POST …/documents`**.                                                                                                                                                                                                                                                                                                                           |
 | **`borrower.primary_id_document_number`**   | **11 digits**                                                                                        | Numeric string; real formats vary — teaching sandbox uses fixed width.                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **`borrower.mobile_phone`**                 | PH mobile                                                                                            | National digit **9** — **+639…**, **09…**, or **9…** forms accepted.                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **`employment`**                            | Employed / self-employed shapes                                                                      | **Gross Monthly Income** — **`gross_monthly_income_cents`** (×12 ≥ **`min_annual_income_cents`**, PHP **250,000**/year). **EMPLOYED**: **`employer_address`** + PH row validation; optional **`business_mobile_phone`**, **`business_phone`**. **SELF_EMPLOYED**: **`business_name`**, **`years_in_current_business`**. Plus **`source_of_funds`**, **`employment_status`**, **`occupation`**, **`industry`**, **`business_email`**, tenure; **`status`** vs **`source_of_funds`**. |
@@ -372,7 +594,18 @@ The same strings are exported in code as **`STIPULATION_DESCRIPTION_EXAMPLES`** 
 
 ### 5.3 Edge cases catalog
 
-Catalog columns reference **`javascript/test/integration/loanEdgeCases.test.js`** and Postman **Edge cases** where noted.
+Automations and manual checks both rely on **HTTP status codes**. Quick meanings in **everyday language**:
+
+| Code | Simple meaning |
+| ---- | -------------- |
+| **400** | The server understood the request, but **refused** it for a **business rule** (example: paying more than the balance). |
+| **401** | **Not logged in** or bad credentials — missing or invalid **Bearer** token. |
+| **403** | Logged in, but **not allowed** to do this yet (example: creating a loan application **before** KYC). |
+| **404** | The **application** or **loan** id does not exist in this sandbox session. |
+| **409** | **Wrong order** or **wrong state** — you skipped a required step or repeated a step that is not allowed twice. |
+| **422** | The **JSON body or field values** do not pass validation (wrong type, unknown enum, out-of-range amount). |
+
+Sections **A–H** below list **what can go wrong**, the usual **status code**, and whether **Vitest** (and sometimes **Postman**) already covers it. Column **Automated** points to **`javascript/test/integration/loanEdgeCases.test.js`** and Postman **Edge cases** where noted.
 
 #### A. Not found
 
@@ -393,14 +626,6 @@ Catalog columns reference **`javascript/test/integration/loanEdgeCases.test.js`*
 | Scenario                                                                                                                                                                                                                                                                                  | Typical code | Automated                                                                                        |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
 | Double submit, decision before **IN_UNDERWRITING**, credit before **IN_PROCESSING** or before disclosures, **fund** before **funding/authorize**, fund/disburse out of order or twice, pay before **ACTIVE** (including while **FUNDED**), pay after `PAID_OFF`, fund while stips pending | `409`        | Yes (+ Postman **EC5**, **EC6**; tests **credit before disclosures**, **fund before authorize**) |
-
-#### G. Auth & onboarding
-
-| Scenario                                                   | Typical code | Automated |
-| ---------------------------------------------------------- | ------------ | --------- |
-| Protected route without `Authorization: Bearer`            | `401`        | Yes       |
-| **POST /loan-applications** after login but **before** KYC | `403`        | Yes       |
-| Bad login password (not `demo` / `demo123`)                | `401`        | —         |
 
 #### D. Balance rules
 
@@ -425,13 +650,25 @@ Catalog columns reference **`javascript/test/integration/loanEdgeCases.test.js`*
 | Principal / income outside catalogue min/max                                     | `422`        | Yes       |
 | Unsupported **`method`** on payment (not **ACH** / **WIRE**)                     | `422`        | Yes       |
 
+#### G. Auth & onboarding
+
+| Scenario                                                   | Typical code | Automated |
+| ---------------------------------------------------------- | ------------ | --------- |
+| Protected route without `Authorization: Bearer`            | `401`        | Yes       |
+| **POST /loan-applications** after login but **before** KYC | `403`        | Yes       |
+| Bad login password (not `demo` / `demo123`)                | `401`        | —         |
+
 #### H. Not in this sandbox
 
 Auth hardening, rate limits, idempotency keys, concurrency, webhooks — **backlog** for production.
 
 ### 5.4 Mapping to production bank lifecycle
 
-This section answers: **“How close is the mock to real life?”** — **close on story and vocabulary**, **thin on systems and compliance**.
+**Question this section answers:** *How close is this practice API to a real bank?*
+
+**Short answer:** It is **close** in **storyline** and **words** teams use day to day (application vs loan, underwriting, funding, disbursement). It is **not close** in **depth**: there are no real credit bureaus, no multi-day disclosure timers, no general-ledger postings, and no regulatory filings.
+
+Use the tables below when you need to **translate** between this sandbox and **production conversations** with risk, operations, or product — and to remind stakeholders what **must** be built outside this repo.
 
 #### Design intent (what we mirror on purpose)
 
@@ -500,7 +737,7 @@ Use this list when communicating scope to **risk**, **ops**, or **compliance**: 
 | `.prettierrc`                                                   | Prettier formatting                                                                                            |
 | `scripts/validate-openapi.mjs`                                  | CI **OpenAPI** parse / `$ref` check                                                                            |
 | `.github/workflows/ci.yml`                                      | **GitHub Actions** merge gate                                                                                  |
-| `javascript/lib/loanApiClient.js`                               | HTTP client used in tests                                                                                      |
+| `javascript/lib/loanApiClient.js`                               | HTTP client — includes **`completePepComplianceClearance`** (PEP gate before **submit**)                       |
 | `javascript/lib/config.js`                                      | Env: `LOAN_API_BASE_URL`, `LOAN_API_KEY`                                                                       |
 | `javascript/lib/loanConstants.js`                               | Term union + payment **LOVs**; **`STIPULATION_DESCRIPTION_EXAMPLES`** (copy-paste stip text)                   |
 | `javascript/lib/loanProductCatalog.js`                          | **PHP Personal Loan** catalogue + create-application validation rules                                          |
@@ -522,7 +759,7 @@ Use this list when communicating scope to **risk**, **ops**, or **compliance**: 
 
 The repo ships an **import-ready flow**: the collection **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** contains a folder **Flow — Happy path (import & run in order)** with every request in the correct sequence for **Collection Runner** (after you attach the environment below).
 
-**Contract parity:** The collection **description** (overview + happy-path folder) matches the **Swagger / OpenAPI** narrative in **`javascript/mock-server/openapi.json`** (`info`, **Tags**, key operations) and the business walkthrough in [§5 Loan lifecycle](#5-loan-lifecycle-business-view) — especially [§5.0](#50-step-by-step-happy-path) and [§5.4](#54-mapping-to-production-bank-lifecycle). Update all three if you rename steps or ports.
+**Contract parity:** The collection **description** (overview + happy-path folder) matches the **Swagger / OpenAPI** narrative in **`javascript/mock-server/openapi.json`** (`info`, **Tags**, **`POST …/compliance/pep-clearance`**, key operations) and the business walkthrough in [§5 Loan lifecycle](#5-loan-lifecycle-business-view) — especially [§5.0](#50-step-by-step-happy-path), Step **7b**, and [§5.4](#54-mapping-to-production-bank-lifecycle). Update **OpenAPI**, **§5**, and **Postman** together whenever routes or PEP rules change.
 
 ### 7.1 Files in `postman/`
 
@@ -609,20 +846,43 @@ flowchart LR
 | Practice API                                                                        | `npm run start:mock`                                                                                 |
 | Swagger                                                                             | [http://127.0.0.1:8765/docs](http://127.0.0.1:8765/docs)                                             |
 
-**MSW vs integration:** Five offline edge stubs + two happy-path blocks run **without** a server; when the mock URL is set, **loanEdgeCases** and **loanLifecycle** run the remaining **27** tests against HTTP (**34** total).
+### When to use which command
+
+| Situation | Command |
+| --------- | ------- |
+| “Did I break anything quickly?” | `npm test` |
+| “I changed **openapi.json** (or server routes).” | `npm run validate:openapi` then `npm run test:integration` |
+| “CI failed on formatting.” | `npm run format` then `npm run format:check` |
+| “I want to see tests in a browser.” | `npm run test:ui` |
+| “Full pipeline like GitHub.” | `npm run ci` |
+
+**MSW vs integration:** Most of the suite can run **without** a server (**MSW** fakes HTTP). When **`LOAN_API_BASE_URL`** points at the mock (**`127.0.0.1`** + **`/v1`**), **integration** tests also hit a **live** server — **`npm run test:integration`** starts the API on **9876** automatically. Exact test counts change over time; run **`npm test`** / **`npm run test:integration`** for the current numbers.
 
 ---
 
 ## 9. Glossary
 
-| Term                  | Meaning                                                                                                                          |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **API**               | HTTP + JSON endpoints.                                                                                                           |
-| **Vitest**            | Test runner (`npm test`, `npm run test:ui`).                                                                                     |
-| **MSW**               | Mocks HTTP inside tests so no server is required.                                                                                |
-| **Integration test**  | Hits a real running server: **`npm run test:integration`** uses **9876**; manual runs with **`start:mock`** default to **8765**. |
-| **OpenAPI / Swagger** | Machine-readable contract; **Try it out** in `/docs`.                                                                            |
-| **Bearer token**      | `Authorization: Bearer <token>` (optional `LOAN_API_KEY`).                                                                       |
+| Term | Meaning |
+| ---- | ------- |
+| **API** | Application Programming Interface — here, **HTTP** URLs that accept and return **JSON**. |
+| **Bearer token** | A secret string the server gives you at **login**. Send it as header **`Authorization: Bearer <token>`** on protected calls. Optional **`LOAN_API_KEY`** may also exist for some setups. |
+| **Vitest** | The **test runner** behind **`npm test`**, **`npm run test:watch`**, **`npm run test:ui`**, and coverage commands. |
+| **MSW (Mock Service Worker)** | Library that **intercepts** HTTP from Node tests and returns **canned responses**. Lets you test the client **without** starting the mock server. |
+| **Integration test (here)** | A test that opens a **real TCP connection** to the practice API. **`npm run test:integration`** starts the server on port **9876**; a developer manually pairing terminals often uses **8765**. |
+| **OpenAPI** | A structured **description** of every path, method, and JSON schema. This repo’s source file is **`javascript/mock-server/openapi.json`**. |
+| **Swagger UI** | A **web page** (here at **`/docs`**) that reads OpenAPI and lets you **Try it out** on each endpoint. |
+| **LOS** | Loan Origination System — bank software for **applications, decisions, and onboarding**. |
+| **KYC** | Know Your Customer — **identity checks** before lending. |
+| **EDD** | Enhanced Due Diligence — **extra compliance review**, modeled lightly here for **PEP** (politically exposed person) scenarios. |
+| **AML / CFT** | Anti–money laundering / countering financing of terrorism — real banks use policies and vendors here; this mock only has a **small PEP gate** to show where such checks often sit in the journey. |
+| **Stipulation (“stip”)** | A **condition** the borrower must satisfy after a **conditional** approval. |
+| **LOV** | List of Values — allowed dropdown codes returned in the **loan-products** catalogue. |
+| **PEP** | Politically Exposed Person — in this sandbox, two **yes/no** questions on the application. **Either “yes”** triggers an extra **`POST …/compliance/pep-clearance`** before **submit**. Real banks add much more review (see §5.2 Step 6 narrative). |
+| **`application_id`** | UUID of the **application** record — use it for all **`/loan-applications/{id}/...`** calls until funding steps need **`loan_id`**. |
+| **`loan_id`** | UUID of the **loan** after underwriting **creates** it — required for **`/loans/{id}/...`** (funding, disburse, pay). |
+| **`principal_cents`** | Loan amount in **Philippine peso centavos** (100 = **one peso**). Amounts must be **whole pesos** in this mock (multiples of **100**). |
+| **422** | “Your JSON shape or values are wrong” — read the error body for which field failed. |
+| **409** | “Wrong order or state” — for example **submit** without **documents**, **credit** before **disclosures**, or **PEP** clearance missing when required. |
 
 ---
 
@@ -637,6 +897,8 @@ flowchart LR
 ---
 
 ## 11. API automation standards (this repo)
+
+**Goal:** Catch mistakes **early** and **often**, with checks that are cheap to run locally and in CI — without pretending a mock server is the same as a chartered bank’s production stack.
 
 This project follows a **practical “golden baseline”** for API automation — not a full bank production stack, but **repeatable, gated, contract-aware** test practice.
 
