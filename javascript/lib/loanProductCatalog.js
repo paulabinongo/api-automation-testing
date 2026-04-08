@@ -295,14 +295,14 @@ export const PERSONAL_LOAN_PRODUCT = Object.freeze({
         key: 'additional_information',
         title: 'Additional information',
         description:
-          'Review entered values from loan through employment and addresses; edit or go back. **Next** runs eligibility against product criteria before document upload.',
+          'Review entered values from loan through employment and addresses; edit or go back. **Next** runs eligibility against product criteria before document upload. **PEP screening** — **`additional_information.pep_close_family_or_public_position`** and **`pep_financial_transactions_on_behalf`** (both required booleans). If **either** is **true** (Yes), **production** banks normally trigger **enhanced due diligence**, Compliance queue, extra documentation, and escalated approvals (**this sandbox** still allows **Step 7** onward for testing). See **docs/DOCUMENTATION.md** (Step 6 — Additional information) for a typical real-world sequence.',
       }),
       Object.freeze({
         step: 7,
         key: 'document_requirements',
         title: 'Document requirements',
         description:
-          'Upload required documents. ID-type picker lists **primary_id_document_types** (expanded vs Step 3). **POST …/documents** **primary_id_document_type** must exactly match **borrower.primary_id_document_type** (including after **PATCH**) or **422**.',
+          'Upload required documents. ID-type picker lists **primary_id_document_types** (expanded vs Step 3). **POST …/documents** **primary_id_document_type** must exactly match **borrower.primary_id_document_type** (including after **PATCH**) or **422**. **If Step 6 PEP is Yes** on either question: complete **POST …/compliance/pep-clearance** after documents and **before** **submit** (sandbox Compliance / EDD gate). **PATCH** to **additional_information** clears a prior clearance — call **pep-clearance** again.',
       }),
     ]),
   }),

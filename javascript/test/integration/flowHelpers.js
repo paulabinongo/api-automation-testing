@@ -7,6 +7,22 @@ export async function registerDocumentsForPayload(client, applicationId, payload
   })
 }
 
+/**
+ * **Step 7b** — when Step 6 PEP answers include **Yes**, sandbox requires **POST …/compliance/pep-clearance** before **submit**.
+ */
+export async function completePepComplianceGateIfRequired(client, applicationId, payload) {
+  const ai = payload?.additional_information
+  if (
+    !ai ||
+    typeof ai !== 'object' ||
+    (ai.pep_close_family_or_public_position !== true &&
+      ai.pep_financial_transactions_on_behalf !== true)
+  ) {
+    return
+  }
+  await client.completePepComplianceClearance(applicationId)
+}
+
 /** Ops queue + Reg-TILA-style disclosure ack (production-shaped gates before credit). */
 export async function throughOpsAndDisclosures(client, applicationId) {
   await client.acceptForProcessing(applicationId)
@@ -18,6 +34,7 @@ export async function throughCredit(client, payload) {
   const created = await client.createApplication(payload)
   const appId = created.id
   await registerDocumentsForPayload(client, appId, payload)
+  await completePepComplianceGateIfRequired(client, appId, payload)
   await client.submitApplication(appId)
   await throughOpsAndDisclosures(client, appId)
   await client.runCreditCheck(appId, creditCheckForcePass)

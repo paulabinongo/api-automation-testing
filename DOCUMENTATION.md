@@ -33,7 +33,7 @@ npm install
 npm test
 ```
 
-Runs **MSW-backed** tests in memory; **integration** cases are **skipped** unless `LOAN_API_BASE_URL` is **`http://127.0.0.1:<port>/v1`** (any port; default mock **`8765`**) — see `javascript/lib/config.js` → `isLocalMockConfigured`. **`javascript/test/unit/`** is pure logic (catalog, eligibility, computation); **`javascript/test/integration/`** is Vitest + **MSW** against the HTTP client. Total test count grows over time (run **`npm test`** for the current tally).
+Runs **MSW-backed** tests in memory; **integration** cases are **skipped** unless `LOAN_API_BASE_URL` is **`http://127.0.0.1:<port>/v1`** (any port; default mock **`8765`**) — see `javascript/lib/config.js` → `isLocalMockConfigured`. Total test count grows over time (run **`npm test`** for the current tally).
 
 **Watch mode** (re-run when files change):
 
@@ -139,7 +139,7 @@ Swagger is driven by **`javascript/mock-server/openapi.json`** (served as `/open
    - **`paths`** — add or adjust URL templates (`/v1/...`), methods, `requestBody`, `responses`, examples.
    - **`components.schemas`** — reuse field shapes; add new schemas for new bodies.
 3. **Restart** — `npm run start:mock` and hard-refresh **`/docs`** in the browser.
-4. **Keep clients aligned** — update **`javascript/lib/loanApiClient.js`**, **`javascript/test/**/\*.test.js`** (and **MSW** handler URLs/bodies), and **Postman\*\* if paths or JSON differ.
+4. **Keep clients aligned** — update **`javascript/lib/loanApiClient.js`**, **`javascript/test/*.test.js`** (and **MSW** handler URLs/bodies), and **Postman** if paths or JSON differ.
 
 **Tip:** Valid JSON is required. Validate with:
 
@@ -155,7 +155,7 @@ node -e "JSON.parse(require('fs').readFileSync('javascript/mock-server/openapi.j
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | **Paths / HTTP methods**       | `javascript/lib/loanApiClient.js`, `javascript/mock-server/server.js`, `javascript/mock-server/openapi.json`, Postman JSON |
 | **Sample data**                | `javascript/lib/sampleData.js`                                                                                             |
-| **Fake responses (no server)** | MSW handlers in `javascript/test/integration/loanLifecycle.test.js`, `javascript/test/integration/loanEdgeCases.test.js`   |
+| **Fake responses (no server)** | MSW handlers in `javascript/test/loanLifecycle.test.js`, `javascript/test/loanEdgeCases.test.js`                           |
 | **When integration tests run** | `javascript/lib/config.js` (`isLocalMockConfigured`, env vars)                                                             |
 | **Env / secrets**              | `.env` (not committed), `LOAN_API_BASE_URL`, `LOAN_API_KEY`                                                                |
 
@@ -194,7 +194,7 @@ Follow this order in **Swagger**, **Postman**, or your app. **Almost every** `/v
 | **14**                        | Close the loan on the system.                            | `POST /v1/loans/{loanId}/payoff`                                                                                           | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **loan_id**                                                              | Status **CLOSED**.                                                               |
 | **—**                         | **Log out** (invalidate token).                          | `POST /v1/auth/logout`                                                                                                     | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Bearer                                                                   | **204** — reuse requires **login** again.                                        |
 
-**Remember:** **`loan_id` does not exist until step 7** (underwriting decision) creates the loan. Until then only **`application_id`** matters. Helpers in **`javascript/test/integration/flowHelpers.js`** (`throughCredit`, `throughUnderwritingDecision`, `activeLoan`) chain these steps for **Vitest**; **`LoanApiClient`** exposes each **POST** separately for Postman and app code.
+**Remember:** **`loan_id` does not exist until step 7** (underwriting decision) creates the loan. Until then only **`application_id`** matters. Helpers in **`javascript/test/flowHelpers.js`** (`throughCredit`, `throughUnderwritingDecision`, `activeLoan`) chain these steps for **Vitest**; **`LoanApiClient`** exposes each **POST** separately for Postman and app code.
 
 **HTTP:** Every **`/v1/...`** call except **`POST /auth/login`**, **`GET /health`**, **`GET /reference/loan-products`**, and **`GET /reference/loan-computation-preview`** must send **`Authorization: Bearer`** with the **`access_token`** from login (Postman and **`LoanApiClient.setAccessToken`** handle this).
 
@@ -204,15 +204,15 @@ Follow this order in **Swagger**, **Postman**, or your app. **Almost every** `/v
 
 Use the same list whenever you change URLs, fields, or rules so **docs**, **tests**, and **mocks** stay aligned.
 
-| If you change…                                                  | Update these (minimum)                                                                                                                                                       |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Path** (e.g. `/applications` instead of `/loan-applications`) | `javascript/lib/loanApiClient.js`, `javascript/mock-server/server.js`, `javascript/mock-server/openapi.json`, Postman collection, MSW URLs in `javascript/test/**/*.test.js` |
-| **Request JSON** (field names, types, money format)             | `server.js` validation + handlers, `openapi.json` schemas/examples, `sampleData.js`, tests’ payloads, Postman bodies                                                         |
-| **Response JSON** or **status values**                          | `openapi.json`, assertions in `javascript/test/**/*.test.js`, MSW mock JSON in same files                                                                                    |
-| **State machine** (when submit/credit/fund is allowed)          | `server.js` guards (`409` logic), edge-case tests, [§5.3 Edge cases catalog](#53-edge-cases-catalog)                                                                         |
-| **New step** in the journey                                     | Add route in `server.js`, document path in `openapi.json`, add `loanApiClient` method, add/extend tests + Postman folder                                                     |
-| **Port or base URL** for local integration                      | `LOAN_API_BASE_URL` (`127.0.0.1` + `/v1`), Postman **`base_url`**                                                                                                            |
-| **Auth** (headers, tokens)                                      | `loanApiClient.js`, Postman auth, optional checks in `server.js`                                                                                                             |
+| If you change…                                                  | Update these (minimum)                                                                                                                                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Path** (e.g. `/applications` instead of `/loan-applications`) | `javascript/lib/loanApiClient.js`, `javascript/mock-server/server.js`, `javascript/mock-server/openapi.json`, Postman collection, MSW URLs in `javascript/test/*.test.js` |
+| **Request JSON** (field names, types, money format)             | `server.js` validation + handlers, `openapi.json` schemas/examples, `sampleData.js`, tests’ payloads, Postman bodies                                                      |
+| **Response JSON** or **status values**                          | `openapi.json`, assertions in `javascript/test/*.test.js`, MSW mock JSON in same files                                                                                    |
+| **State machine** (when submit/credit/fund is allowed)          | `server.js` guards (`409` logic), edge-case tests, [§5.3 Edge cases catalog](#53-edge-cases-catalog)                                                                      |
+| **New step** in the journey                                     | Add route in `server.js`, document path in `openapi.json`, add `loanApiClient` method, add/extend tests + Postman folder                                                  |
+| **Port or base URL** for local integration                      | `LOAN_API_BASE_URL` (`127.0.0.1` + `/v1`), Postman **`base_url`**                                                                                                         |
+| **Auth** (headers, tokens)                                      | `loanApiClient.js`, Postman auth, optional checks in `server.js`                                                                                                          |
 
 ---
 
@@ -372,7 +372,7 @@ The same strings are exported in code as **`STIPULATION_DESCRIPTION_EXAMPLES`** 
 
 ### 5.3 Edge cases catalog
 
-Catalog columns reference **`javascript/test/integration/loanEdgeCases.test.js`** and Postman **Edge cases** where noted.
+Catalog columns reference **`javascript/test/loanEdgeCases.test.js`** and Postman **Edge cases** where noted.
 
 #### A. Not found
 
@@ -487,12 +487,11 @@ Use this list when communicating scope to **risk**, **ops**, or **compliance**: 
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **PM** | [§5.0 Step-by-step](#50-step-by-step-happy-path), [§5.1 Routes](#51-route-cheat-sheet-one-line-per-step), [§5.4 Production mapping](#54-mapping-to-production-bank-lifecycle), [§5.3 Edge cases](#53-edge-cases-catalog) |
 | **BA** | Map your process §4–5; [checklist §10](#10-pm--ba-checklist)                                                                                                                                                             |
-| **QA** | §2 tests, §3 Swagger/Postman, extend `javascript/test/**/*.test.js`                                                                                                                                                      |
+| **QA** | §2 tests, §3 Swagger/Postman, extend `javascript/test/*.test.js`                                                                                                                                                         |
 
 | Path                                                            | Purpose                                                                                                        |
 | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `README.md`                                                     | Entry point — links to this guide                                                                              |
-| `docs/DOCUMENTATION.md`                                         | This guide                                                                                                     |
+| `DOCUMENTATION.md`                                              | This guide                                                                                                     |
 | `.nvmrc`                                                        | Node 20 for nvm                                                                                                |
 | `package.json`                                                  | Scripts: `test`, `test:coverage`, `test:integration`, `ci`, `lint`, `format`, `validate:openapi`, `start:mock` |
 | `vitest.config.js`                                              | Vitest + **coverage thresholds** (automation modules)                                                          |
@@ -508,10 +507,8 @@ Use this list when communicating scope to **risk**, **ops**, or **compliance**: 
 | `javascript/lib/sampleData.js`                                  | Example payloads (**`buildSampleLoanApplication`** = Personal Loan)                                            |
 | `javascript/mock-server/server.js`                              | Practice API + `/docs`                                                                                         |
 | `javascript/mock-server/openapi.json`                           | OpenAPI / Swagger source                                                                                       |
-| `javascript/test/unit/*.test.js`                                | Vitest — catalogue / eligibility / computation (no MSW)                                                        |
-| `javascript/test/integration/*.test.js`                         | Vitest + **MSW** — lifecycle + edge cases                                                                      |
-| `javascript/test/integration/flowHelpers.js`                    | Shared **throughCredit** / **activeLoan** chains for integration tests                                         |
-| `javascript/test/integration/sessionHelpers.js`                 | **login** + **KYC** helpers for integration tests                                                              |
+| `javascript/test/*.test.js`                                     | Vitest + MSW                                                                                                   |
+| `javascript/test/flowHelpers.js`                                | Shared **throughCredit** / **activeLoan** chains for integration tests                                         |
 | `javascript/test/helpers/assertions.js`                         | Shared API error assertions                                                                                    |
 | `postman/collection/Loan_Lifecycle_API.postman_collection.json` | Collection + **Flow — Happy path** folder for Runner                                                           |
 | `postman/environments/Local_Mock.postman_environment.json`      | Local URLs + demo auth + runtime variables                                                                     |

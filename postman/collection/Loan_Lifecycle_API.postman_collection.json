@@ -564,6 +564,46 @@
           "response": []
         },
         {
+          "name": "1d. PEP compliance clearance (conditional)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('PEP clearance or not applicable', function () {",
+                  "    pm.expect([200, 400]).to.include(pm.response.code);",
+                  "    if (pm.response.code === 200) {",
+                  "        var j = pm.response.json();",
+                  "        pm.expect(j.pep_compliance_clearance_at).to.be.ok;",
+                  "    }",
+                  "    if (pm.response.code === 400) {",
+                  "        var e = pm.response.json();",
+                  "        pm.expect(String(e.detail || '')).to.match(/not required/i);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/compliance/pep-clearance",
+            "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required — Runner test accepts **200** or **400**."
+          },
+          "response": []
+        },
+        {
           "name": "2. Submit application",
           "event": [
             {
@@ -582,7 +622,7 @@
             "method": "POST",
             "header": [],
             "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
-            "description": "Moves application to SUBMITTED for credit / ops."
+            "description": "Moves application to SUBMITTED for credit / ops. **PEP Yes:** run **1d** first after **1c**."
           },
           "response": []
         },
@@ -1135,6 +1175,46 @@
               "response": []
             },
             {
+              "name": "1d. PEP compliance clearance (conditional)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('PEP clearance or not applicable', function () {",
+                      "    pm.expect([200, 400]).to.include(pm.response.code);",
+                      "    if (pm.response.code === 200) {",
+                      "        var j = pm.response.json();",
+                      "        pm.expect(j.pep_compliance_clearance_at).to.be.ok;",
+                      "    }",
+                      "    if (pm.response.code === 400) {",
+                      "        var e = pm.response.json();",
+                      "        pm.expect(String(e.detail || '')).to.match(/not required/i);",
+                      "    }",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/compliance/pep-clearance",
+                "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required — Runner test accepts **200** or **400**."
+              },
+              "response": []
+            },
+            {
               "name": "2. Submit application",
               "event": [
                 {
@@ -1153,7 +1233,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
-                "description": "Moves application to SUBMITTED for credit / ops."
+                "description": "Moves application to SUBMITTED for credit / ops. **PEP Yes:** run **1d** first after **1c**."
               },
               "response": []
             },
@@ -1580,6 +1660,46 @@
               "response": []
             },
             {
+              "name": "1d. PEP compliance clearance (conditional)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('PEP clearance or not applicable', function () {",
+                      "    pm.expect([200, 400]).to.include(pm.response.code);",
+                      "    if (pm.response.code === 200) {",
+                      "        var j = pm.response.json();",
+                      "        pm.expect(j.pep_compliance_clearance_at).to.be.ok;",
+                      "    }",
+                      "    if (pm.response.code === 400) {",
+                      "        var e = pm.response.json();",
+                      "        pm.expect(String(e.detail || '')).to.match(/not required/i);",
+                      "    }",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/compliance/pep-clearance",
+                "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required — Runner test accepts **200** or **400**."
+              },
+              "response": []
+            },
+            {
               "name": "2. Submit application",
               "event": [
                 {
@@ -1598,7 +1718,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
-                "description": "Moves application to SUBMITTED for credit / ops."
+                "description": "Moves application to SUBMITTED for credit / ops. **PEP Yes:** run **1d** first after **1c**."
               },
               "response": []
             },

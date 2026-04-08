@@ -196,6 +196,22 @@ function sanitizeApplicationOut(row) {
   return rest
 }
 
+/** Step 6 PEP screening — **Yes** on either boolean flags heightened scrutiny (AML/CFT-style). */
+function additionalInformationIndicatesPep(additional_information) {
+  if (!additional_information || typeof additional_information !== 'object') return false
+  return (
+    additional_information.pep_close_family_or_public_position === true ||
+    additional_information.pep_financial_transactions_on_behalf === true
+  )
+}
+
+function applicationRequiresPepComplianceClearance(row) {
+  return (
+    row.product_code === 'PERSONAL_LOAN' &&
+    additionalInformationIndicatesPep(row.additional_information)
+  )
+}
+
 /** First of month after "today + ~1 month" — matches prior Python demo logic. */
 function scheduleStartDate() {
   const d = new Date()
@@ -428,6 +444,7 @@ v1.post('/loan-applications', (req, res) => {
     decline_reason_code: null,
     credit_reference_id: null,
     disclosures_acknowledged_at: null,
+    pep_compliance_clearance_at: null,
     owner_user_id: req.bankSession.user_id,
   }
   applications.set(aid, row)
@@ -520,6 +537,9 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
     borrower: mergedBody.borrower,
     employment: mergedBody.employment,
   })
+  if (p.additional_information && typeof p.additional_information === 'object') {
+    row.pep_compliance_clearance_at = null
+  }
   res.json(sanitizeApplicationOut(row))
 })
 
@@ -569,6 +589,44 @@ v1.post('/loan-applications/:applicationId/documents', (req, res) => {
   res.json(sanitizeApplicationOut(row))
 })
 
+/**
+ * **PEP / enhanced due diligence gate** (production-shaped). After **Step 7** document registration,
+ * **Personal Loan** applications with **either** Step 6 PEP boolean **true** must call this **before** **submit**.
+ */
+v1.post('/loan-applications/:applicationId/compliance/pep-clearance', (req, res) => {
+  const row = getApp(req.params.applicationId)
+  if (!row) return sendError(req, res, 404, 'Application not found')
+  if (row.owner_user_id !== req.bankSession.user_id) {
+    return sendError(req, res, 403, 'Application belongs to another session')
+  }
+  if (row.status !== 'DRAFT') {
+    return sendError(
+      req,
+      res,
+      409,
+      'PEP compliance clearance allowed only when application status is DRAFT',
+    )
+  }
+  if (!applicationRequiresPepComplianceClearance(row)) {
+    return sendError(
+      req,
+      res,
+      400,
+      'PEP compliance clearance is not required — neither additional_information.pep_close_family_or_public_position nor pep_financial_transactions_on_behalf is true',
+    )
+  }
+  if (!(row.document_intake && row.document_intake.completed_at)) {
+    return sendError(
+      req,
+      res,
+      409,
+      'Complete document registration (POST …/loan-applications/{applicationId}/documents) before PEP compliance clearance',
+    )
+  }
+  row.pep_compliance_clearance_at = new Date().toISOString()
+  res.json(sanitizeApplicationOut(row))
+})
+
 v1.get('/loan-applications/:applicationId', (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
@@ -595,6 +653,14 @@ v1.post('/loan-applications/:applicationId/submit', (req, res) => {
       res,
       409,
       'Personal Loan requires Step 7 document intake: POST /v1/loan-applications/{applicationId}/documents with primary_id_document_type equal to borrower.primary_id_document_type',
+    )
+  }
+  if (applicationRequiresPepComplianceClearance(row) && !row.pep_compliance_clearance_at) {
+    return sendError(
+      req,
+      res,
+      409,
+      'PEP heightened scrutiny: complete the compliance gate before submit — POST /v1/loan-applications/{applicationId}/compliance/pep-clearance (required when Step 6 indicates Yes to either PEP question). For a plain No/No PEP screening, this call is not used.',
     )
   }
   row.status = 'SUBMITTED'

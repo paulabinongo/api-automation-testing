@@ -203,6 +203,18 @@ export class LoanApiClient {
     })
   }
 
+  /**
+   * **PEP enhanced due diligence** gate — mirrors Compliance sign-off after intake when Step 6 indicates **Yes**.
+   * Call **after** **POST …/documents** and **before** **submit** when either **`additional_information`** PEP boolean is **true**.
+   * **400** if PEP screening is both **false**; **409** if documents are not registered yet.
+   */
+  completePepComplianceClearance(applicationId) {
+    return this._request('POST', `/loan-applications/${applicationId}/compliance/pep-clearance`, {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+  }
+
   /** Look up one application by id. */
   getApplication(applicationId) {
     return this._request('GET', `/loan-applications/${applicationId}`)

@@ -556,11 +556,52 @@
         }
       }
     },
+    "/v1/loan-applications/{applicationId}/compliance/pep-clearance": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "PEP / enhanced due diligence clearance (before submit)",
+        "description": "**Production-shaped gate** when **Step 6** indicates **Yes** to **`pep_close_family_or_public_position`** or **`pep_financial_transactions_on_behalf`**. Call **after** **POST …/documents** and **before** **submit**. **400** if neither PEP boolean is **true**. **409** if still **DRAFT** but documents are not registered. Idempotent: repeated calls refresh **`pep_compliance_clearance_at`**. **PATCH** to **additional_information** clears prior clearance.",
+        "operationId": "completePepComplianceClearance",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" },
+              "example": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "DRAFT updated — **`pep_compliance_clearance_at`** set",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Application belongs to another session" },
+          "404": { "description": "Not found" },
+          "409": {
+            "description": "**Not DRAFT**, or document intake not completed",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          },
+          "400": {
+            "description": "PEP clearance not applicable (both Step 6 answers **No**)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          }
+        }
+      }
+    },
     "/v1/loan-applications/{applicationId}/submit": {
       "post": {
         "tags": ["Applications"],
         "summary": "Submit (DRAFT → SUBMITTED)",
-        "description": "For **PERSONAL_LOAN**, **POST …/documents** must have completed first (**409** otherwise).",
+        "description": "For **PERSONAL_LOAN**, **POST …/documents** must have completed first (**409** otherwise). When **additional_information** has **either** PEP boolean **true**, **POST …/compliance/pep-clearance** must have completed first (**409** otherwise).",
         "operationId": "submitApplication",
         "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
         "responses": {
@@ -572,7 +613,7 @@
           },
           "404": { "description": "Not found" },
           "409": {
-            "description": "Invalid state (not DRAFT) or document intake not completed (Personal Loan)"
+            "description": "Invalid state (not **DRAFT**), document intake incomplete (**Personal Loan**), or **PEP** compliance gate not cleared"
           }
         }
       }
@@ -1442,15 +1483,15 @@
       "AdditionalInformationIn": {
         "type": "object",
         "required": ["pep_close_family_or_public_position", "pep_financial_transactions_on_behalf"],
-        "description": "Step 6 PEP-style questions (both mandatory **boolean**; UI often defaults **false**).",
+        "description": "Step 6 PEP-style questions (both mandatory **boolean**; UI often defaults **false**). **Either `true`:** after **POST …/documents**, **`POST …/compliance/pep-clearance`** is **required** before **submit** in this sandbox (**409** otherwise). See **docs/DOCUMENTATION.md** (Step 6–7b). In real banks expect broader **EDD** and escalated approval beyond this API gate.",
         "properties": {
           "pep_close_family_or_public_position": {
             "type": "boolean",
-            "description": "Family/self close relationship with prominent public or international-org position."
+            "description": "Family/self close relationship with prominent public or international-org position. **`true`:** typically starts **EDD** / Compliance workflow in production."
           },
           "pep_financial_transactions_on_behalf": {
             "type": "boolean",
-            "description": "Substantial domestic/international financial transactions on behalf of such a person."
+            "description": "Substantial domestic/international financial transactions on behalf of such a person. **`true`:** typically starts **EDD** / Compliance workflow in production."
           }
         }
       },
@@ -1815,6 +1856,17 @@
             "format": "date-time",
             "nullable": true,
             "description": "Set by **POST …/disclosures/acknowledge**; required before **credit-check**."
+          },
+          "additional_information": {
+            "allOf": [{ "$ref": "#/components/schemas/AdditionalInformationIn" }],
+            "nullable": true,
+            "description": "Step 6 PEP screening (echoed)."
+          },
+          "pep_compliance_clearance_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Compliance/CFT gate — set by **POST …/compliance/pep-clearance** when PEP is **Yes**; nulled when **PATCH** merges **additional_information**."
           }
         }
       },

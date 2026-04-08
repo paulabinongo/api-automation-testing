@@ -18,7 +18,7 @@ import {
   creditCheckForcePass,
 } from '../../lib/sampleData.js'
 import { loginAndCompleteKyc } from './sessionHelpers.js'
-import { registerDocumentsForPayload } from './flowHelpers.js'
+import { completePepComplianceGateIfRequired, registerDocumentsForPayload } from './flowHelpers.js'
 import { expectRejectsWithStatus } from '../helpers/assertions.js'
 
 const MOCK_BASE = 'https://api.loan.test/v1'
@@ -48,17 +48,20 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
           message: 'ok',
         }),
       ),
-      http.post(`${MOCK_BASE}/loan-applications`, () =>
-        HttpResponse.json(
+      http.post(`${MOCK_BASE}/loan-applications`, async ({ request }) => {
+        const body = await request.json()
+        return HttpResponse.json(
           {
             id: applicationId,
             status: 'DRAFT',
-            product_code: sample.product_code,
-            principal_cents: principal,
+            product_code: body.product_code,
+            principal_cents: body.principal_cents,
+            term_months: body.term_months,
+            additional_information: body.additional_information,
           },
           { status: 201 },
-        ),
-      ),
+        )
+      }),
       http.post(`${MOCK_BASE}/loan-applications/${applicationId}/documents`, () =>
         HttpResponse.json({
           id: applicationId,
@@ -67,6 +70,13 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
             primary_id_document_type: sample.borrower.primary_id_document_type,
             completed_at: '2026-01-01T00:00:00.000Z',
           },
+        }),
+      ),
+      http.post(`${MOCK_BASE}/loan-applications/${applicationId}/compliance/pep-clearance`, () =>
+        HttpResponse.json({
+          id: applicationId,
+          status: 'DRAFT',
+          pep_compliance_clearance_at: '2026-06-01T12:00:00.000Z',
         }),
       ),
       http.post(`${MOCK_BASE}/loan-applications/${applicationId}/submit`, () =>
@@ -211,6 +221,32 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
     await loginAndCompleteKyc(client)
     await expectRejectsWithStatus(client.createApplication(buildSampleLoanApplication()), 422)
   })
+
+  it.each([
+    [
+      'pep_close_family_or_public_position only',
+      { pep_close_family_or_public_position: true, pep_financial_transactions_on_behalf: false },
+    ],
+    [
+      'pep_financial_transactions_on_behalf only',
+      { pep_close_family_or_public_position: false, pep_financial_transactions_on_behalf: true },
+    ],
+    [
+      'both PEP questions',
+      { pep_close_family_or_public_position: true, pep_financial_transactions_on_behalf: true },
+    ],
+  ])('PEP Yes (%s): documents → pep-clearance → submit', async (_label, additional_information) => {
+    const client = new LoanApiClient({ baseUrl: MOCK_BASE })
+    await loginAndCompleteKyc(client)
+    const body = { ...buildPersonalLoanSampleApplication(36), additional_information }
+    const created = await client.createApplication(body)
+    expect(created.status).toBe('DRAFT')
+    expect(created.additional_information).toEqual(additional_information)
+    await registerDocumentsForPayload(client, applicationId, body)
+    await completePepComplianceGateIfRequired(client, applicationId, body)
+    const submitted = await client.submitApplication(applicationId)
+    expect(submitted.status).toBe('SUBMITTED')
+  })
 })
 
 describe.skipIf(!isLocalMockConfigured())(
@@ -287,6 +323,120 @@ describe.skipIf(!isLocalMockConfigured())(
       const created = await client.createApplication(buildPersonalLoanSampleApplication(24))
       expect(created.status).toBe('DRAFT')
       expect(created.product_code).toBe('PERSONAL_LOAN')
+    })
+
+    it.each([
+      [
+        'pep_close_family_or_public_position only',
+        { pep_close_family_or_public_position: true, pep_financial_transactions_on_behalf: false },
+      ],
+      [
+        'pep_financial_transactions_on_behalf only',
+        { pep_close_family_or_public_position: false, pep_financial_transactions_on_behalf: true },
+      ],
+      [
+        'both PEP questions',
+        { pep_close_family_or_public_position: true, pep_financial_transactions_on_behalf: true },
+      ],
+    ])(
+      'live mock: create + documents + pep-clearance + submit when %s is Yes',
+      async (_label, additional_information) => {
+        const client = new LoanApiClient()
+        await loginAndCompleteKyc(client)
+        const body = { ...buildPersonalLoanSampleApplication(12), additional_information }
+        const created = await client.createApplication(body)
+        expect(created.status).toBe('DRAFT')
+        expect(created.additional_information).toEqual(additional_information)
+        await registerDocumentsForPayload(client, created.id, body)
+        await completePepComplianceGateIfRequired(client, created.id, body)
+        const cleared = await client.getApplication(created.id)
+        expect(cleared.pep_compliance_clearance_at).toBeTruthy()
+        const submitted = await client.submitApplication(created.id)
+        expect(submitted.status).toBe('SUBMITTED')
+      },
+    )
+
+    it.each([
+      [
+        'one PEP flag',
+        { pep_close_family_or_public_position: true, pep_financial_transactions_on_behalf: false },
+      ],
+      [
+        'both PEP flags',
+        { pep_close_family_or_public_position: true, pep_financial_transactions_on_behalf: true },
+      ],
+    ])(
+      'live mock: eligibility-preview stays eligible when %s is Yes',
+      async (_label, additional_information) => {
+        const client = new LoanApiClient()
+        await loginAndCompleteKyc(client)
+        const body = { ...buildPersonalLoanSampleApplication(24), additional_information }
+        const prev = await client.previewApplicationEligibility(body)
+        expect(prev.eligible).toBe(true)
+      },
+    )
+
+    it('live mock: submit returns 409 when PEP is Yes but compliance/pep-clearance was skipped', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = {
+        ...buildPersonalLoanSampleApplication(12),
+        additional_information: {
+          pep_close_family_or_public_position: true,
+          pep_financial_transactions_on_behalf: false,
+        },
+      }
+      const created = await client.createApplication(body)
+      await registerDocumentsForPayload(client, created.id, body)
+      await expectRejectsWithStatus(client.submitApplication(created.id), 409)
+    })
+
+    it('live mock: POST compliance/pep-clearance returns 400 when neither PEP question is Yes', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildPersonalLoanSampleApplication(12)
+      const created = await client.createApplication(body)
+      await registerDocumentsForPayload(client, created.id, body)
+      await expectRejectsWithStatus(client.completePepComplianceClearance(created.id), 400)
+    })
+
+    it('live mock: POST compliance/pep-clearance returns 409 before documents when PEP is Yes', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = {
+        ...buildPersonalLoanSampleApplication(12),
+        additional_information: {
+          pep_close_family_or_public_position: false,
+          pep_financial_transactions_on_behalf: true,
+        },
+      }
+      const created = await client.createApplication(body)
+      await expectRejectsWithStatus(client.completePepComplianceClearance(created.id), 409)
+    })
+
+    it('live mock: PATCH additional_information clears PEP clearance — submit blocks until pep-clearance again', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = {
+        ...buildPersonalLoanSampleApplication(12),
+        additional_information: {
+          pep_close_family_or_public_position: true,
+          pep_financial_transactions_on_behalf: false,
+        },
+      }
+      const created = await client.createApplication(body)
+      await registerDocumentsForPayload(client, created.id, body)
+      await client.completePepComplianceClearance(created.id)
+      await client.updateDraftApplication(created.id, {
+        additional_information: {
+          pep_close_family_or_public_position: true,
+          pep_financial_transactions_on_behalf: true,
+        },
+      })
+      await expectRejectsWithStatus(client.submitApplication(created.id), 409)
+      await client.completePepComplianceClearance(created.id)
+      const submitted = await client.submitApplication(created.id)
+      expect(submitted.status).toBe('SUBMITTED')
     })
 
     it('rejects PERSONAL_LOAN when gross monthly income implies below minimum annual income', async () => {
@@ -512,6 +662,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const created = await client.createApplication(sample)
       const appId = created.id
       await registerDocumentsForPayload(client, appId, sample)
+      await completePepComplianceGateIfRequired(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)
@@ -547,6 +698,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const created = await client.createApplication(sample)
       const appId = created.id
       await registerDocumentsForPayload(client, appId, sample)
+      await completePepComplianceGateIfRequired(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)
@@ -580,6 +732,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const created = await client.createApplication(sample)
       const appId = created.id
       await registerDocumentsForPayload(client, appId, sample)
+      await completePepComplianceGateIfRequired(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)
@@ -610,6 +763,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const created = await client.createApplication(sample)
       const appId = created.id
       await registerDocumentsForPayload(client, appId, sample)
+      await completePepComplianceGateIfRequired(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
       await client.acknowledgeDisclosures(appId)
