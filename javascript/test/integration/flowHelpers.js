@@ -1,3 +1,4 @@
+import { applicationRequiresMetrobankDepositAccountConfirmation } from '../../lib/loanProductCatalog.js'
 import { buildUnderwritingBody, creditCheckForcePass } from '../../lib/sampleData.js'
 
 /** Step 7 — **personal** applications need document registration before **submit**. */
@@ -5,6 +6,14 @@ export async function registerDocumentsForPayload(client, applicationId, payload
   await client.registerApplicationDocuments(applicationId, {
     primary_id_document_type: payload.borrower.primary_id_document_type,
   })
+}
+
+/**
+ * **Step 7b (Metrobank ADA)** — when intake is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`**, call **POST …/metrobank-deposit-account/confirm** after documents so **`metrobank_deposit_account_confirmed_at`** is set before **underwriting** can **APPROVE** (submit does not require it).
+ */
+export async function completeMetrobankDepositConfirmIfRequired(client, applicationId, payload) {
+  if (!applicationRequiresMetrobankDepositAccountConfirmation(payload)) return
+  await client.confirmMetrobankDepositAccount(applicationId)
 }
 
 /**
@@ -34,6 +43,7 @@ export async function throughCredit(client, payload) {
   const created = await client.createApplication(payload)
   const appId = created.id
   await registerDocumentsForPayload(client, appId, payload)
+  await completeMetrobankDepositConfirmIfRequired(client, appId, payload)
   await completePepComplianceGateIfRequired(client, appId, payload)
   await client.submitApplication(appId)
   await throughOpsAndDisclosures(client, appId)

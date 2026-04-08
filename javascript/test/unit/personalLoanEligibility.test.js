@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import { evaluatePersonalLoanEligibility } from '../../lib/personalLoanEligibility.js'
-import { buildPersonalLoanSampleApplication } from '../../lib/sampleData.js'
+import {
+  buildPersonalLoanSampleApplication,
+  buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit,
+  buildPersonalLoanSampleApplicationNotYetMetrobankClient,
+} from '../../lib/sampleData.js'
 
 describe('evaluatePersonalLoanEligibility', () => {
   const ref = new Date('2026-06-15T12:00:00.000Z')
@@ -13,6 +17,35 @@ describe('evaluatePersonalLoanEligibility', () => {
     expect(out.failed_checks).toHaveLength(0)
     expect(out.checks.length).toBe(5)
     expect(out.checks.every((c) => c.passed)).toBe(true)
+  })
+
+  it('passes NOT_METROBANK_CLIENT metrobank check regardless of repayment plan (approval gates deposit)', () => {
+    const ok = buildPersonalLoanSampleApplicationNotYetMetrobankClient(36)
+    expect(evaluatePersonalLoanEligibility(ok, { referenceDate: ref }).eligible).toBe(true)
+    const declines = {
+      ...ok,
+      additional_information: {
+        ...ok.additional_information,
+        metrobank_deposit_repayment_plan: 'DECLINES_METROBANK_DEPOSIT',
+      },
+    }
+    expect(evaluatePersonalLoanEligibility(declines, { referenceDate: ref }).eligible).toBe(true)
+    const otherBank = {
+      ...ok,
+      additional_information: {
+        ...ok.additional_information,
+        metrobank_deposit_repayment_plan: 'WILL_USE_OTHER_BANK_DEPOSIT_ONLY',
+      },
+    }
+    expect(evaluatePersonalLoanEligibility(otherBank, { referenceDate: ref }).eligible).toBe(true)
+  })
+
+  it('passes EXISTING_CLIENT_CREDIT_CARD metrobank check even when plan omitted (approval gates deposit)', () => {
+    const ok = buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit(36)
+    expect(evaluatePersonalLoanEligibility(ok, { referenceDate: ref }).eligible).toBe(true)
+    const noPlan = { ...ok, additional_information: { ...ok.additional_information } }
+    delete noPlan.additional_information.metrobank_deposit_repayment_plan
+    expect(evaluatePersonalLoanEligibility(noPlan, { referenceDate: ref }).eligible).toBe(true)
   })
 
   it('fails when borrower is not Filipino', () => {

@@ -14,18 +14,31 @@ function phpToCentavos(pesos) {
   return Math.round(pesos * 100)
 }
 
-/** Intake values for **POST /loan-applications** — Metrobank relationship (personal loan disbursement/servicing). */
+/**
+ * **`metrobank_client_type`** values accepted on **POST /loan-applications** for **PERSONAL_LOAN**.
+ * **`EXISTING_CLIENT_CREDIT_CARD`** and **`NOT_METROBANK_CLIENT`** may **create** and **submit** without a deposit yet; **APPROVE** / **CONDITIONAL** remain **422** until **`metrobank_deposit_account_confirmed_at`** (or switching to **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**).
+ */
 export const PERSONAL_LOAN_METROBANK_CLIENT_TYPES = Object.freeze([
   'EXISTING_CLIENT_CREDIT_CARD',
   'EXISTING_CLIENT_DEPOSIT_ACCOUNT',
   'NOT_METROBANK_CLIENT',
 ])
 
-/** Allowed to proceed with **PERSONAL_LOAN** (must hold a Metrobank card or deposit account). */
-export const PERSONAL_LOAN_ELIGIBLE_METROBANK_CLIENT_TYPES = Object.freeze([
-  'EXISTING_CLIENT_CREDIT_CARD',
-  'EXISTING_CLIENT_DEPOSIT_ACCOUNT',
-])
+/**
+ * When **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`**, **`metrobank_deposit_repayment_plan`** is optional at intake; if present it must be one of these **string** values.
+ * In **JSON** bodies the value must be quoted (e.g. **`"metrobank_deposit_repayment_plan": "WILL_OPEN_METROBANK_DEPOSIT"`**); bare **`WILL_OPEN_METROBANK_DEPOSIT`** without quotes is invalid JSON.
+ */
+export const METROBANK_DEPOSIT_REPAYMENT_PLAN = Object.freeze({
+  WILL_OPEN_METROBANK_DEPOSIT: 'WILL_OPEN_METROBANK_DEPOSIT',
+  DECLINES_METROBANK_DEPOSIT: 'DECLINES_METROBANK_DEPOSIT',
+  WILL_USE_OTHER_BANK_DEPOSIT_ONLY: 'WILL_USE_OTHER_BANK_DEPOSIT_ONLY',
+})
+
+/** @param {unknown} body */
+export function applicationRequiresMetrobankDepositAccountConfirmation(body) {
+  const mt = String(body?.metrobank_client_type || '')
+  return mt === 'NOT_METROBANK_CLIENT' || mt === 'EXISTING_CLIENT_CREDIT_CARD'
+}
 
 /** Display label for **primary_id_document_types** LOV (API **`value`** → UI **label**). */
 export function primaryIdDocumentTypeLabel(value) {
@@ -302,26 +315,26 @@ export const PERSONAL_LOAN_PRODUCT = Object.freeze({
         key: 'document_requirements',
         title: 'Document requirements',
         description:
-          'Upload required documents. ID-type picker lists **primary_id_document_types** (expanded vs Step 3). **POST …/documents** **primary_id_document_type** must exactly match **borrower.primary_id_document_type** (including after **PATCH**) or **422**. **If Step 6 PEP is Yes** on either question: complete **POST …/compliance/pep-clearance** after documents and **before** **submit** (sandbox Compliance / EDD gate). **PATCH** to **additional_information** clears a prior clearance — call **pep-clearance** again.',
+          'Upload required documents. ID-type picker lists **primary_id_document_types** (expanded vs Step 3). **POST …/documents** **primary_id_document_type** must exactly match **borrower.primary_id_document_type** (including after **PATCH**) or **422**. If **metrobank_client_type** is **NOT_METROBANK_CLIENT** or **EXISTING_CLIENT_CREDIT_CARD** with **WILL_OPEN_METROBANK_DEPOSIT**: **POST …/metrobank-deposit-account/confirm** after documents (through **IN_UNDERWRITING**) records account-opening for **ADA** (required before **underwriting** **APPROVE** / **CONDITIONAL**). **If Step 6 PEP is Yes** on either question: **POST …/compliance/pep-clearance** after documents and **before** **submit**. **PATCH** to **additional_information** clears prior **pep** / **Metrobank confirm** timestamps — repeat gates as needed.',
       }),
     ]),
   }),
   metrobank_client_prerequisite: Object.freeze({
-    question: 'Are you an existing Metrobank Client?',
+    question: 'How will loan repayments be made?',
     explanation:
-      'Metrobank Personal Loan uses Metrobank channels for proceeds and repayments. Only clients with a Metrobank credit card or a Metrobank deposit account may apply online in this flow.',
+      'Personal Loan collections use **automatic debit (ADA)** against a **Metrobank deposit account** only. A Metrobank **credit card alone** is **not** sufficient for **approval** — the borrower must **confirm** a Metrobank deposit account (or already have one) before **underwriting** can **APPROVE**. You may still **create** and **submit** while arranging the account. Existing **credit card clients** usually have a simple branch process (**one valid ID** + initial deposit; amounts depend on the account type). Full **reference**: **docs/DOCUMENTATION.md** §5.2 — *Opening a Metrobank deposit account*. Declining a Metrobank deposit or other-bank-only ADA cannot be **approved** in this sandbox.',
     choices: Object.freeze([
       Object.freeze({
-        value: 'EXISTING_CLIENT_CREDIT_CARD',
-        label: 'Yes — I am a Metrobank client with a Metrobank credit card',
+        value: 'EXISTING_CLIENT_DEPOSIT_ACCOUNT',
+        label: 'Yes — I already have a Metrobank deposit account (for ADA / repayments)',
       }),
       Object.freeze({
-        value: 'EXISTING_CLIENT_DEPOSIT_ACCOUNT',
-        label: 'Yes — I am a Metrobank client with a Metrobank deposit account',
+        value: 'EXISTING_CLIENT_CREDIT_CARD',
+        label: 'Metrobank credit card holder — I will open/use a Metrobank deposit account for ADA repayments (confirm before approval)',
       }),
       Object.freeze({
         value: 'NOT_METROBANK_CLIENT',
-        label: 'Not yet a Metrobank client',
+        label: 'Not yet a Metrobank client — I will open a Metrobank deposit account for repayments (confirm before approval)',
       }),
     ]),
   }),
@@ -756,6 +769,22 @@ export function validatePersonalLoanIntakeShape(body, options = {}) {
     if (typeof ai.pep_financial_transactions_on_behalf !== 'boolean') {
       errs.push('additional_information.pep_financial_transactions_on_behalf must be true or false')
     }
+
+    const mt = String(body.metrobank_client_type || '')
+    const needsDepositRepaymentPlan =
+      mt === 'NOT_METROBANK_CLIENT' || mt === 'EXISTING_CLIENT_CREDIT_CARD'
+    if (needsDepositRepaymentPlan) {
+      const plan = ai.metrobank_deposit_repayment_plan
+      const P = METROBANK_DEPOSIT_REPAYMENT_PLAN
+      const validPlans = [P.WILL_OPEN_METROBANK_DEPOSIT, P.DECLINES_METROBANK_DEPOSIT, P.WILL_USE_OTHER_BANK_DEPOSIT_ONLY]
+      if (plan != null && plan !== '' && !validPlans.includes(plan)) {
+        errs.push(
+          'additional_information.metrobank_deposit_repayment_plan must be one of: ' +
+            validPlans.join(', ') +
+            ' when provided (optional for NOT_METROBANK_CLIENT or EXISTING_CLIENT_CREDIT_CARD)',
+        )
+      }
+    }
   }
 
   const fn = b.first_name
@@ -1045,19 +1074,12 @@ export function validateApplicationAgainstCatalog(body, options = {}) {
     const mt = body.metrobank_client_type
     if (mt == null || mt === '') {
       errs.push(
-        'metrobank_client_type required — EXISTING_CLIENT_CREDIT_CARD, EXISTING_CLIENT_DEPOSIT_ACCOUNT, or NOT_METROBANK_CLIENT (see product metrobank_client_prerequisite on GET /v1/reference/loan-products)',
+        'metrobank_client_type required — EXISTING_CLIENT_DEPOSIT_ACCOUNT, EXISTING_CLIENT_CREDIT_CARD, or NOT_METROBANK_CLIENT (see product metrobank_client_prerequisite on GET /v1/reference/loan-products)',
       )
-    } else {
-      const m = String(mt)
-      if (!PERSONAL_LOAN_METROBANK_CLIENT_TYPES.includes(m)) {
-        errs.push(
-          'metrobank_client_type must be one of: EXISTING_CLIENT_CREDIT_CARD, EXISTING_CLIENT_DEPOSIT_ACCOUNT, NOT_METROBANK_CLIENT',
-        )
-      } else if (!PERSONAL_LOAN_ELIGIBLE_METROBANK_CLIENT_TYPES.includes(m)) {
-        errs.push(
-          'Personal Loan requires an existing Metrobank relationship with a credit card or deposit account — metrobank_client_type cannot be NOT_METROBANK_CLIENT',
-        )
-      }
+    } else if (!PERSONAL_LOAN_METROBANK_CLIENT_TYPES.includes(String(mt))) {
+      errs.push(
+        'metrobank_client_type must be one of: ' + PERSONAL_LOAN_METROBANK_CLIENT_TYPES.join(', '),
+      )
     }
   }
   return errs

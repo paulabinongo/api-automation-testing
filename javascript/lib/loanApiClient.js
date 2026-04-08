@@ -215,6 +215,20 @@ export class LoanApiClient {
     })
   }
 
+  /**
+   * **Metrobank deposit for ADA** — after **POST …/documents**, when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`**. Allowed while status is **DRAFT**, **SUBMITTED**, **IN_PROCESSING**, **CREDIT_COMPLETED**, or **IN_UNDERWRITING** (before a successful approval decision). Sets **`metrobank_deposit_account_confirmed_at`** (required for **underwriting** **APPROVE** / **CONDITIONAL**; **submit** does not require this call). Re-runs eligibility (**422** if capacity-to-pay checks fail). **400** if not applicable.
+   */
+  confirmMetrobankDepositAccount(applicationId) {
+    return this._request(
+      'POST',
+      `/loan-applications/${applicationId}/metrobank-deposit-account/confirm`,
+      {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    )
+  }
+
   /** Look up one application by id. */
   getApplication(applicationId) {
     return this._request('GET', `/loan-applications/${applicationId}`)

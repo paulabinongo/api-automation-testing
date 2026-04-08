@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Retail Bank Loan API (Mock)",
-    "description": "Practice API for **API automation** and demos.\n\n**Flow (production-shaped):** **login** → **KYC** → **DRAFT** → **documents** (**POST …/documents**) → (**PEP Yes:** **POST …/compliance/pep-clearance** after documents, before submit — **`docs/DOCUMENTATION.md`** Step **7b**) → **submit** → **processing/accept** (**IN_PROCESSING**) → **disclosures/acknowledge** → **credit-check** → **underwriting/start** (**IN_UNDERWRITING**) → **underwriting/decision** → optional **stipulations** → **funding/authorize** (**CLEARED_FOR_BOOKING**) → **fund** (**FUNDED**) → **disburse** (**ACTIVE**) → **payments** → **payoff** (**CLOSED**) → **logout**.\n\n**Swagger UI** at **`/docs`** renders this file (**`/openapi.json`**); contract is the same as **`javascript/mock-server/openapi.json`** in the repo.\n\n**Production alignment:** Extra steps mirror **ops intake**, **initial disclosures**, **underwriting queue**, **PEP/AML-style** intake gate, and **funding authorization** before booking. **Phase map:** **`docs/DOCUMENTATION.md`** §**5.0** / §**5.4**. **Postman:** **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** (§**7**).\n\n**Auth:** All `/v1/*` routes except **GET /health**, **GET /reference/loan-products**, and **POST /auth/login** require `Authorization: Bearer <access_token>`.\n\n**Ops headers (production-style):** Responses are tagged with **`X-Correlation-Id`**, **`X-Request-Id`** (echo or minted), **`X-API-Environment`** (default **sandbox**; set **`BANK_API_ENV`**), **`X-API-Revision`**, **`Cache-Control: no-store`**. Send **`X-Correlation-Id`** from the client to tie logs to your own trace (optional unless **`BANK_REQUIRE_CORRELATION_ID=1`**). Optional **`Idempotency-Key`** on **authenticated POST** retries: same key + same path + same body replays the first **2xx** (`Idempotent-Replayed: true`); a different body with the same key returns **409**. Optional **`BANK_API_RATE_LIMIT_PER_MINUTE`** (per client IP) returns **429** with **`Retry-After`**.\n\n**Implementation:** `javascript/mock-server/server.js`.",
-    "version": "0.8.12"
+    "description": "Practice API for **API automation** and demos.\n\n**Flow (production-shaped):** **login** → **KYC** → **DRAFT** → **documents** (**POST …/documents**) → (**optional:** **NOT / credit-card** + **WILL_OPEN:** **POST …/metrobank-deposit-account/confirm** — required before **underwriting** **APPROVE**, **not** required before **submit**) → (**PEP Yes:** **POST …/compliance/pep-clearance** after documents, before submit — **`docs/DOCUMENTATION.md`** Step **7b**) → **submit** → **processing/accept** (**IN_PROCESSING**) → **disclosures/acknowledge** → **credit-check** → **underwriting/start** (**IN_UNDERWRITING**) → **underwriting/decision** → optional **stipulations** → **funding/authorize** (**CLEARED_FOR_BOOKING**) → **fund** (**FUNDED**) → **disburse** (**ACTIVE**) → **payments** → **payoff** (**CLOSED**) → **logout**.\n\n**Swagger UI** at **`/docs`** renders this file (**`/openapi.json`**); contract is the same as **`javascript/mock-server/openapi.json`** in the repo.\n\n**Production alignment:** Extra steps mirror **ops intake**, **initial disclosures**, **underwriting queue**, **PEP/AML-style** intake gate, and **funding authorization** before booking. **Phase map:** **`docs/DOCUMENTATION.md`** §**5.0** / §**5.4**. **Postman:** **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** (§**7**).\n\n**Auth:** All `/v1/*` routes except **GET /health**, **GET /reference/loan-products**, and **POST /auth/login** require `Authorization: Bearer <access_token>`.\n\n**Ops headers (production-style):** Responses are tagged with **`X-Correlation-Id`**, **`X-Request-Id`** (echo or minted), **`X-API-Environment`** (default **sandbox**; set **`BANK_API_ENV`**), **`X-API-Revision`**, **`Cache-Control: no-store`**. Send **`X-Correlation-Id`** from the client to tie logs to your own trace (optional unless **`BANK_REQUIRE_CORRELATION_ID=1`**). Optional **`Idempotency-Key`** on **authenticated POST** retries: same key + same path + same body replays the first **2xx** (`Idempotent-Replayed: true`); a different body with the same key returns **409**. Optional **`BANK_API_RATE_LIMIT_PER_MINUTE`** (per client IP) returns **429** with **`Retry-After`**.\n\n**Implementation:** `javascript/mock-server/server.js`.",
+    "version": "0.8.15"
   },
   "servers": [{ "url": "/", "description": "Same host as this Swagger page" }],
   "security": [{ "bearerAuth": [] }],
@@ -26,7 +26,7 @@
     },
     {
       "name": "Applications",
-      "description": "**Intake** (**create** → **PATCH** → **documents**) → **conditional PEP compliance** (**`POST …/compliance/pep-clearance`** when Step **6** PEP is **Yes**) → **submit** → **ops processing** → **disclosures** → **credit** → **underwriting queue** → **decision** → **pre-close (stips)**. **`ApplicationOut`** echoes **`pep_compliance_clearance_at`** when set. See **docs/DOCUMENTATION.md** §5.0 / §5.4 / Step **7b**."
+      "description": "**Intake** (**create** → **PATCH** → **documents**) → **optional Metrobank deposit confirm** (**`POST …/metrobank-deposit-account/confirm`** when **`WILL_OPEN_METROBANK_DEPOSIT`** — sets **`metrobank_deposit_account_confirmed_at`**, required for **underwriting** **APPROVE** / **CONDITIONAL**, not for **submit**) → **conditional PEP compliance** (**`POST …/compliance/pep-clearance`** when Step **6** PEP is **Yes**) → **submit** → **ops processing** → **disclosures** → **credit** → **underwriting queue** → **decision** → **pre-close (stips)**. **`ApplicationOut`** echoes **`pep_compliance_clearance_at`** and **`metrobank_deposit_account_confirmed_at`** when set. See **docs/DOCUMENTATION.md** §5.0 / §5.4 / Step **7b**."
     },
     {
       "name": "Loans",
@@ -229,7 +229,7 @@
       "post": {
         "tags": ["Applications"],
         "summary": "Create application (DRAFT)",
-        "description": "**Application intake** — first LOS step after KYC. Creates **DRAFT** with **`loan_id: null`** until **POST …/underwriting/decision** creates the loan (see **docs/DOCUMENTATION.md** §5.4). Requires **completed KYC** (otherwise **403**). For **PERSONAL_LOAN**, **metrobank_client_type** is required (see **GET /reference/loan-products** → **metrobank_client_prerequisite**); values **EXISTING_CLIENT_CREDIT_CARD** or **EXISTING_CLIENT_DEPOSIT_ACCOUNT** proceed; **NOT_METROBANK_CLIENT** returns **422**.",
+        "description": "**Application intake** — first LOS step after KYC. Creates **DRAFT** with **`loan_id: null`** until **POST …/underwriting/decision** creates the loan (see **docs/DOCUMENTATION.md** §5.4). Requires **completed KYC** (otherwise **403**). For **PERSONAL_LOAN**, **metrobank_client_type** is **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**, **`EXISTING_CLIENT_CREDIT_CARD`**, or **`NOT_METROBANK_CLIENT`** (see **GET /reference/loan-products** → **metrobank_client_prerequisite**). **ADA** uses a **Metrobank deposit account** for repayments; **`NOT_METROBANK_CLIENT`** and **`EXISTING_CLIENT_CREDIT_CARD`** may **create** and **submit** without **`metrobank_deposit_account_confirmed_at`**, but **APPROVE** / **CONDITIONAL** return **422** until deposit is confirmed (or **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**). Optional **`metrobank_deposit_repayment_plan`** when absent; valid enum when provided; after documents, **POST …/metrobank-deposit-account/confirm** applies when **`WILL_OPEN_METROBANK_DEPOSIT`**.",
         "operationId": "createApplication",
         "requestBody": {
           "required": true,
@@ -412,7 +412,7 @@
       "post": {
         "tags": ["Applications"],
         "summary": "Preview Personal Loan eligibility (Step 6)",
-        "description": "**Dry-run** the same validation and **eligibility criteria** as **POST /loan-applications** (intake Steps 1–6). Does **not** create a draft. Use after **Additional information** review and before **document upload** / create. Requires **KYC**.",
+        "description": "**Dry-run** the same validation and **eligibility criteria** as **POST /loan-applications** (intake Steps 1–6). Does **not** create a draft. Use after **Additional information** review and before **document upload** / create. Requires **KYC**. **metrobank_client_type** and **metrobank_deposit_repayment_plan** semantics match **POST /loan-applications**.",
         "operationId": "previewApplicationEligibility",
         "requestBody": {
           "required": true,
@@ -446,7 +446,7 @@
       "patch": {
         "tags": ["Applications"],
         "summary": "Update DRAFT application (partial merge)",
-        "description": "Merge **principal_cents**, **term_months**, **metrobank_client_type**, **borrower**, and/or **employment** into an existing **DRAFT**. Re-validates catalogue rules and **eligibility**. **403** if not owner; **409** if not **DRAFT**.",
+        "description": "Merge **principal_cents**, **term_months**, **metrobank_client_type**, **borrower**, and/or **employment** into an existing **DRAFT**. Re-validates catalogue rules and **eligibility**. **PATCH** that merges **additional_information** clears **`pep_compliance_clearance_at`** and **`metrobank_deposit_account_confirmed_at`**. Changing **`metrobank_client_type`** clears **`metrobank_deposit_account_confirmed_at`**. **403** if not owner; **409** if not **DRAFT**.",
         "operationId": "patchDraftApplication",
         "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
         "requestBody": {
@@ -597,11 +597,58 @@
         }
       }
     },
+    "/v1/loan-applications/{applicationId}/metrobank-deposit-account/confirm": {
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Confirm Metrobank deposit account opening for ADA (before underwriting approval)",
+        "description": "For **PERSONAL_LOAN** with **`metrobank_client_type`:** **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** and **`additional_information.metrobank_deposit_repayment_plan`:** **`WILL_OPEN_METROBANK_DEPOSIT`**, call **after** **POST …/documents** while status is **DRAFT**, **SUBMITTED**, **IN_PROCESSING**, **CREDIT_COMPLETED**, or **IN_UNDERWRITING** (before **APPROVE** / **CONDITIONAL**). Re-runs **eligibility** (**422** if capacity-to-pay fails). **400** if not required; **409** if documents incomplete or plan is not **WILL_OPEN**. Sets **`metrobank_deposit_account_confirmed_at`** (cleared when **PATCH** merges **additional_information** or changes **`metrobank_client_type`**). **Submit** does **not** require this; **underwriting** **APPROVE** / **CONDITIONAL** do until **`metrobank_deposit_account_confirmed_at`** is set.",
+        "operationId": "confirmMetrobankDepositAccount",
+        "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" },
+              "example": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "DRAFT updated — **`metrobank_deposit_account_confirmed_at`** set",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApplicationOut" } }
+            }
+          },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Application belongs to another session" },
+          "404": { "description": "Not found" },
+          "409": {
+            "description": "**Wrong status** (not allowed before underwriting approval), document intake incomplete, or repayment plan incompatible",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          },
+          "400": {
+            "description": "Confirmation not applicable (**EXISTING_CLIENT_DEPOSIT_ACCOUNT** only)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          },
+          "422": {
+            "description": "Eligibility failure",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorBody" } }
+            }
+          }
+        }
+      }
+    },
     "/v1/loan-applications/{applicationId}/submit": {
       "post": {
         "tags": ["Applications"],
         "summary": "Submit (DRAFT → SUBMITTED)",
-        "description": "For **PERSONAL_LOAN**, **POST …/documents** must have completed first (**409** otherwise). When **additional_information** has **either** PEP boolean **true**, **POST …/compliance/pep-clearance** must have completed first (**409** otherwise).",
+        "description": "For **PERSONAL_LOAN**, **POST …/documents** must have completed first (**409** otherwise). **Metrobank deposit confirm** is **not** a **submit** gate (**APPROVE** / **CONDITIONAL** still **422** without **`metrobank_deposit_account_confirmed_at`** when **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`**). When **additional_information** has **either** PEP boolean **true**, **POST …/compliance/pep-clearance** must have completed first (**409** otherwise).",
         "operationId": "submitApplication",
         "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
         "responses": {
@@ -718,6 +765,7 @@
       "post": {
         "tags": ["Applications"],
         "summary": "Underwriting decision",
+        "description": "**APPROVE** / **CONDITIONAL** return **422** when **Personal Loan** Metrobank deposit policy is not satisfied (e.g. **NOT_METROBANK_CLIENT** without **`metrobank_deposit_account_confirmed_at`**, or legacy credit-card-only relationship on the stored application).",
         "operationId": "underwritingDecision",
         "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
         "requestBody": {
@@ -754,7 +802,7 @@
                         "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
-                        "metrobank_client_type": "EXISTING_CLIENT_CREDIT_CARD",
+                        "metrobank_client_type": "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
@@ -810,7 +858,7 @@
                         "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
-                        "metrobank_client_type": "EXISTING_CLIENT_CREDIT_CARD",
+                        "metrobank_client_type": "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
@@ -872,7 +920,7 @@
                         "product_code": "PERSONAL_LOAN",
                         "principal_cents": 5000000,
                         "term_months": 36,
-                        "metrobank_client_type": "EXISTING_CLIENT_CREDIT_CARD",
+                        "metrobank_client_type": "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
                         "borrower": {
                           "full_name": "Alex Rivera",
                           "email": "alex@example.com",
@@ -920,7 +968,9 @@
           "409": {
             "description": "Must be IN_UNDERWRITING (call POST …/underwriting/start after credit)"
           },
-          "422": { "description": "Invalid outcome or missing stips" }
+          "422": {
+            "description": "Invalid outcome, missing stips, or **Personal Loan** Metrobank deposit / ADA policy blocks approval"
+          }
         }
       }
     },
@@ -1483,7 +1533,7 @@
       "AdditionalInformationIn": {
         "type": "object",
         "required": ["pep_close_family_or_public_position", "pep_financial_transactions_on_behalf"],
-        "description": "Step 6 PEP-style questions (both mandatory **boolean**; UI often defaults **false**). **Either `true`:** after **POST …/documents**, **`POST …/compliance/pep-clearance`** is **required** before **submit** in this sandbox (**409** otherwise). See **docs/DOCUMENTATION.md** (Step 6–7b). In real banks expect broader **EDD** and escalated approval beyond this API gate.",
+        "description": "Step 6 PEP-style questions (both mandatory **boolean**; UI often defaults **false**). **Either `true`:** after **POST …/documents**, **`POST …/compliance/pep-clearance`** is **required** before **submit** in this sandbox (**409** otherwise). When **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`**, **`metrobank_deposit_repayment_plan`** is **optional**; if present it must be a valid enum **string** in JSON (e.g. `\"metrobank_deposit_repayment_plan\": \"WILL_OPEN_METROBANK_DEPOSIT\"` — unquoted enum tokens are invalid). Deposit confirmation for **`WILL_OPEN`** is required before **underwriting** **APPROVE** — see **`POST …/metrobank-deposit-account/confirm`**. See **docs/DOCUMENTATION.md** (Step 6–7b).",
         "properties": {
           "pep_close_family_or_public_position": {
             "type": "boolean",
@@ -1492,6 +1542,16 @@
           "pep_financial_transactions_on_behalf": {
             "type": "boolean",
             "description": "Substantial domestic/international financial transactions on behalf of such a person. **`true`:** typically starts **EDD** / Compliance workflow in production."
+          },
+          "metrobank_deposit_repayment_plan": {
+            "type": "string",
+            "enum": [
+              "WILL_OPEN_METROBANK_DEPOSIT",
+              "DECLINES_METROBANK_DEPOSIT",
+              "WILL_USE_OTHER_BANK_DEPOSIT_ONLY"
+            ],
+            "example": "WILL_OPEN_METROBANK_DEPOSIT",
+            "description": "Optional when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** (valid enum if sent). JSON: always a **quoted** string. Only **`WILL_OPEN_METROBANK_DEPOSIT`** can use **POST …/metrobank-deposit-account/confirm**; **APPROVE** / **CONDITIONAL** **422** without confirm (or **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**)."
           }
         }
       },
@@ -1729,7 +1789,7 @@
               "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
               "NOT_METROBANK_CLIENT"
             ],
-            "description": "**PERSONAL_LOAN** prerequisite from intake (**Are you an existing Metrobank Client?**). Only **EXISTING_CLIENT_CREDIT_CARD** and **EXISTING_CLIENT_DEPOSIT_ACCOUNT** are accepted — **NOT_METROBANK_CLIENT** returns **422**. Mirrors **`metrobank_client_prerequisite`** on **GET /reference/loan-products**."
+            "description": "**PERSONAL_LOAN** prerequisite — **ADA** requires a **Metrobank deposit account** before **approval**. **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`:** already has deposit. **`EXISTING_CLIENT_CREDIT_CARD`** and **`NOT_METROBANK_CLIENT`:** may **create** / **submit** without confirm; **POST …/metrobank-deposit-account/confirm** after documents when **`WILL_OPEN_METROBANK_DEPOSIT`** sets **`metrobank_deposit_account_confirmed_at`** for **underwriting**. Mirrors **`metrobank_client_prerequisite`** on **GET /reference/loan-products**."
           },
           "loan_purpose": { "$ref": "#/components/schemas/LoanPurpose" },
           "additional_information": { "$ref": "#/components/schemas/AdditionalInformationIn" },
@@ -1750,7 +1810,8 @@
               "EXISTING_CLIENT_CREDIT_CARD",
               "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
               "NOT_METROBANK_CLIENT"
-            ]
+            ],
+            "description": "Same semantics as **ApplicationIn.metrobank_client_type**."
           },
           "loan_purpose": { "$ref": "#/components/schemas/LoanPurpose" },
           "additional_information": { "$ref": "#/components/schemas/AdditionalInformationIn" },
@@ -1811,7 +1872,7 @@
               "EXISTING_CLIENT_DEPOSIT_ACCOUNT",
               "NOT_METROBANK_CLIENT"
             ],
-            "description": "Captured at intake; must be an **eligible** value for the application to be created."
+            "description": "Captured at intake. **Credit card** and **NOT** paths that open deposit for **ADA** set **`metrobank_deposit_account_confirmed_at`** via confirm **POST**."
           },
           "borrower": {
             "type": "object",
@@ -1867,6 +1928,12 @@
             "format": "date-time",
             "nullable": true,
             "description": "Compliance/CFT gate — set by **POST …/compliance/pep-clearance** when PEP is **Yes**; nulled when **PATCH** merges **additional_information**."
+          },
+          "metrobank_deposit_account_confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Set by **POST …/metrobank-deposit-account/confirm** when **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** commits to opening a Metrobank deposit account for **ADA**; cleared when **PATCH** merges **additional_information** or changes **metrobank_client_type**."
           }
         }
       },

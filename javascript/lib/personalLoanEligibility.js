@@ -3,10 +3,7 @@
  * Pure checks — call after **validateApplicationAgainstCatalog** (intake shape + amounts).
  */
 
-import {
-  PERSONAL_LOAN_ELIGIBLE_METROBANK_CLIENT_TYPES,
-  PERSONAL_LOAN_PRODUCT,
-} from './loanProductCatalog.js'
+import { PERSONAL_LOAN_PRODUCT } from './loanProductCatalog.js'
 
 /**
  * @param {string} ymd `YYYY-MM-DD`
@@ -77,11 +74,18 @@ export function evaluatePersonalLoanEligibility(body, options = {}) {
   })
 
   const mt = String(body.metrobank_client_type || '')
-  const okMb = PERSONAL_LOAN_ELIGIBLE_METROBANK_CLIENT_TYPES.includes(mt)
+  let okMb = false
+  if (mt === 'EXISTING_CLIENT_DEPOSIT_ACCOUNT') {
+    okMb = true
+  } else if (mt === 'NOT_METROBANK_CLIENT' || mt === 'EXISTING_CLIENT_CREDIT_CARD') {
+    // Intake may proceed without a deposit yet; **POST …/underwriting/decision** (**APPROVE** / **CONDITIONAL**)
+    // stays **422** until **`metrobank_deposit_account_confirmed_at`** is set (or borrower switches to deposit client).
+    okMb = true
+  }
   checks.push({
-    id: 'metrobank_card_or_account',
+    id: 'metrobank_deposit_for_ada',
     criterion:
-      'Have a Metrobank credit card or Metrobank deposit account (Step 1 prerequisite; required for servicing)',
+      'Metrobank deposit account for ADA is required before approval — existing deposit client, or **POST …/metrobank-deposit-account/confirm** after **WILL_OPEN_METROBANK_DEPOSIT**',
     passed: okMb,
   })
 

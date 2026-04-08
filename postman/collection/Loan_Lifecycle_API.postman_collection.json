@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-loan-lifecycle-001",
     "name": "Loan Lifecycle API",
-    "description": "**Lifecycle** matches **Swagger UI**, **`javascript/mock-server/openapi.json`**, and **`docs/DOCUMENTATION.md`** §**5** (happy path §**5.0**, production phase map §**5.4**). **OpenAPI 0.7+** adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**.\n\n**Order (high level):** **Login** → **KYC** → **Create loan application** → **Documents** → (**PEP Yes:** **compliance/pep-clearance**) → **Submit** → **Ops accept** → **Disclosures acknowledge** → Credit → **Start underwriting** → **Underwriting decision** → (optional **stipulations**) → **Funding authorize** → **Fund** (book) → **Disburse** → Get loan → Schedule → Payment(s) → Payoff → optional **Logout**.\n\n**Personal Loan (DRAFT path):** optional **0a. Eligibility preview** → **1. Create** → **1b. Loan computation preview** → **1c. Register documents** (**`POST …/documents`**) → **1d. PEP compliance clearance** (**`POST …/compliance/pep-clearance`** — **200** when Step **6** PEP is **Yes** on either question, **400** when both **No**; required before **2. Submit** if **Yes**) → **2. Submit**. Same operation IDs and paths as **Swagger** / **`openapi.json`**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack — see **`docs/DOCUMENTATION.md`** §**5.4** for what real institutions add.\n\n**Import-ready flow:** folder **Flow — Happy path (import & run in order)** (this guide §**7**).\n\n**Stipulation tests:** **Tests — stipulations (single & multiple)** — Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** — select **Loan Lifecycle — Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`javascript/mock-server/openapi.json`** in Postman.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only — do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** — set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
+    "description": "**Lifecycle** matches **Swagger UI**, **`javascript/mock-server/openapi.json`**, and **`docs/DOCUMENTATION.md`** §**5** (happy path §**5.0**, production phase map §**5.4**). **OpenAPI 0.8.x** (see **`openapi.json`**) adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**.\n\n**Order (high level):** **Login** → **KYC** → **Create loan application** → **Documents** → (**optional:** **metrobank-deposit-account/confirm** when opening a Metrobank deposit for **ADA** — needed before **underwriting APPROVE**, not before **Submit**) → (**PEP Yes:** **compliance/pep-clearance**) → **Submit** → **Ops accept** → **Disclosures acknowledge** → Credit → **Start underwriting** → **Underwriting decision** → (optional **stipulations**) → **Funding authorize** → **Fund** (book) → **Disburse** → Get loan → Schedule → Payment(s) → Payoff → optional **Logout**.\n\n**Personal Loan (DRAFT path):** optional **0a. Eligibility preview** → **1. Create** → **1b. Loan computation preview** → **1c. Register documents** (**`POST …/documents`**) → **1c-MB. Metrobank deposit confirm** (**`POST …/metrobank-deposit-account/confirm`** when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** and **`additional_information.metrobank_deposit_repayment_plan`** is **`WILL_OPEN_METROBANK_DEPOSIT`**) → **1d. PEP compliance clearance** (**`POST …/compliance/pep-clearance`** — **200** when Step **6** PEP is **Yes** on either question, **400** when both **No**; required before **2. Submit** if **Yes**) → **2. Submit**. Same operation IDs and paths as **Swagger** / **`openapi.json`**.\n\n**ADA / Metrobank deposit:** **`{{metrobank_client_type}}`** defaults to **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**. **`EXISTING_CLIENT_CREDIT_CARD`** / **`NOT_METROBANK_CLIENT`** may **create** and **submit** without **1c-MB**; **`POST …/underwriting/decision`** (**APPROVE** / **CONDITIONAL**) returns **422** until **`metrobank_deposit_account_confirmed_at`** is set (e.g. via **1c-MB** while **DRAFT** with **`WILL_OPEN_METROBANK_DEPOSIT`**). See **`openapi.json` 0.8.15**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack — see **`docs/DOCUMENTATION.md`** §**5.4** for what real institutions add.\n\n**Import-ready flow:** folder **Flow — Happy path (import & run in order)** (this guide §**7**).\n\n**Stipulation tests:** **Tests — stipulations (single & multiple)** — Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** — select **Loan Lifecycle — Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`javascript/mock-server/openapi.json`** in Postman.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only — do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** — set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -87,6 +87,14 @@
     {
       "key": "primary_id_document_type",
       "value": "SSS"
+    },
+    {
+      "key": "metrobank_client_type",
+      "value": "NOT_METROBANK_CLIENT"
+    },
+    {
+      "key": "metrobank_deposit_repayment_plan_line",
+      "value": ", \"metrobank_deposit_repayment_plan\": \"WILL_OPEN_METROBANK_DEPOSIT\""
     },
     {
       "key": "loan_preview_principal_cents",
@@ -295,7 +303,7 @@
     },
     {
       "name": "Flow — Happy path (import & run in order)",
-      "description": "Same journey as **Swagger** operation order and **`docs/DOCUMENTATION.md`** §**5.0**. Run **Collection Runner** on **this folder only** (top to bottom). Environment: **Loan Lifecycle — Local mock**. **Login** → **KYC** → optional **0a. Eligibility preview** → **1. Create** → **1b** → **1c** (**`{{primary_id_document_type}}`** on **`POST …/documents`**) → **1d. PEP compliance clearance** (**200** or **400** when PEP both **No**) → **2. Submit** → numbered steps **3 … 14**; **15. Logout** is optional. Steps **1** (create) and **7** (underwriting) save **application_id** and **loan_id** via Tests. If step **7** is **CONDITIONAL**, it also sets **`stipulation_ids_json`** and **`stipulation_id`** — run **Fulfill all stipulations** in folder **Conditional — fulfill stipulations** once, then **9. Fund** (after **8. Funding — authorize**).",
+      "description": "Same journey as **Swagger** operation order and **`docs/DOCUMENTATION.md`** §**5.0**. Run **Collection Runner** on **this folder only** (top to bottom). Environment: **Loan Lifecycle — Local mock**. **Login** → **KYC** → optional **0a. Eligibility preview** → **1. Create** → **1b** → **1c** (**`{{primary_id_document_type}}`** on **`POST …/documents`**) → **1c-MB. Metrobank deposit confirm** — **Local mock** defaults to **no deposit yet** (**`NOT_METROBANK_CLIENT`** + **`metrobank_deposit_repayment_plan_line`** for **`WILL_OPEN`** on **1. Create**; see §**7.3**). **200** after **1c**; **400** if env uses **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (confirm not applicable); **409** if plan missing / wrong or docs incomplete → **1d. PEP compliance clearance** (**200** or **400** when PEP both **No**) → **2. Submit** → numbered steps **3 … 14**; **15. Logout** is optional. Steps **1** (create) and **7** (underwriting) save **application_id** and **loan_id** via Tests. If step **7** is **CONDITIONAL**, it also sets **`stipulation_ids_json`** and **`stipulation_id`** — run **Fulfill all stipulations** in folder **Conditional — fulfill stipulations** once, then **9. Fund** (after **8. Funding — authorize**).",
       "item": [
         {
           "name": "Login",
@@ -402,7 +410,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
+              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"{{metrobank_client_type}}\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false{{metrobank_deposit_repayment_plan_line}}\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications/eligibility-preview",
             "description": "**Personal Loan intake:** **POST /v1/loan-applications/eligibility-preview** — same JSON as **1. Create**; dry-run catalogue + eligibility (UI **Step 6** **Next**). No draft. **Optional** in Runner."
@@ -441,10 +449,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
+              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"{{metrobank_client_type}}\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false{{metrobank_deposit_repayment_plan_line}}\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications",
-            "description": "**Personal Loan:** **DRAFT** after full intake (**docs/DOCUMENTATION.md** §5.0). **`loan_purpose`**, **additional_information** (PEP), **`borrower.primary_id_document_type`** = **`{{primary_id_document_type}}`** — **Step 3** subset (**step3_primary_id_document_types** on **GET /reference/loan-products**); Step 7 upload uses the full **primary_id_document_types** list. Saves **`application_id`**."
+            "description": "**Personal Loan:** **DRAFT** after full intake (**docs/DOCUMENTATION.md** §5.0). **`loan_purpose`**, **additional_information** (PEP; optional **`metrobank_deposit_repayment_plan`** as a **JSON string**, e.g. **`\"WILL_OPEN_METROBANK_DEPOSIT\"`** — use env **`metrobank_deposit_repayment_plan_line`** §**7.3**), **`borrower.primary_id_document_type`** = **`{{primary_id_document_type}}`** — **Step 3** subset (**step3_primary_id_document_types** on **GET /reference/loan-products**); Step 7 upload uses the full **primary_id_document_types** list. Saves **`application_id`**."
           },
           "response": []
         },
@@ -564,6 +572,48 @@
           "response": []
         },
         {
+          "name": "1c-MB. Metrobank deposit confirm (conditional — ADA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Metrobank deposit confirm or not applicable', function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        var j = pm.response.json();",
+                  "        pm.expect(j.metrobank_deposit_account_confirmed_at).to.be.ok;",
+                  "        return;",
+                  "    }",
+                  "    if (pm.response.code === 400) {",
+                  "        var e = pm.response.json();",
+                  "        pm.expect(String(e.detail || '')).to.match(/not required/i);",
+                  "        return;",
+                  "    }",
+                  "    throw new Error('Expected 200 (confirmed) or 400 (not required). Got ' + pm.response.code + ': ' + pm.response.text());",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/metrobank-deposit-account/confirm",
+            "description": "**ADA:** After **POST …/documents**. Draft must have **`additional_information.metrobank_deposit_repayment_plan`:** **`WILL_OPEN_METROBANK_DEPOSIT`** (string) when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`**. **Local mock** env defaults supply this on **1. Create**. **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`:** **400** not required. **409** if plan missing / wrong for **NOT** / **credit-card**, or **`WILL_USE_OTHER_BANK_DEPOSIT_ONLY`** — Runner expects **200** or **400**."
+          },
+          "response": []
+        },
+        {
           "name": "1d. PEP compliance clearance (conditional)",
           "event": [
             {
@@ -622,7 +672,7 @@
             "method": "POST",
             "header": [],
             "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
-            "description": "Moves application to SUBMITTED for credit / ops. **PEP Yes:** run **1d** first after **1c**."
+            "description": "Moves application to SUBMITTED. **1c-MB** is **not** required for submit; **underwriting APPROVE** still needs **`metrobank_deposit_account_confirmed_at`** on **NOT** / **credit-card** paths. **PEP Yes:** run **1d** after **1c** (and after **1c-MB** if you ran it)."
           },
           "response": []
         },
@@ -1133,7 +1183,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
+                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"{{metrobank_client_type}}\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false{{metrobank_deposit_repayment_plan_line}}\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
                 },
                 "url": "{{api_root}}/loan-applications",
                 "description": "Creates a DRAFT application. **`term_months`** must be one of **12, 18, 24, 36** (**PHP** Personal Loan catalogue). Saves `application_id`."
@@ -1171,6 +1221,48 @@
                 },
                 "url": "{{api_root}}/loan-applications/{{application_id}}/documents",
                 "description": "**Personal Loan Step 7:** **`primary_id_document_type`** must match **`borrower`** on the draft (**{{primary_id_document_type}}**). Same LOV as Step 3. Required before **2. Submit** (**409** if skipped)."
+              },
+              "response": []
+            },
+            {
+              "name": "1c-MB. Metrobank deposit confirm (conditional — ADA)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Metrobank deposit confirm or not applicable', function () {",
+                      "    if (pm.response.code === 200) {",
+                      "        var j = pm.response.json();",
+                      "        pm.expect(j.metrobank_deposit_account_confirmed_at).to.be.ok;",
+                      "        return;",
+                      "    }",
+                      "    if (pm.response.code === 400) {",
+                      "        var e = pm.response.json();",
+                      "        pm.expect(String(e.detail || '')).to.match(/not required/i);",
+                      "        return;",
+                      "    }",
+                      "    throw new Error('Expected 200 (confirmed) or 400 (not required). Got ' + pm.response.code + ': ' + pm.response.text());",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/metrobank-deposit-account/confirm",
+                "description": "**ADA:** Same as happy-path **1c-MB** — **Local mock** / collection defaults use **`NOT_METROBANK_CLIENT`** + **`WILL_OPEN`** plan on create; **400** when **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (clear plan line); **409** if plan wrong or docs incomplete."
               },
               "response": []
             },
@@ -1233,7 +1325,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
-                "description": "Moves application to SUBMITTED for credit / ops. **PEP Yes:** run **1d** first after **1c**."
+                "description": "Moves application to SUBMITTED. **ADA:** **1c-MB** optional before submit; required before **APPROVE** when **NOT** / **credit-card** without deposit confirm. **PEP Yes:** **1d** after **1c** (and **1c-MB** if used)."
               },
               "response": []
             },
@@ -1618,7 +1710,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
+                  "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"{{metrobank_client_type}}\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false{{metrobank_deposit_repayment_plan_line}}\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
                 },
                 "url": "{{api_root}}/loan-applications",
                 "description": "Creates a DRAFT application. **`term_months`** must be one of **12, 18, 24, 36** (**PHP** Personal Loan catalogue). Saves `application_id`."
@@ -1656,6 +1748,48 @@
                 },
                 "url": "{{api_root}}/loan-applications/{{application_id}}/documents",
                 "description": "**Personal Loan Step 7:** **`primary_id_document_type`** must match **`borrower`** on the draft (**{{primary_id_document_type}}**). Same LOV as Step 3. Required before **2. Submit** (**409** if skipped)."
+              },
+              "response": []
+            },
+            {
+              "name": "1c-MB. Metrobank deposit confirm (conditional — ADA)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Metrobank deposit confirm or not applicable', function () {",
+                      "    if (pm.response.code === 200) {",
+                      "        var j = pm.response.json();",
+                      "        pm.expect(j.metrobank_deposit_account_confirmed_at).to.be.ok;",
+                      "        return;",
+                      "    }",
+                      "    if (pm.response.code === 400) {",
+                      "        var e = pm.response.json();",
+                      "        pm.expect(String(e.detail || '')).to.match(/not required/i);",
+                      "        return;",
+                      "    }",
+                      "    throw new Error('Expected 200 (confirmed) or 400 (not required). Got ' + pm.response.code + ': ' + pm.response.text());",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                },
+                "url": "{{api_root}}/loan-applications/{{application_id}}/metrobank-deposit-account/confirm",
+                "description": "**ADA:** Same as happy-path **1c-MB** — **Local mock** / collection defaults use **`NOT_METROBANK_CLIENT`** + **`WILL_OPEN`** plan on create; **400** when **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (clear plan line); **409** if plan wrong or docs incomplete."
               },
               "response": []
             },
@@ -1718,7 +1852,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
-                "description": "Moves application to SUBMITTED for credit / ops. **PEP Yes:** run **1d** first after **1c**."
+                "description": "Moves application to SUBMITTED. **ADA:** **1c-MB** optional before submit; required before **APPROVE** when **NOT** / **credit-card** without deposit confirm. **PEP Yes:** **1d** after **1c** (and **1c-MB** if used)."
               },
               "response": []
             },
@@ -2182,7 +2316,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 0,\n  \"term_months\": 12,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_CREDIT_CARD\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false\n  },\n  \"borrower\": {\n    \"first_name\": \"Test\",\n    \"last_name\": \"User\",\n    \"email\": \"test@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Test Street\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Services\",\n    \"business_email\": \"hr@co.example\",\n    \"years_working_total\": 5,\n    \"gross_monthly_income_cents\": 1,\n    \"employer_name\": \"Co\",\n    \"employer_address\": {\n      \"street_line\": \"Test\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\"\n    },\n    \"years_with_current_employer\": 2,\n    \"is_regular_employment\": true\n  }\n}"
+              "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 0,\n  \"term_months\": 12,\n  \"metrobank_client_type\": \"{{metrobank_client_type}}\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false{{metrobank_deposit_repayment_plan_line}}\n  },\n  \"borrower\": {\n    \"first_name\": \"Test\",\n    \"last_name\": \"User\",\n    \"email\": \"test@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Test Street\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Services\",\n    \"business_email\": \"hr@co.example\",\n    \"years_working_total\": 5,\n    \"gross_monthly_income_cents\": 1,\n    \"employer_name\": \"Co\",\n    \"employer_address\": {\n      \"street_line\": \"Test\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\"\n    },\n    \"years_with_current_employer\": 2,\n    \"is_regular_employment\": true\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications"
           },

@@ -3,6 +3,7 @@ import {
   PAYMENT_METHODS,
   STIPULATION_DESCRIPTION_EXAMPLES,
 } from './loanConstants.js'
+import { METROBANK_DEPOSIT_REPAYMENT_PLAN } from './loanProductCatalog.js'
 
 export { ALLOWED_LOAN_TERM_MONTHS, PAYMENT_METHODS, STIPULATION_DESCRIPTION_EXAMPLES }
 
@@ -28,7 +29,7 @@ export function buildPersonalLoanSampleApplication(termMonths = 36) {
     product_code: 'PERSONAL_LOAN',
     principal_cents: 50_000_000,
     term_months: termMonths,
-    metrobank_client_type: 'EXISTING_CLIENT_CREDIT_CARD',
+    metrobank_client_type: 'EXISTING_CLIENT_DEPOSIT_ACCOUNT',
     loan_purpose: 'PERSONAL_CONSUMPTION',
     additional_information: {
       pep_close_family_or_public_position: false,
@@ -94,6 +95,39 @@ export function buildPersonalLoanSampleApplication(termMonths = 36) {
         area_code: '082',
         subscriber_number: '87654321',
       },
+    },
+  }
+}
+
+/**
+ * Applicant **not yet** a Metrobank client but **willing to open** a Metrobank deposit account for **ADA** repayments.
+ * After **POST …/documents**, **POST …/metrobank-deposit-account/confirm** sets **`metrobank_deposit_account_confirmed_at`** (required before **underwriting** **APPROVE**; **submit** does not require it).
+ */
+export function buildPersonalLoanSampleApplicationNotYetMetrobankClient(termMonths = 36) {
+  const base = buildPersonalLoanSampleApplication(termMonths)
+  return {
+    ...base,
+    metrobank_client_type: 'NOT_METROBANK_CLIENT',
+    additional_information: {
+      ...base.additional_information,
+      metrobank_deposit_repayment_plan:
+        METROBANK_DEPOSIT_REPAYMENT_PLAN.WILL_OPEN_METROBANK_DEPOSIT,
+    },
+  }
+}
+
+/**
+ * **Metrobank credit card** client opening (or linking) a **deposit** account for **ADA** — same **`metrobank_deposit_repayment_plan`** + confirm step as **`NOT_METROBANK_CLIENT`** with **`WILL_OPEN_METROBANK_DEPOSIT`** (confirm before **APPROVE**, not before **submit**).
+ */
+export function buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit(termMonths = 36) {
+  const base = buildPersonalLoanSampleApplication(termMonths)
+  return {
+    ...base,
+    metrobank_client_type: 'EXISTING_CLIENT_CREDIT_CARD',
+    additional_information: {
+      ...base.additional_information,
+      metrobank_deposit_repayment_plan:
+        METROBANK_DEPOSIT_REPAYMENT_PLAN.WILL_OPEN_METROBANK_DEPOSIT,
     },
   }
 }

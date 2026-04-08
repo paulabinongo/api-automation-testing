@@ -12,7 +12,9 @@ import { randomUUID } from 'crypto'
 
 import { PAYMENT_METHODS } from '../lib/loanConstants.js'
 import {
+  applicationRequiresMetrobankDepositAccountConfirmation,
   buildLoanProductReferencePayload,
+  METROBANK_DEPOSIT_REPAYMENT_PLAN,
   PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES,
   PERSONAL_LOAN_PRODUCT,
   validateApplicationAgainstCatalog,
@@ -210,6 +212,32 @@ function applicationRequiresPepComplianceClearance(row) {
     row.product_code === 'PERSONAL_LOAN' &&
     additionalInformationIndicatesPep(row.additional_information)
   )
+}
+
+/** Rebuild intake body from a stored row (eligibility / validation). */
+function applicationBodyFromRow(row) {
+  return {
+    product_code: row.product_code,
+    principal_cents: row.principal_cents,
+    term_months: row.term_months,
+    metrobank_client_type: row.metrobank_client_type,
+    loan_purpose: row.loan_purpose,
+    additional_information: row.additional_information,
+    borrower: row.borrower,
+    employment: row.employment,
+  }
+}
+
+/** @returns {string | null} error message if **APPROVE** / **CONDITIONAL** must be blocked */
+function metrobankDepositPolicyBlocksApproval(row) {
+  if (row.product_code !== 'PERSONAL_LOAN') return null
+  const mt = String(row.metrobank_client_type || '')
+  if (mt === 'EXISTING_CLIENT_DEPOSIT_ACCOUNT') return null
+  if (mt === 'NOT_METROBANK_CLIENT' || mt === 'EXISTING_CLIENT_CREDIT_CARD') {
+    if (row.metrobank_deposit_account_confirmed_at) return null
+    return 'Underwriting cannot approve until the borrower completes Metrobank deposit account opening for ADA repayments — POST /v1/loan-applications/{applicationId}/metrobank-deposit-account/confirm'
+  }
+  return 'Underwriting cannot approve: Metrobank deposit policy not satisfied for this application'
 }
 
 /** First of month after "today + ~1 month" — matches prior Python demo logic. */
@@ -445,6 +473,7 @@ v1.post('/loan-applications', (req, res) => {
     credit_reference_id: null,
     disclosures_acknowledged_at: null,
     pep_compliance_clearance_at: null,
+    metrobank_deposit_account_confirmed_at: null,
     owner_user_id: req.bankSession.user_id,
   }
   applications.set(aid, row)
@@ -527,6 +556,16 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
   if (row.document_intake?.completed_at && oldPid !== newPid) {
     delete row.document_intake
   }
+  if (p.additional_information && typeof p.additional_information === 'object') {
+    row.pep_compliance_clearance_at = null
+    row.metrobank_deposit_account_confirmed_at = null
+  }
+  if (
+    p.metrobank_client_type != null &&
+    String(p.metrobank_client_type) !== String(row.metrobank_client_type)
+  ) {
+    row.metrobank_deposit_account_confirmed_at = null
+  }
   Object.assign(row, {
     product_code: mergedBody.product_code,
     principal_cents: mergedBody.principal_cents,
@@ -537,9 +576,6 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
     borrower: mergedBody.borrower,
     employment: mergedBody.employment,
   })
-  if (p.additional_information && typeof p.additional_information === 'object') {
-    row.pep_compliance_clearance_at = null
-  }
   res.json(sanitizeApplicationOut(row))
 })
 
@@ -586,6 +622,72 @@ v1.post('/loan-applications/:applicationId/documents', (req, res) => {
     primary_id_document_type: u,
     completed_at: new Date().toISOString(),
   }
+  res.json(sanitizeApplicationOut(row))
+})
+
+/**
+ * **Metrobank deposit for ADA** — for **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`**, after document registration. Sets **`metrobank_deposit_account_confirmed_at`** for **underwriting** approval (not a **submit** gate).
+ */
+v1.post('/loan-applications/:applicationId/metrobank-deposit-account/confirm', (req, res) => {
+  const row = getApp(req.params.applicationId)
+  if (!row) return sendError(req, res, 404, 'Application not found')
+  if (row.owner_user_id !== req.bankSession.user_id) {
+    return sendError(req, res, 403, 'Application belongs to another session')
+  }
+  const mbConfirmAllowed = new Set([
+    'DRAFT',
+    'SUBMITTED',
+    'IN_PROCESSING',
+    'CREDIT_COMPLETED',
+    'IN_UNDERWRITING',
+  ])
+  if (!mbConfirmAllowed.has(row.status)) {
+    return sendError(
+      req,
+      res,
+      409,
+      'Metrobank deposit confirmation allowed only before underwriting approval (status must be DRAFT, SUBMITTED, IN_PROCESSING, CREDIT_COMPLETED, or IN_UNDERWRITING)',
+    )
+  }
+  if (row.product_code !== 'PERSONAL_LOAN') {
+    return sendError(req, res, 400, 'Metrobank deposit confirmation applies only to PERSONAL_LOAN')
+  }
+  if (!applicationRequiresMetrobankDepositAccountConfirmation(row)) {
+    return sendError(
+      req,
+      res,
+      400,
+      'Metrobank deposit confirmation is not required when metrobank_client_type is EXISTING_CLIENT_DEPOSIT_ACCOUNT (not NOT_METROBANK_CLIENT or EXISTING_CLIENT_CREDIT_CARD)',
+    )
+  }
+  const plan = row.additional_information?.metrobank_deposit_repayment_plan
+  if (plan !== METROBANK_DEPOSIT_REPAYMENT_PLAN.WILL_OPEN_METROBANK_DEPOSIT) {
+    return sendError(
+      req,
+      res,
+      409,
+      'Metrobank deposit confirmation requires additional_information.metrobank_deposit_repayment_plan = "WILL_OPEN_METROBANK_DEPOSIT" (JSON string; declining or other-bank-only plans cannot proceed)',
+    )
+  }
+  if (!(row.document_intake && row.document_intake.completed_at)) {
+    return sendError(
+      req,
+      res,
+      409,
+      'Complete document registration (POST …/loan-applications/{applicationId}/documents) before Metrobank deposit confirmation',
+    )
+  }
+  const intakeBody = applicationBodyFromRow(row)
+  const elig = evaluatePersonalLoanEligibility(intakeBody)
+  if (!elig.eligible) {
+    return sendError(
+      req,
+      res,
+      422,
+      elig.failed_checks.map((c) => 'Eligibility: ' + c),
+    )
+  }
+  row.metrobank_deposit_account_confirmed_at = new Date().toISOString()
   res.json(sanitizeApplicationOut(row))
 })
 
@@ -810,6 +912,10 @@ v1.post('/loan-applications/:applicationId/underwriting/decision', (req, res) =>
     row.status = 'DECLINED'
     row.decline_reason_code = body.decline_reason_code || 'UNDERWRITING_DECLINE'
     return res.json({ application: sanitizeApplicationOut(row), loan: null })
+  }
+  const mbBlock = metrobankDepositPolicyBlocksApproval(row)
+  if (mbBlock) {
+    return sendError(req, res, 422, mbBlock)
   }
   const stipsIn = Array.isArray(body.stipulations) ? body.stipulations : []
   if (outcome === 'CONDITIONAL' && stipsIn.length === 0) {

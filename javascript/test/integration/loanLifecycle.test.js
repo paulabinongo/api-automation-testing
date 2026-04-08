@@ -12,13 +12,19 @@ import { isLocalMockConfigured } from '../../lib/config.js'
 import {
   buildConditionalUnderwritingExample,
   buildPersonalLoanSampleApplication,
+  buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit,
+  buildPersonalLoanSampleApplicationNotYetMetrobankClient,
   buildSampleLoanApplication,
   buildPaymentBody,
   buildUnderwritingBody,
   creditCheckForcePass,
 } from '../../lib/sampleData.js'
 import { loginAndCompleteKyc } from './sessionHelpers.js'
-import { completePepComplianceGateIfRequired, registerDocumentsForPayload } from './flowHelpers.js'
+import {
+  completePepComplianceGateIfRequired,
+  registerDocumentsForPayload,
+  throughCredit,
+} from './flowHelpers.js'
 import { expectRejectsWithStatus } from '../helpers/assertions.js'
 
 const MOCK_BASE = 'https://api.loan.test/v1'
@@ -458,12 +464,98 @@ describe.skipIf(!isLocalMockConfigured())(
       await expectRejectsWithStatus(client.createApplication(bad), 422)
     })
 
-    it('rejects PERSONAL_LOAN when borrower is not yet a Metrobank client (intake)', async () => {
+    it('accepts NOT_METROBANK_CLIENT when metrobank_deposit_repayment_plan is omitted', async () => {
       const client = new LoanApiClient()
       await loginAndCompleteKyc(client)
       const base = buildPersonalLoanSampleApplication(12)
-      const bad = { ...base, metrobank_client_type: 'NOT_METROBANK_CLIENT' }
-      await expectRejectsWithStatus(client.createApplication(bad), 422)
+      const body = { ...base, metrobank_client_type: 'NOT_METROBANK_CLIENT' }
+      const created = await client.createApplication(body)
+      expect(created.status).toBe('DRAFT')
+    })
+
+    it('accepts NOT_METROBANK_CLIENT with WILL_OPEN_METROBANK_DEPOSIT plan', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildPersonalLoanSampleApplicationNotYetMetrobankClient(12)
+      const created = await client.createApplication(body)
+      expect(created.status).toBe('DRAFT')
+    })
+
+    it('accepts EXISTING_CLIENT_CREDIT_CARD when metrobank_deposit_repayment_plan is omitted', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const base = buildPersonalLoanSampleApplication(12)
+      const body = { ...base, metrobank_client_type: 'EXISTING_CLIENT_CREDIT_CARD' }
+      const created = await client.createApplication(body)
+      expect(created.status).toBe('DRAFT')
+    })
+
+    it('accepts EXISTING_CLIENT_CREDIT_CARD with WILL_OPEN_METROBANK_DEPOSIT plan', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit(12)
+      const created = await client.createApplication(body)
+      expect(created.status).toBe('DRAFT')
+    })
+
+    it('allows submit for EXISTING_CLIENT_CREDIT_CARD before metrobank-deposit confirm; confirm after submit unlocks APPROVE', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit(12)
+      const created = await client.createApplication(body)
+      await registerDocumentsForPayload(client, created.id, body)
+      const submitted = await client.submitApplication(created.id)
+      expect(submitted.status).toBe('SUBMITTED')
+      await client.acceptForProcessing(created.id)
+      await client.acknowledgeDisclosures(created.id)
+      await client.runCreditCheck(created.id, creditCheckForcePass)
+      await client.startUnderwriting(created.id)
+      await expectRejectsWithStatus(
+        client.underwritingDecision(created.id, buildUnderwritingBody('APPROVE')),
+        422,
+      )
+      await client.confirmMetrobankDepositAccount(created.id)
+      const uw = await client.underwritingDecision(created.id, buildUnderwritingBody('APPROVE'))
+      expect(uw.application.status).toBe('APPROVED_CLEAR_TO_CLOSE')
+      expect(uw.loan).toBeTruthy()
+    })
+
+    it('throughCredit works for EXISTING_CLIENT_CREDIT_CARD after confirm step', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const payload = buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit(12)
+      const appId = await throughCredit(client, payload)
+      expect(appId).toBeTruthy()
+    })
+
+    it('allows submit for NOT_METROBANK_CLIENT before metrobank-deposit confirm; confirm after submit unlocks APPROVE', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildPersonalLoanSampleApplicationNotYetMetrobankClient(12)
+      const created = await client.createApplication(body)
+      await registerDocumentsForPayload(client, created.id, body)
+      const submitted = await client.submitApplication(created.id)
+      expect(submitted.status).toBe('SUBMITTED')
+      await client.acceptForProcessing(created.id)
+      await client.acknowledgeDisclosures(created.id)
+      await client.runCreditCheck(created.id, creditCheckForcePass)
+      await client.startUnderwriting(created.id)
+      await expectRejectsWithStatus(
+        client.underwritingDecision(created.id, buildUnderwritingBody('APPROVE')),
+        422,
+      )
+      await client.confirmMetrobankDepositAccount(created.id)
+      const uw = await client.underwritingDecision(created.id, buildUnderwritingBody('APPROVE'))
+      expect(uw.application.status).toBe('APPROVED_CLEAR_TO_CLOSE')
+      expect(uw.loan).toBeTruthy()
+    })
+
+    it('throughCredit works for NOT_METROBANK_CLIENT after confirm step', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const payload = buildPersonalLoanSampleApplicationNotYetMetrobankClient(12)
+      const appId = await throughCredit(client, payload)
+      expect(appId).toBeTruthy()
     })
 
     it('rejects create when primary_id is outside Step 3 subset (use PATCH then upload for PRC, etc.)', async () => {
@@ -535,7 +627,8 @@ describe.skipIf(!isLocalMockConfigured())(
       const client = new LoanApiClient()
       const ref = await client.getLoanProductReference()
       const p = ref.products[0]
-      expect(p?.metrobank_client_prerequisite?.question).toContain('Metrobank')
+      expect(p?.metrobank_client_prerequisite?.question).toMatch(/repayment|Metrobank/i)
+      expect(p?.metrobank_client_prerequisite?.explanation).toMatch(/Metrobank/i)
       expect(p?.metrobank_client_prerequisite?.choices?.length).toBe(3)
     })
 
