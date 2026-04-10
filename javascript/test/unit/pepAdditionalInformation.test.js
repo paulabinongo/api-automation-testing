@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { validateApplicationAgainstCatalog } from '../../lib/loanProductCatalog.js'
-import { evaluatePersonalLoanEligibility } from '../../lib/personalLoanEligibility.js'
+import { evaluatePersonalLoanEligibility } from '../../lib/loan-products/personal-loan/personalLoanEligibility.js'
 import { buildPersonalLoanSampleApplication } from '../../lib/sampleData.js'
 
 function validPersonalLoanBody(termMonths = 24) {

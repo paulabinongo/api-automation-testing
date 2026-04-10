@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluatePersonalLoanEligibility } from '../../lib/personalLoanEligibility.js'
+import { evaluatePersonalLoanEligibility } from '../../lib/loan-products/personal-loan/personalLoanEligibility.js'
 import {
   buildPersonalLoanSampleApplication,
   buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit,

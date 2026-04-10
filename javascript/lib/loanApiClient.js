@@ -105,6 +105,12 @@ export class LoanApiClient {
       principal_cents: String(q.principal_cents),
       term_months: String(q.term_months),
     })
+    if (q.product_code != null && String(q.product_code).trim() !== '') {
+      qs.set('product_code', String(q.product_code))
+    }
+    if (q.loan_purpose != null && String(q.loan_purpose).trim() !== '') {
+      qs.set('loan_purpose', String(q.loan_purpose))
+    }
     return this._request('GET', `/reference/loan-computation-preview?${qs}`, {}, { auth: false })
   }
 

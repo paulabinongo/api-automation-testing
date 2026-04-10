@@ -15,12 +15,17 @@ import {
   applicationRequiresMetrobankDepositAccountConfirmation,
   buildLoanProductReferencePayload,
   METROBANK_DEPOSIT_REPAYMENT_PLAN,
-  PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES,
-  PERSONAL_LOAN_PRODUCT,
+  primaryIdUploadValuesForProduct,
   validateApplicationAgainstCatalog,
 } from '../lib/loanProductCatalog.js'
-import { computePersonalLoanPreview } from '../lib/personalLoanComputation.js'
-import { evaluatePersonalLoanEligibility } from '../lib/personalLoanEligibility.js'
+import { getLoanProductByCode } from '../lib/loan-products/catalog.js'
+import { computeLoanPreviewForProduct } from '../lib/loan-products/computationRegistry.js'
+import {
+  PRODUCT_CODES_REQUIRING_DOCUMENT_INTAKE_BEFORE_SUBMIT,
+  PRODUCT_CODES_WITH_METROBANK_DEPOSIT_CONFIRM,
+  PRODUCT_CODES_WITH_PEP_COMPLIANCE_GATE,
+} from '../lib/loan-products/lifecyclePolicies.js'
+import { evaluateEligibilityForProduct } from '../lib/loan-products/registry.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const openApiSpec = JSON.parse(readFileSync(path.join(__dirname, 'openapi.json'), 'utf8'))
@@ -287,7 +292,7 @@ function additionalInformationIndicatesPep(additional_information) {
 
 function applicationRequiresPepComplianceClearance(row) {
   return (
-    row.product_code === 'PERSONAL_LOAN' &&
+    PRODUCT_CODES_WITH_PEP_COMPLIANCE_GATE.has(row.product_code) &&
     additionalInformationIndicatesPep(row.additional_information)
   )
 }
@@ -308,7 +313,7 @@ function applicationBodyFromRow(row) {
 
 /** @returns {string | null} error message if **APPROVE** / **CONDITIONAL** must be blocked */
 function metrobankDepositPolicyBlocksApproval(row) {
-  if (row.product_code !== 'PERSONAL_LOAN') return null
+  if (!PRODUCT_CODES_WITH_METROBANK_DEPOSIT_CONFIRM.has(row.product_code)) return null
   const mt = String(row.metrobank_client_type || '')
   if (mt === 'EXISTING_CLIENT_DEPOSIT_ACCOUNT') return null
   if (mt === 'NOT_METROBANK_CLIENT' || mt === 'EXISTING_CLIENT_CREDIT_CARD') {
@@ -368,33 +373,58 @@ function sendLoanProductReference(_req, res) {
 }
 
 function sendLoanComputationPreview(req, res) {
+  const productCodeRaw =
+    req.query.product_code != null && String(req.query.product_code).trim() !== ''
+      ? String(req.query.product_code)
+      : 'PERSONAL_LOAN'
+  const product = getLoanProductByCode(productCodeRaw)
+  if (!product) {
+    return sendError(req, res, 422, [
+      `Unknown product_code "${productCodeRaw}" — use a code from GET /v1/reference/loan-products`,
+    ])
+  }
   const principalCents = req.query.principal_cents != null ? Number(req.query.principal_cents) : NaN
   const termMonths = req.query.term_months != null ? Number(req.query.term_months) : NaN
+  const loanPurposeQ =
+    req.query.loan_purpose != null && String(req.query.loan_purpose).trim() !== ''
+      ? String(req.query.loan_purpose)
+      : undefined
   const errs = []
   if (!Number.isFinite(principalCents) || principalCents !== Math.round(principalCents)) {
     errs.push('principal_cents must be a whole number (PHP centavos)')
+  } else if (
+    (productCodeRaw === 'PERSONAL_LOAN' || productCodeRaw === 'HOME_LOAN') &&
+    (!Number.isInteger(principalCents) || principalCents % 100 !== 0)
+  ) {
+    errs.push('principal_cents must be a whole PHP amount (integer centavos divisible by 100)')
   }
+  const allowedTerms = product.allowed_term_months
   if (
     !Number.isFinite(termMonths) ||
-    !PERSONAL_LOAN_PRODUCT.allowed_term_months.includes(termMonths)
+    !Array.isArray(allowedTerms) ||
+    !allowedTerms.includes(termMonths)
   ) {
-    errs.push('term_months must be one of: ' + PERSONAL_LOAN_PRODUCT.allowed_term_months.join(', '))
+    errs.push(
+      'term_months must be one of: ' +
+        (Array.isArray(allowedTerms) ? allowedTerms.join(', ') : '(see product catalogue)'),
+    )
   }
   if (errs.length) return sendError(req, res, 422, errs)
-  if (
-    principalCents < PERSONAL_LOAN_PRODUCT.min_principal_cents ||
-    principalCents > PERSONAL_LOAN_PRODUCT.max_principal_cents
-  ) {
+  const minP = /** @type {number} */ (product.min_principal_cents)
+  const maxP = /** @type {number} */ (product.max_principal_cents)
+  if (principalCents < minP || principalCents > maxP) {
     return sendError(
       req,
       res,
       422,
-      `principal_cents must be between ${PERSONAL_LOAN_PRODUCT.min_principal_cents} and ${PERSONAL_LOAN_PRODUCT.max_principal_cents} (catalogue limits)`,
+      `principal_cents must be between ${minP} and ${maxP} (catalogue limits for ${productCodeRaw})`,
     )
   }
-  const out = computePersonalLoanPreview(principalCents, termMonths)
-  if (!out) return sendError(req, res, 422, ['Unsupported term_months for computation'])
-  res.json(out)
+  const preview = computeLoanPreviewForProduct(productCodeRaw, principalCents, termMonths, {
+    loan_purpose: loanPurposeQ,
+  })
+  if (!preview.ok) return sendError(req, res, 422, preview.errors)
+  res.json(preview.payload)
 }
 
 /** Uses **principal_cents** and **term_months** from the borrower’s draft application (same session owner). */
@@ -404,9 +434,14 @@ function sendLoanComputationPreviewFromApplication(req, res) {
   if (row.owner_user_id != null && row.owner_user_id !== req.bankSession.user_id) {
     return sendError(req, res, 403, 'Not allowed to access this application')
   }
-  const out = computePersonalLoanPreview(row.principal_cents, row.term_months)
-  if (!out) return sendError(req, res, 422, ['Unsupported term_months for computation'])
-  res.json({ ...out, application_id: row.id })
+  const preview = computeLoanPreviewForProduct(
+    String(row.product_code),
+    row.principal_cents,
+    row.term_months,
+    { loan_purpose: row.loan_purpose },
+  )
+  if (!preview.ok) return sendError(req, res, 422, preview.errors)
+  res.json({ ...preview.payload, application_id: row.id })
 }
 
 /** Canonical paths + `/v1/...` aliases when `base_url` already ends with `/v1` (avoids falling through to auth). */
@@ -511,7 +546,7 @@ v1.post('/loan-applications', (req, res) => {
   if (errors.length) {
     return sendError(req, res, 422, errors)
   }
-  const elig = evaluatePersonalLoanEligibility(req.body)
+  const elig = evaluateEligibilityForProduct(req.body)
   if (!elig.eligible) {
     return sendError(
       req,
@@ -573,7 +608,7 @@ v1.post('/loan-applications/eligibility-preview', (req, res) => {
   if (errors.length) {
     return sendError(req, res, 422, errors)
   }
-  const result = evaluatePersonalLoanEligibility(req.body)
+  const result = evaluateEligibilityForProduct(req.body)
   res.json({
     eligible: result.eligible,
     checks: result.checks,
@@ -621,7 +656,7 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
   if (errors.length) {
     return sendError(req, res, 422, errors)
   }
-  const elig = evaluatePersonalLoanEligibility(mergedBody)
+  const elig = evaluateEligibilityForProduct(mergedBody)
   if (!elig.eligible) {
     return sendError(
       req,
@@ -678,13 +713,22 @@ v1.post('/loan-applications/:applicationId/documents', (req, res) => {
     return sendError(req, res, 422, 'primary_id_document_type required')
   }
   const u = String(uploaded)
-  if (!PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES.includes(u)) {
+  const product = getLoanProductByCode(row.product_code)
+  const allowedIdTypes = primaryIdUploadValuesForProduct(product)
+  if (!allowedIdTypes.length) {
+    return sendError(
+      req,
+      res,
+      400,
+      'Document upload is not configured for this product — add primary_id_document_types on the catalogue row',
+    )
+  }
+  if (!allowedIdTypes.includes(u)) {
     return sendError(
       req,
       res,
       422,
-      'primary_id_document_type must be one of: ' +
-        PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES.join(', '),
+      'primary_id_document_type must be one of: ' + allowedIdTypes.join(', '),
     )
   }
   const declared = row.borrower?.primary_id_document_type
@@ -728,8 +772,13 @@ v1.post('/loan-applications/:applicationId/metrobank-deposit-account/confirm', (
       'Metrobank deposit confirmation allowed only before underwriting approval (status must be DRAFT, SUBMITTED, IN_PROCESSING, CREDIT_COMPLETED, or IN_UNDERWRITING)',
     )
   }
-  if (row.product_code !== 'PERSONAL_LOAN') {
-    return sendError(req, res, 400, 'Metrobank deposit confirmation applies only to PERSONAL_LOAN')
+  if (!PRODUCT_CODES_WITH_METROBANK_DEPOSIT_CONFIRM.has(row.product_code)) {
+    return sendError(
+      req,
+      res,
+      400,
+      'Metrobank deposit confirmation does not apply to this product_code',
+    )
   }
   if (!applicationRequiresMetrobankDepositAccountConfirmation(row)) {
     return sendError(
@@ -757,7 +806,7 @@ v1.post('/loan-applications/:applicationId/metrobank-deposit-account/confirm', (
     )
   }
   const intakeBody = applicationBodyFromRow(row)
-  const elig = evaluatePersonalLoanEligibility(intakeBody)
+  const elig = evaluateEligibilityForProduct(intakeBody)
   if (!elig.eligible) {
     return sendError(
       req,
@@ -876,14 +925,14 @@ v1.post('/loan-applications/:applicationId/submit', (req, res) => {
     return sendError(req, res, 409, 'Invalid state for submit')
   }
   if (
-    row.product_code === 'PERSONAL_LOAN' &&
+    PRODUCT_CODES_REQUIRING_DOCUMENT_INTAKE_BEFORE_SUBMIT.has(row.product_code) &&
     !(row.document_intake && row.document_intake.completed_at)
   ) {
     return sendError(
       req,
       res,
       409,
-      'Personal Loan requires Step 7 document intake: POST /v1/loan-applications/{applicationId}/documents with primary_id_document_type equal to borrower.primary_id_document_type',
+      'Document intake required before submit: POST /v1/loan-applications/{applicationId}/documents with primary_id_document_type equal to borrower.primary_id_document_type',
     )
   }
   if (applicationRequiresPepComplianceClearance(row) && !row.pep_compliance_clearance_at) {

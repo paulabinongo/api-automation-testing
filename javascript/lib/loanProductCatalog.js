@@ -4,9 +4,16 @@
  */
 
 import {
+  HOME_LOAN_APPLICANT_CATEGORIES,
+  HOME_LOAN_PRIMARY_ID_DOCUMENT_TYPES,
+  HOME_LOAN_PRODUCT,
+  HOME_LOAN_PURPOSES,
+  HOME_LOAN_STEP3_PRIMARY_ID_DOCUMENT_TYPES,
+} from './loan-products/home-loan/homeLoanCatalog.js'
+import {
   PERSONAL_LOAN_OCCUPATIONS,
   PERSONAL_LOAN_OCCUPATION_CODES,
-} from './personalLoanOccupations.js'
+} from './loan-products/personal-loan/personalLoanOccupations.js'
 import { PH_ADDRESS_VALID_ROWS, isValidPhAddressTriplet } from './philippineAddressReference.js'
 
 /** @param {number} pesos Whole PHP */
@@ -59,6 +66,14 @@ export function primaryIdDocumentTypeLabel(value) {
     SENIOR: 'Senior',
     VOTERS: 'Voters',
     OTHERS: 'Others',
+    PHILID: 'Philippine Identification (PhilID)',
+    OFW_ID: 'OFW ID / e-card',
+    SEAMANS_BOOK: "Seaman's Book",
+    ALIEN_CERTIFICATE_REGISTRATION: 'ACR / ICR',
+    GOVERNMENT_OFFICE_GOCC_ID: 'Government / GOCC ID',
+    PWD_NCDA_ID: 'PWD ID (NCDA)',
+    IBP_ID: 'Integrated Bar ID',
+    SCHOOL_ID: 'School ID',
   })
   const v = String(value)
   return map[v] ?? v.replace(/_/g, ' ')
@@ -442,9 +457,27 @@ export const PERSONAL_LOAN_PRODUCT = Object.freeze({
   ),
 })
 
-/** @type {Readonly<Record<string, typeof PERSONAL_LOAN_PRODUCT>>} */
+/** Borrower/employment LOVs aligned with **PERSONAL_LOAN** reference (shared intake UX for **HOME_LOAN**). */
+const HOME_LOAN_CATALOG_ROW = Object.freeze({
+  ...HOME_LOAN_PRODUCT,
+  landline_area_code_options: PERSONAL_LOAN_PRODUCT.landline_area_code_options,
+  home_ownership_options: PERSONAL_LOAN_PRODUCT.home_ownership_options,
+  gender_options: PERSONAL_LOAN_PRODUCT.gender_options,
+  marital_status_options: PERSONAL_LOAN_PRODUCT.marital_status_options,
+  education_options: PERSONAL_LOAN_PRODUCT.education_options,
+  occupations: PERSONAL_LOAN_OCCUPATIONS,
+  source_of_funds_options: PERSONAL_LOAN_PRODUCT.source_of_funds_options,
+  employment_status_options: PERSONAL_LOAN_PRODUCT.employment_status_options,
+})
+
+/**
+ * All supported **`product_code`** values and their **GET /reference/loan-products** payloads.
+ * Add new products here — **`buildLoanProductReferencePayload`** includes every entry automatically.
+ * @type {Readonly<Record<string, typeof PERSONAL_LOAN_PRODUCT>>}
+ */
 export const LOAN_PRODUCTS_BY_CODE = Object.freeze({
   [PERSONAL_LOAN_PRODUCT.product_code]: PERSONAL_LOAN_PRODUCT,
+  [HOME_LOAN_CATALOG_ROW.product_code]: HOME_LOAN_CATALOG_ROW,
 })
 
 /** Sorted **term_months** values for the catalogue (PHP Personal Loan). */
@@ -454,10 +487,24 @@ export const ALL_CATALOG_TERM_MONTHS = PERSONAL_LOAN_PRODUCT.allowed_term_months
  * @returns {{ products: object[], note: string }}
  */
 export function buildLoanProductReferencePayload() {
+  const products = Object.keys(LOAN_PRODUCTS_BY_CODE).map((k) => ({
+    ...LOAN_PRODUCTS_BY_CODE[k],
+  }))
   return {
-    products: [{ ...PERSONAL_LOAN_PRODUCT }],
-    note: '**All amounts** in **PHP centavos** on **principal_cents** and **employment.gross_monthly_income_cents** (×12 vs **min_annual_income_cents** on the product). Principal: **PHP 20,000**–**2,000,000** (whole pesos only). **loan_purpose**, **term_months** (**12|18|24|36**), **additional_information** (PEP — **Yes** triggers **POST …/compliance/pep-clearance** after **documents**, before **submit**; same as **openapi.json** / **Swagger**), **borrower** (Present Home Address + **philippine_address_sample_rows**, optional **home_phone** / **landline_area_code_options**, names, consents, Step 3 ID subset on create), **employment** (**employer_address** when **EMPLOYED**; optional **business_mobile_phone**, **business_phone**). Step 7 **POST …/documents** must match declared ID. **GET /v1/reference/loan-computation-preview** (add-on, EIR, amortization, fees, net proceeds). Full path list: **Swagger** `/docs` or repo **openapi.json**.',
+    products,
+    note: '**All amounts** in **PHP centavos** on **principal_cents**, **employment.gross_monthly_income_cents**, and **additional_information.property_appraised_value_cents** (Home Loan) unless a product specifies otherwise. **Personal Loan:** **PHP 20,000**–**2,000,000** (whole pesos). **Home Loan:** **PHP 500,000**–**50,000,000** (whole pesos); **purpose_options**, **fixed_interest_rates**, **loan_requirements**. **loan_purpose**, **term_months**, **additional_information**, **borrower**, **employment** — see each catalogue row. Multi-product: **javascript/lib/loan-products/README.md**. **Swagger** `/docs` / **openapi.json**.',
   }
+}
+
+/**
+ * **`value`** strings allowed on **POST …/documents** for this product (from **`primary_id_document_types`** on the catalogue row).
+ *
+ * @param {typeof PERSONAL_LOAN_PRODUCT | null | undefined} product
+ * @returns {readonly string[]}
+ */
+export function primaryIdUploadValuesForProduct(product) {
+  if (!product?.primary_id_document_types) return Object.freeze([])
+  return Object.freeze(product.primary_id_document_types.map((r) => String(r.value)))
 }
 
 const NAME_PART_RE = /^[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]+( [A-Za-z\u00C0-\u024F\u1E00-\u1EFF]+)*$/
@@ -1005,6 +1052,282 @@ export function validatePersonalLoanIntakeShape(body, options = {}) {
 }
 
 /**
+ * **HOME_LOAN** intake (borrower + employment shared with Personal Loan shape; different purpose, IDs, appraisal).
+ * @param {unknown} body
+ * @param {{ primaryIdPolicy?: 'step3_only' | 'full' }} [options]
+ * @returns {string[]}
+ */
+export function validateHomeLoanIntakeShape(body, options = {}) {
+  const primaryIdPolicy = options.primaryIdPolicy === 'full' ? 'full' : 'step3_only'
+  const errs = []
+  if (!body || typeof body !== 'object') return errs
+  const b = body.borrower
+  if (!b || typeof b !== 'object') return errs
+
+  const lp = body.loan_purpose
+  if (lp == null || String(lp).trim() === '') errs.push('loan_purpose required')
+  else if (!HOME_LOAN_PURPOSES.includes(String(lp))) {
+    errs.push('loan_purpose must be one of: ' + HOME_LOAN_PURPOSES.join(', '))
+  }
+
+  const ai = body.additional_information
+  if (!ai || typeof ai !== 'object') {
+    errs.push(
+      'additional_information required (PEP, Home Loan appraisal, applicant category, collateral, credit declaration)',
+    )
+  } else {
+    if (typeof ai.pep_close_family_or_public_position !== 'boolean') {
+      errs.push('additional_information.pep_close_family_or_public_position must be true or false')
+    }
+    if (typeof ai.pep_financial_transactions_on_behalf !== 'boolean') {
+      errs.push('additional_information.pep_financial_transactions_on_behalf must be true or false')
+    }
+    if (
+      typeof ai.property_appraised_value_cents !== 'number' ||
+      !Number.isFinite(ai.property_appraised_value_cents) ||
+      ai.property_appraised_value_cents <= 0
+    ) {
+      errs.push(
+        'additional_information.property_appraised_value_cents required — appraisal value in PHP centavos',
+      )
+    }
+    const cat = ai.home_loan_applicant_category
+    if (cat == null || !HOME_LOAN_APPLICANT_CATEGORIES.includes(String(cat))) {
+      errs.push('additional_information.home_loan_applicant_category required — RESIDENT | OFW')
+    }
+    if (ai.collateral_property_type !== 'RESIDENTIAL') {
+      errs.push('additional_information.collateral_property_type must be RESIDENTIAL')
+    }
+    if (typeof ai.collateral_is_vacant_lot !== 'boolean') {
+      errs.push('additional_information.collateral_is_vacant_lot must be true or false')
+    }
+    if (typeof ai.no_adverse_credit_history !== 'boolean') {
+      errs.push('additional_information.no_adverse_credit_history must be true or false')
+    }
+    if (
+      body.loan_purpose === 'HOME_EQUITY_PERSONAL_CONSUMPTION' &&
+      ai.home_equity_for_improvement != null &&
+      typeof ai.home_equity_for_improvement !== 'boolean'
+    ) {
+      errs.push('additional_information.home_equity_for_improvement must be boolean when provided')
+    }
+  }
+
+  const fn = b.first_name
+  const ln = b.last_name
+  const hasParts = fn != null && String(fn).trim() !== '' && ln != null && String(ln).trim() !== ''
+  if (hasParts) {
+    if (!isValidNamePart(fn)) {
+      errs.push(
+        'borrower.first_name must be 1–30 letters/spaces only, trimmed, no leading/trailing spaces',
+      )
+    }
+    if (!isValidNamePart(ln)) {
+      errs.push(
+        'borrower.last_name must be 1–30 letters/spaces only, trimmed, no leading/trailing spaces',
+      )
+    }
+  } else {
+    if (!b.full_name || !String(b.full_name).trim()) {
+      errs.push(
+        'borrower.first_name and borrower.last_name required (or legacy borrower.full_name)',
+      )
+    } else {
+      const full = String(b.full_name).trim()
+      if (full.length < 1 || full.length > 100 || !NAME_PART_RE.test(full)) {
+        errs.push('borrower.full_name must be letters/spaces only, 1–100 characters, trimmed')
+      }
+    }
+  }
+
+  validateOptionalMiddleName(b, errs)
+
+  if (!isValidEmailLoose(b.email)) errs.push('borrower.email must be a valid email address')
+
+  if (!normalizePhilippineMobileDigits(b.mobile_phone)) {
+    errs.push(
+      'borrower.mobile_phone required — Philippine mobile: +639XXXXXXXXX, 09XXXXXXXXX, or 9XXXXXXXXX (first national digit 9)',
+    )
+  }
+
+  if (!b.date_of_birth || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.date_of_birth))) {
+    errs.push('borrower.date_of_birth required (YYYY-MM-DD)')
+  } else if (!isDobStrictlyBeforeToday(b.date_of_birth)) {
+    errs.push('borrower.date_of_birth must be strictly before today (past date of birth)')
+  }
+
+  if (!b.citizenship) errs.push('borrower.citizenship required')
+  else if (String(b.citizenship) !== 'FILIPINO') {
+    errs.push('borrower.citizenship must be FILIPINO for this product')
+  }
+
+  const pid = b.primary_id_document_type
+  const allowedPid =
+    primaryIdPolicy === 'full'
+      ? HOME_LOAN_PRIMARY_ID_DOCUMENT_TYPES
+      : HOME_LOAN_STEP3_PRIMARY_ID_DOCUMENT_TYPES
+  if (pid == null || String(pid).trim() === '') {
+    errs.push(
+      'borrower.primary_id_document_type required — create: Home Loan step3_primary_id_document_types; PATCH may use full primary_id_document_types',
+    )
+  } else if (!allowedPid.includes(String(pid))) {
+    errs.push(
+      'borrower.primary_id_document_type must be one of: ' +
+        allowedPid.join(', ') +
+        (primaryIdPolicy === 'step3_only'
+          ? ' (Step 3 subset on create — use PATCH then upload for other ID types)'
+          : ''),
+    )
+  }
+
+  const idNum = b.primary_id_document_number
+  const idStr = idNum != null ? String(idNum).trim() : ''
+  if (!/^[A-Za-z0-9\-]{6,40}$/.test(idStr)) {
+    errs.push(
+      'borrower.primary_id_document_number must be 6–40 characters: letters, digits, hyphen (Home Loan / passport-friendly)',
+    )
+  }
+  const c = b.consents
+  if (!c || typeof c !== 'object') errs.push('borrower.consents required')
+  else {
+    if (c.terms_of_use_accepted !== true) {
+      errs.push('borrower.consents.terms_of_use_accepted must be true')
+    }
+    if (c.terms_and_conditions_accepted !== true) {
+      errs.push('borrower.consents.terms_and_conditions_accepted must be true')
+    }
+    if (c.data_privacy_policy_accepted !== true) {
+      errs.push('borrower.consents.data_privacy_policy_accepted must be true')
+    }
+  }
+
+  if (!PERSONAL_LOAN_GENDERS.includes(/** @type {any} */ (b.gender))) {
+    errs.push('borrower.gender required — FEMALE | MALE | UNKNOWN')
+  }
+  if (!PERSONAL_LOAN_MARITAL_STATUSES.includes(/** @type {any} */ (b.marital_status))) {
+    errs.push(
+      'borrower.marital_status required — see GET /v1/reference/loan-products → marital_status_options',
+    )
+  }
+  if (!PERSONAL_LOAN_EDUCATION_LEVELS.includes(/** @type {any} */ (b.education))) {
+    errs.push(
+      'borrower.education required — see GET /v1/reference/loan-products → education_options (dropdown + search in production)',
+    )
+  }
+  validatePlaceOfBirthStrict(b, errs)
+
+  validateResidentialAddress(b.residential_address, errs)
+  validateOptionalHomePhone(b, errs)
+
+  if (typeof b.mailing_same_as_residential !== 'boolean') {
+    errs.push('borrower.mailing_same_as_residential must be true or false')
+  } else if (!b.mailing_same_as_residential) {
+    const ma = b.mailing_address
+    if (!ma || typeof ma !== 'object')
+      errs.push('borrower.mailing_address required when mailing_same_as_residential is false')
+    else {
+      if (!String(ma.line1 || '').trim()) errs.push('borrower.mailing_address.line1 required')
+      if (!String(ma.city || '').trim()) errs.push('borrower.mailing_address.city required')
+      if (!String(ma.province_region || '').trim()) {
+        errs.push('borrower.mailing_address.province_region required')
+      }
+      if (ma.postal_code == null || String(ma.postal_code).trim() === '') {
+        errs.push('borrower.mailing_address.postal_code required')
+      }
+    }
+  }
+
+  const emp = body.employment
+  if (!emp || typeof emp !== 'object') errs.push('employment required')
+  else {
+    if (
+      !emp.source_of_funds ||
+      !PERSONAL_LOAN_SOURCE_OF_FUNDS.includes(String(emp.source_of_funds))
+    ) {
+      errs.push('employment.source_of_funds required — ' + PERSONAL_LOAN_SOURCE_OF_FUNDS.join(', '))
+    }
+    if (
+      !emp.employment_status ||
+      !PERSONAL_LOAN_EMPLOYMENT_STATUSES.includes(String(emp.employment_status))
+    ) {
+      errs.push(
+        'employment.employment_status required — ' + PERSONAL_LOAN_EMPLOYMENT_STATUSES.join(', '),
+      )
+    }
+    if (emp.occupation == null || !PERSONAL_LOAN_OCCUPATION_CODES.has(String(emp.occupation))) {
+      errs.push(
+        'employment.occupation must be one of occupations[].value on GET /v1/reference/loan-products',
+      )
+    }
+    const industry = String(emp.industry || '').trim()
+    if (industry.length < 2 || industry.length > 80) {
+      errs.push('employment.industry required (2–80 characters)')
+    }
+    if (!isValidEmailLoose(emp.business_email)) {
+      errs.push('employment.business_email must be a valid email (e.g. name@company.com)')
+    }
+    if (typeof emp.years_working_total !== 'number' || emp.years_working_total < 0) {
+      errs.push('employment.years_working_total must be a number >= 0')
+    }
+    if (
+      typeof emp.gross_monthly_income_cents !== 'number' ||
+      !Number.isFinite(emp.gross_monthly_income_cents) ||
+      emp.gross_monthly_income_cents < 0
+    ) {
+      errs.push('employment.gross_monthly_income_cents must be a number >= 0 (PHP centavos)')
+    } else if (
+      HOME_LOAN_PRODUCT.min_annual_income_cents != null &&
+      emp.gross_monthly_income_cents * 12 < HOME_LOAN_PRODUCT.min_annual_income_cents
+    ) {
+      errs.push(
+        'employment.gross_monthly_income_cents × 12 must be at least the Home Loan minimum (PHP 40,000/month family income — see min_annual_income_cents on product)',
+      )
+    }
+
+    if (emp.status !== 'EMPLOYED' && emp.status !== 'SELF_EMPLOYED') {
+      errs.push('employment.status must be EMPLOYED or SELF_EMPLOYED')
+    } else if (emp.source_of_funds === 'EMPLOYED' && emp.status !== 'EMPLOYED') {
+      errs.push('employment.status must be EMPLOYED when employment.source_of_funds is EMPLOYED')
+    } else if (emp.source_of_funds === 'SELF_EMPLOYED' && emp.status !== 'SELF_EMPLOYED') {
+      errs.push(
+        'employment.status must be SELF_EMPLOYED when employment.source_of_funds is SELF_EMPLOYED',
+      )
+    } else if (emp.status === 'EMPLOYED') {
+      if (!String(emp.employer_name || '').trim()) {
+        errs.push('employment.employer_name required when status is EMPLOYED')
+      }
+      if (typeof emp.years_with_current_employer !== 'number') {
+        errs.push('employment.years_with_current_employer must be a number')
+      }
+      if (typeof emp.is_regular_employment !== 'boolean') {
+        errs.push('employment.is_regular_employment must be true or false')
+      }
+      validateEmployerAddress(emp.employer_address, errs)
+    } else {
+      if (!String(emp.business_name || '').trim()) {
+        errs.push('employment.business_name required when status is SELF_EMPLOYED')
+      }
+      if (typeof emp.years_in_current_business !== 'number') {
+        errs.push('employment.years_in_current_business must be a number')
+      }
+    }
+
+    if (
+      typeof emp.years_with_current_employer === 'number' &&
+      typeof emp.years_working_total === 'number' &&
+      emp.years_with_current_employer > emp.years_working_total
+    ) {
+      errs.push('employment.years_with_current_employer must be <= employment.years_working_total')
+    }
+
+    validateOptionalBusinessMobile(emp, errs)
+    validateOptionalLandlinePhone(emp.business_phone, errs, 'employment.business_phone')
+  }
+
+  return errs
+}
+
+/**
  * @param {string[]} errs
  * @param {readonly number[]} allowed
  */
@@ -1012,6 +1335,47 @@ function pushTermError(errs, allowed) {
   errs.push(
     'term_months must be one of approved terms for this product (months): ' + allowed.join(', '),
   )
+}
+
+/** Product-specific principal rules (extend when adding e.g. **AUTO_LOAN**). */
+function productRequiresWholePhpPrincipal(product) {
+  return product.product_code === 'PERSONAL_LOAN' || product.product_code === 'HOME_LOAN'
+}
+
+/**
+ * Product-specific intake after generic **borrower** / **principal** / **term** checks.
+ * Add a **`case 'YOUR_PRODUCT':`** when you register a new **`LOAN_PRODUCTS_BY_CODE`** entry.
+ *
+ * @param {string[]} errs
+ * @param {typeof PERSONAL_LOAN_PRODUCT} product
+ * @param {object} body
+ * @param {{ personalLoanPrimaryIdPolicy?: 'step3_only' | 'full' }} options
+ */
+function appendProductSpecificIntakeValidation(errs, product, body, options) {
+  const idPol = options.personalLoanPrimaryIdPolicy === 'full' ? 'full' : 'step3_only'
+  switch (product.product_code) {
+    case 'PERSONAL_LOAN':
+      errs.push(...validatePersonalLoanIntakeShape(body, { primaryIdPolicy: idPol }))
+      {
+        const mt = body.metrobank_client_type
+        if (mt == null || mt === '') {
+          errs.push(
+            'metrobank_client_type required — EXISTING_CLIENT_DEPOSIT_ACCOUNT, EXISTING_CLIENT_CREDIT_CARD, or NOT_METROBANK_CLIENT (see product metrobank_client_prerequisite on GET /v1/reference/loan-products)',
+          )
+        } else if (!PERSONAL_LOAN_METROBANK_CLIENT_TYPES.includes(String(mt))) {
+          errs.push(
+            'metrobank_client_type must be one of: ' +
+              PERSONAL_LOAN_METROBANK_CLIENT_TYPES.join(', '),
+          )
+        }
+      }
+      break
+    case 'HOME_LOAN':
+      errs.push(...validateHomeLoanIntakeShape(body, { primaryIdPolicy: idPol }))
+      break
+    default:
+      break
+  }
 }
 
 /**
@@ -1047,7 +1411,7 @@ export function validateApplicationAgainstCatalog(body, options = {}) {
     }
   }
   if (
-    product.product_code === 'PERSONAL_LOAN' &&
+    productRequiresWholePhpPrincipal(product) &&
     typeof body.principal_cents === 'number' &&
     body.principal_cents > 0
   ) {
@@ -1074,19 +1438,6 @@ export function validateApplicationAgainstCatalog(body, options = {}) {
     }
     if (!b.email) errs.push('borrower.email required')
   }
-  const idPol = options.personalLoanPrimaryIdPolicy === 'full' ? 'full' : 'step3_only'
-  if (product.product_code === 'PERSONAL_LOAN') {
-    errs.push(...validatePersonalLoanIntakeShape(body, { primaryIdPolicy: idPol }))
-    const mt = body.metrobank_client_type
-    if (mt == null || mt === '') {
-      errs.push(
-        'metrobank_client_type required — EXISTING_CLIENT_DEPOSIT_ACCOUNT, EXISTING_CLIENT_CREDIT_CARD, or NOT_METROBANK_CLIENT (see product metrobank_client_prerequisite on GET /v1/reference/loan-products)',
-      )
-    } else if (!PERSONAL_LOAN_METROBANK_CLIENT_TYPES.includes(String(mt))) {
-      errs.push(
-        'metrobank_client_type must be one of: ' + PERSONAL_LOAN_METROBANK_CLIENT_TYPES.join(', '),
-      )
-    }
-  }
+  appendProductSpecificIntakeValidation(errs, product, body, options)
   return errs
 }

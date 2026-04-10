@@ -16,6 +16,84 @@ export function buildSampleLoanApplication() {
 }
 
 const SAMPLE_MOBILE = '+639171234567'
+const SAMPLE_HOME_APPRAISED = 100_000_000 // PHP 1,000,000
+const SAMPLE_HOME_PRINCIPAL = 50_000_000 // PHP 500,000 (min scenario LTV 50% of 1M)
+
+/**
+ * **HOME_LOAN** sample — residential mortgage intake (PHP centavos). **Passport**-friendly ID number.
+ * @param {number} [termMonths=240]
+ */
+export function buildHomeLoanSampleApplication(termMonths = 240) {
+  const grossMonthlyIncomeCents = 5_000_000 // PHP 50,000 / month
+  return {
+    product_code: 'HOME_LOAN',
+    principal_cents: SAMPLE_HOME_PRINCIPAL,
+    term_months: termMonths,
+    loan_purpose: 'PURCHASE_HOUSE_AND_LOT',
+    additional_information: {
+      pep_close_family_or_public_position: false,
+      pep_financial_transactions_on_behalf: false,
+      property_appraised_value_cents: SAMPLE_HOME_APPRAISED,
+      home_loan_applicant_category: 'RESIDENT',
+      collateral_property_type: 'RESIDENTIAL',
+      collateral_is_vacant_lot: false,
+      no_adverse_credit_history: true,
+    },
+    borrower: {
+      first_name: 'Juan',
+      middle_name: 'Dela',
+      last_name: 'Cruz',
+      full_name: 'Juan Dela Cruz',
+      email: 'juan.delacruz@example.com',
+      mobile_phone: SAMPLE_MOBILE,
+      date_of_birth: '1988-03-20',
+      citizenship: 'FILIPINO',
+      primary_id_document_type: 'PASSPORT',
+      primary_id_document_number: 'P1234567A',
+      consents: {
+        terms_of_use_accepted: true,
+        terms_and_conditions_accepted: true,
+        data_privacy_policy_accepted: true,
+      },
+      gender: 'MALE',
+      marital_status: 'MARRIED',
+      education: 'COLLEGE_GRADUATE',
+      place_of_birth: 'Quezon City',
+      mailing_same_as_residential: true,
+      residential_address: {
+        street_line: 'Mabini Street',
+        subdivision_village: 'Sample Village',
+        province: 'NCR',
+        city_town: 'Makati',
+        barangay: 'San Antonio',
+        postal_code: '1200',
+        home_ownership: 'OWNED',
+      },
+    },
+    employment: {
+      status: 'EMPLOYED',
+      source_of_funds: 'EMPLOYED',
+      employment_status: 'REGULAR',
+      occupation: 'OFFICE_CLERK',
+      industry: 'Real Estate',
+      business_email: 'payroll@samplecorp.example.com',
+      years_working_total: 12,
+      gross_monthly_income_cents: grossMonthlyIncomeCents,
+      employer_name: 'Sample Realty Corp',
+      employer_address: {
+        street_line: 'Ayala Avenue',
+        subdivision_building: 'Tower One',
+        province: 'NCR',
+        city_town: 'Makati',
+        barangay: 'Bel-Air',
+        postal_code: '1209',
+      },
+      years_with_current_employer: 5,
+      is_regular_employment: true,
+    },
+  }
+}
+
 const SAMPLE_ID_NUM = '12345678901'
 
 /**

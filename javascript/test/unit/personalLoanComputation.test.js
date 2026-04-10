@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computePersonalLoanPreview,
   solveMonthlyIrrAnnualEirPercent,
-} from '../../lib/personalLoanComputation.js'
+} from '../../lib/loan-products/personal-loan/personalLoanComputation.js'
 
 describe('computePersonalLoanPreview', () => {
   it('matches Metrobank-style 20,000 PHP × 12 months snapshot', () => {

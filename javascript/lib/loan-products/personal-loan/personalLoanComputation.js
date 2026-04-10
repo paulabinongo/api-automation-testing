@@ -9,7 +9,7 @@
  * - **Effective interest rate (EIR)** (annual %): solve monthly rate **r** from borrower cash flows:
  *   `net_proceeds = Σ monthly_amort / (1+r)^k` for k = 1..n, then **((1+r)^12 − 1) × 100**
  */
-import { PERSONAL_LOAN_PRODUCT } from './loanProductCatalog.js'
+import { PERSONAL_LOAN_PRODUCT } from '../../loanProductCatalog.js'
 
 /** @param {number} termMonths */
 export function getPersonalLoanTermOption(termMonths) {
@@ -62,8 +62,9 @@ export function solveMonthlyIrrAnnualEirPercent(
 /**
  * @param {number} principalCents PHP centavos (face / approved amount)
  * @param {number} termMonths 12 | 18 | 24 | 36
+ * @param {object} [_options] ignored — signature aligns with **HOME_LOAN** preview dispatch
  */
-export function computePersonalLoanPreview(principalCents, termMonths) {
+export function computePersonalLoanPreview(principalCents, termMonths, _options = {}) {
   const termOpt = getPersonalLoanTermOption(termMonths)
   if (!termOpt) return null
 

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-loan-lifecycle-001",
     "name": "Loan Lifecycle API",
-    "description": "**Lifecycle** matches **Swagger UI**, **`javascript/mock-server/openapi.json`**, and **`docs/DOCUMENTATION.md`** §**5** (happy path §**5.0**, production phase map §**5.4**). **OpenAPI 0.8.x** (see **`openapi.json`**) adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**.\n\n**Order (high level):** **Login** → **KYC** → **Create loan application** → **Documents** → (**optional:** **metrobank-deposit-account/confirm** when opening a Metrobank deposit for **ADA** — needed before **underwriting APPROVE**, not before **Submit**) → (**PEP Yes:** **compliance/pep-clearance**) → **Submit** → **Ops accept** → **Disclosures acknowledge** → Credit → **Start underwriting** → **Underwriting decision** → (optional **stipulations**) → **Funding authorize** → **Fund** (book) → **Disburse** → Get loan → Schedule → Payment(s) → Payoff → optional **Logout**.\n\n**Personal Loan (DRAFT path):** optional **0a. Eligibility preview** → **1. Create** → **1b. Loan computation preview** → **1c. Register documents** (**`POST …/documents`**) → **1c-MB. Metrobank deposit confirm** (**`POST …/metrobank-deposit-account/confirm`** when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** and **`additional_information.metrobank_deposit_repayment_plan`** is **`WILL_OPEN_METROBANK_DEPOSIT`**) → **1d. PEP compliance clearance** (**`POST …/compliance/pep-clearance`** — **200** when Step **6** PEP is **Yes** on either question, **400** when both **No**; required before **2. Submit** if **Yes**) → **2. Submit**. Same operation IDs and paths as **Swagger** / **`openapi.json`**.\n\n**ADA / Metrobank deposit:** **`{{metrobank_client_type}}`** defaults to **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**. **`EXISTING_CLIENT_CREDIT_CARD`** / **`NOT_METROBANK_CLIENT`** may **create** and **submit** without **1c-MB**; **`POST …/underwriting/decision`** (**APPROVE** / **CONDITIONAL**) returns **422** until **`metrobank_deposit_account_confirmed_at`** is set (e.g. via **1c-MB** while **DRAFT** with **`WILL_OPEN_METROBANK_DEPOSIT`**). See **`openapi.json` 0.8.15**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack — see **`docs/DOCUMENTATION.md`** §**5.4** for what real institutions add.\n\n**Import-ready flow:** folder **Flow — Happy path (import & run in order)** (this guide §**7**).\n\n**Stipulation tests:** **Tests — stipulations (single & multiple)** — Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** — select **Loan Lifecycle — Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`javascript/mock-server/openapi.json`** in Postman.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only — do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** — set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
+    "description": "**Lifecycle** matches **Swagger UI**, **`javascript/mock-server/openapi.json`**, and **`docs/DOCUMENTATION.md`** §**5** (happy path §**5.0**, **Metrobank Home Loan** §**5.0.1**, production phase map §**5.4**). **OpenAPI 0.8.x** (see **`openapi.json`**) adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**.\n\n**Order (high level):** **Login** → **KYC** → **Create loan application** → **Documents** → (**optional:** **metrobank-deposit-account/confirm** when opening a Metrobank deposit for **ADA** — needed before **underwriting APPROVE**, not before **Submit**) → (**PEP Yes:** **compliance/pep-clearance**) → **Submit** → **Ops accept** → **Disclosures acknowledge** → Credit → **Start underwriting** → **Underwriting decision** → (optional **stipulations**) → **Funding authorize** → **Fund** (book) → **Disburse** → Get loan → Schedule → Payment(s) → Payoff → optional **Logout**.\n\n**Personal Loan (DRAFT path):** optional **0a. Eligibility preview** → **1. Create** → **1b. Loan computation preview** → **1c. Register documents** (**`POST …/documents`**) → **1c-MB. Metrobank deposit confirm** (**`POST …/metrobank-deposit-account/confirm`** when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** and **`additional_information.metrobank_deposit_repayment_plan`** is **`WILL_OPEN_METROBANK_DEPOSIT`**) → **1d. PEP compliance clearance** (**`POST …/compliance/pep-clearance`** — **200** when Step **6** PEP is **Yes** on either question, **400** when both **No**; required before **2. Submit** if **Yes**) → **2. Submit**. Same operation IDs and paths as **Swagger** / **`openapi.json`**.\n\n**ADA / Metrobank deposit:** **`{{metrobank_client_type}}`** defaults to **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**. **`EXISTING_CLIENT_CREDIT_CARD`** / **`NOT_METROBANK_CLIENT`** may **create** and **submit** without **1c-MB**; **`POST …/underwriting/decision`** (**APPROVE** / **CONDITIONAL**) returns **422** until **`metrobank_deposit_account_confirmed_at`** is set (e.g. via **1c-MB** while **DRAFT** with **`WILL_OPEN_METROBANK_DEPOSIT`**). See **`openapi.json` 0.8.16**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack — see **`docs/DOCUMENTATION.md`** §**5.4** for what real institutions add.\n\n**Import-ready flows:** **Flow — Happy path (import & run in order)** (Personal Loan) and **Flow — Metrobank Home Loan (happy path)** (**HOME_LOAN** — **`docs/DOCUMENTATION.md`** §**5.0.1**). OpenAPI **0.8.16**.\n\n**Stipulation tests:** **Tests — stipulations (single & multiple)** — Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** — select **Loan Lifecycle — Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`javascript/mock-server/openapi.json`** in Postman.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only — do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** — set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -103,6 +103,10 @@
     {
       "key": "loan_preview_term_months",
       "value": "12"
+    },
+    {
+      "key": "home_loan_payment_amount_cents",
+      "value": "50000000"
     }
   ],
   "event": [
@@ -147,7 +151,7 @@
   "item": [
     {
       "name": "System & reference (no auth)",
-      "description": "**Unauthenticated** probes aligned with **`openapi.json` 0.7+**. Run before **Login** to confirm the mock is up and read product catalogue **term_months** LOV.",
+      "description": "**Unauthenticated** probes aligned with **`openapi.json`** (**0.8.16** — **PERSONAL_LOAN** + **HOME_LOAN**). Run before **Login** to confirm the mock is up and read product catalogue **term_months** LOV.",
       "auth": {
         "type": "noauth"
       },
@@ -214,7 +218,7 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "// Expected math mirrors javascript/lib/personalLoanComputation.js + javascript/lib/loanProductCatalog.js (keep rates in sync).",
+                  "// Expected math mirrors javascript/lib/loan-products/personal-loan/personalLoanComputation.js + javascript/lib/loanProductCatalog.js (keep rates in sync).",
                   "function queryVal(name) {",
                   "    var v = '';",
                   "    pm.request.url.query.each(function (p) { if (p.key === name) v = String(p.value); });",
@@ -1012,6 +1016,684 @@
             },
             "url": "{{api_root}}/loans/{{loan_id}}/payments",
             "description": "Loan must be **ACTIVE** (run **10. Disburse** first). **`method`**: **ACH** (installments / NACHA-style) or **WIRE** (domestic wire / payoff-style). Set `payment_amount_cents`; use **Get loan** → `balance_cents` for a full payoff."
+          },
+          "response": []
+        },
+        {
+          "name": "14. Payoff / close loan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/payoff",
+            "description": "Closes the loan on the mock (**CLOSED**). Run after the loan is paid down or for demo teardown."
+          },
+          "response": []
+        },
+        {
+          "name": "15. Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204', function () {",
+                  "    pm.expect(pm.response.code).to.equal(204);",
+                  "});",
+                  "if (pm.environment && pm.environment.id) pm.environment.set('access_token', '');",
+                  "pm.collectionVariables.set('access_token', '');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/auth/logout",
+            "description": "Invalidates **access_token** — you must **Login** again for further protected calls. Clears **access_token** in the active environment (if any) and collection."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Flow — Metrobank Home Loan (happy path)",
+      "description": "**Metrobank Home Loan** (**HOME_LOAN**) — same API order as **docs/DOCUMENTATION.md** §**5.0.1** and **openapi.json** **0.8.16**. Run **Collection Runner** on **this folder only**. The mock must list **HOME_LOAN** on **GET /reference/loan-products** (restart **`npm run start:mock`** from this repo if **Create** returns **422** Unknown product).\n\n**Order:** **Login** → **KYC** → **1. Create** (no **metrobank_client_type**; mirrors **`buildHomeLoanSampleApplication(240)**`) → **1b** → **1c** (**PASSPORT**) → **1c-MB** (**400** not applicable — OK) → **1d** → **2 … 15**.\n\n**13. Record payment** uses **{{home_loan_payment_amount_cents}}** (full principal demo).",
+      "item": [
+        {
+          "name": "Login",
+          "auth": {
+            "type": "noauth"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.access_token) {",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('access_token', j.access_token);",
+                  "        else pm.collectionVariables.set('access_token', j.access_token);",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{demo_login_email}}\",\n  \"password\": \"{{demo_login_password}}\"\n}"
+            },
+            "url": "{{api_root}}/auth/login",
+            "description": "Public — no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
+          },
+          "response": []
+        },
+        {
+          "name": "Customer KYC (onboarding)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.status) { pm.expect(j.status).to.eql('VERIFIED'); }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Alex Rivera\",\n  \"email\": \"alex.rivera@example.com\",\n  \"date_of_birth\": \"1992-06-15\",\n  \"national_id_last4\": \"4567\"\n}"
+            },
+            "url": "{{api_root}}/onboarding/kyc",
+            "description": "Requires **Login** first. Mandatory before **Create loan application** (otherwise **403**)."
+          },
+          "response": []
+        },
+        {
+          "name": "1. Create loan application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.id) {",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('application_id', j.id);",
+                  "        else pm.collectionVariables.set('application_id', j.id);",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_code\": \"HOME_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 240,\n  \"loan_purpose\": \"PURCHASE_HOUSE_AND_LOT\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false,\n    \"property_appraised_value_cents\": 100000000,\n    \"home_loan_applicant_category\": \"RESIDENT\",\n    \"collateral_property_type\": \"RESIDENTIAL\",\n    \"collateral_is_vacant_lot\": false,\n    \"no_adverse_credit_history\": true\n  },\n  \"borrower\": {\n    \"first_name\": \"Juan\",\n    \"middle_name\": \"Dela\",\n    \"last_name\": \"Cruz\",\n    \"full_name\": \"Juan Dela Cruz\",\n    \"email\": \"juan.delacruz@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1988-03-20\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"PASSPORT\",\n    \"primary_id_document_number\": \"P1234567A\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"MARRIED\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Quezon City\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Mabini Street\",\n      \"subdivision_village\": \"Sample Village\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Real Estate\",\n    \"business_email\": \"payroll@samplecorp.example.com\",\n    \"years_working_total\": 12,\n    \"gross_monthly_income_cents\": 5000000,\n    \"employer_name\": \"Sample Realty Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Tower One\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 5,\n    \"is_regular_employment\": true\n  }\n}"
+            },
+            "url": "{{api_root}}/loan-applications",
+            "description": "**HOME_LOAN** **DRAFT** — mirrors **`buildHomeLoanSampleApplication(240)`** (**`javascript/lib/sampleData.js`**). Omit **`metrobank_client_type`**. Saves **`application_id`**."
+          },
+          "response": []
+        },
+        {
+          "name": "1b. Loan computation preview (from application)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "if (pm.response.code !== 200) return;",
+                  "var j = pm.response.json();",
+                  "var aid = pm.environment.get('application_id') || pm.collectionVariables.get('application_id');",
+                  "pm.test('application_id matches create step', function () { pm.expect(j.application_id).to.eql(aid); });",
+                  "pm.test('HOME_LOAN pricing model', function () { pm.expect(j.pricing_model).to.eql('LEVEL_ANNUAL_PERCENT_BY_LOCK_IN_BUCKET'); });",
+                  "pm.test('product_code echoed', function () { pm.expect(j.product_code).to.eql('HOME_LOAN'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/computation-preview",
+            "description": "**GET /v1/loan-applications/{applicationId}/computation-preview** — same numbers as the public reference preview, but **principal** and **term** are read from the borrower’s application (step **1**). Requires **Bearer**. Run **after** **1. Create loan application** so **`application_id`** is set."
+          },
+          "response": []
+        },
+        {
+          "name": "1c. Register documents (Step 7)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.test('document_intake set', function () { pm.expect(j.document_intake && j.document_intake.completed_at).to.be.ok; });",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primary_id_document_type\": \"PASSPORT\"\n}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/documents",
+            "description": "**HOME_LOAN** Step 7 — **`primary_id_document_type`** must match **PASSPORT** on **1. Create**."
+          },
+          "response": []
+        },
+        {
+          "name": "1c-MB. Metrobank deposit confirm (conditional — ADA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Metrobank deposit confirm or not applicable', function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        var j = pm.response.json();",
+                  "        pm.expect(j.metrobank_deposit_account_confirmed_at).to.be.ok;",
+                  "        return;",
+                  "    }",
+                  "    if (pm.response.code === 400) {",
+                  "        var e = pm.response.json();",
+                  "        pm.expect(String(e.detail || '')).to.match(/not required/i);",
+                  "        return;",
+                  "    }",
+                  "    throw new Error('Expected 200 (confirmed) or 400 (not required). Got ' + pm.response.code + ': ' + pm.response.text());",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/metrobank-deposit-account/confirm",
+            "description": "**Personal Loan** ADA only. For **HOME_LOAN**, server returns **400** (not applicable) — Runner accepts **200** or **400**."
+          },
+          "response": []
+        },
+        {
+          "name": "1d. PEP compliance clearance (conditional)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('PEP clearance or not applicable', function () {",
+                  "    pm.expect([200, 400]).to.include(pm.response.code);",
+                  "    if (pm.response.code === 200) {",
+                  "        var j = pm.response.json();",
+                  "        pm.expect(j.pep_compliance_clearance_at).to.be.ok;",
+                  "    }",
+                  "    if (pm.response.code === 400) {",
+                  "        var e = pm.response.json();",
+                  "        pm.expect(String(e.detail || '')).to.match(/not required/i);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/compliance/pep-clearance",
+            "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required — Runner test accepts **200** or **400**."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Submit application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
+            "description": "Moves application to **SUBMITTED**. **HOME_LOAN:** no **`metrobank_deposit_account_confirmed_at`** gate. **PEP** both **No** on this sample — **1d** may return **400**."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Ops — accept for processing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.status).to.eql('IN_PROCESSING');",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/processing/accept",
+            "description": "LOS-style: **SUBMITTED** → **IN_PROCESSING** (ops / processing queue)."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Disclosures — acknowledge",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.disclosures_acknowledged_at).to.be.ok;",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"package_version\": \"LE-2026-Q2\"\n}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/disclosures/acknowledge",
+            "description": "Initial disclosure package acknowledged (sandbox gate before **credit-check**)."
+          },
+          "response": []
+        },
+        {
+          "name": "5. Run credit check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.status).to.eql('CREDIT_COMPLETED');",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"force_outcome\": \"PASS\"\n}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/credit-check",
+            "description": "Sandbox credit step. Use `force_outcome`: PASS or FAIL, or `simulated_credit_score` (below 620 declines without force)."
+          },
+          "response": []
+        },
+        {
+          "name": "6. Start underwriting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.status).to.eql('IN_UNDERWRITING');",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/start",
+            "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING** (underwriting queue) before **decision**."
+          },
+          "response": []
+        },
+        {
+          "name": "7. Underwriting decision (straight approve)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.loan && j.loan.id) {",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('loan_id', j.loan.id);",
+                  "        else pm.collectionVariables.set('loan_id', j.loan.id);",
+                  "    }",
+                  "    if (j && j.application && Array.isArray(j.application.stipulations)) {",
+                  "        var sidJson = JSON.stringify(j.application.stipulations.map(function (s) { return s.id; }));",
+                  "        if (pm.environment && pm.environment.id) pm.environment.set('stipulation_ids_json', sidJson);",
+                  "        else pm.collectionVariables.set('stipulation_ids_json', sidJson);",
+                  "        if (j.application.stipulations.length === 0) {",
+                  "            if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', '');",
+                  "            else pm.collectionVariables.set('stipulation_id', '');",
+                  "        } else {",
+                  "            var next = j.application.stipulations.find(function (s) { return !s.fulfilled; });",
+                  "            if (next && next.id) {",
+                  "                if (pm.environment && pm.environment.id) pm.environment.set('stipulation_id', next.id);",
+                  "                else pm.collectionVariables.set('stipulation_id', next.id);",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"outcome\": \"APPROVE\"\n}"
+            },
+            "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/decision",
+            "description": "Straight **APPROVE** → **PENDING_FUNDING** (no stips). For **CONDITIONAL**, replace body with `outcome` + `stipulations[]` — Tests save **`loan_id`**, **`stipulation_ids_json`** (all UUIDs), and the first open **`stipulation_id`**. Clear all stips in **one** call: **POST …/stipulations/fulfill-all** (folder **Conditional — fulfill stipulations**). Or fulfill one-by-one with **`{{stipulation_id}}`**. Empty **`stipulation_id`** yields `.../stipulations//fulfill` → **404**."
+          },
+          "response": []
+        },
+        {
+          "name": "8. Funding — authorize (secondary approval)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.status) { pm.expect(j.status).to.eql('CLEARED_FOR_BOOKING'); }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/funding/authorize",
+            "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** — production-style **clear-to-fund** before **GL** booking."
+          },
+          "response": []
+        },
+        {
+          "name": "9. Fund loan (book on ledger)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.status) { pm.expect(j.status).to.eql('FUNDED'); }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/fund",
+            "description": "Books the loan: **CLEARED_FOR_BOOKING** → **FUNDED** (`funded_at`). Requires **8. Funding — authorize** first."
+          },
+          "response": []
+        },
+        {
+          "name": "10. Disburse loan (pay borrower)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    if (j && j.status) { pm.expect(j.status).to.eql('ACTIVE'); }",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/disburse",
+            "description": "Sends proceeds to the borrower: **FUNDED** → **ACTIVE** (`disbursed_at`). Requires **9. Fund** first."
+          },
+          "response": []
+        },
+        {
+          "name": "11. Get loan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}",
+            "description": "After **Disburse**, expect **`status`: ACTIVE** and **`balance_cents`** for repayments."
+          },
+          "response": []
+        },
+        {
+          "name": "12. Get payment schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "try {",
+                  "    var j = pm.response.json();",
+                  "    pm.test('term matches HOME_LOAN sample', function () { pm.expect(j.term_months).to.eql(240); });",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_root}}/loans/{{loan_id}}/payment-schedule",
+            "description": "Illustrative amortization-style schedule from the mock (demo only)."
+          },
+          "response": []
+        },
+        {
+          "name": "13. Record payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is successful', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount_cents\": {{home_loan_payment_amount_cents}},\n  \"method\": \"{{payment_method}}\"\n}"
+            },
+            "url": "{{api_root}}/loans/{{loan_id}}/payments",
+            "description": "**Full principal** repayment (demo). Collection **`home_loan_payment_amount_cents`** defaults to **50000000** (PHP 500,000). Match **1. Create** **`principal_cents`** if you edit the body."
           },
           "response": []
         },

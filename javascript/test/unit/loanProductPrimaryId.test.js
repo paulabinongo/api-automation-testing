@@ -3,11 +3,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import { HOME_LOAN_PRIMARY_ID_DOCUMENT_TYPES } from '../../lib/loan-products/home-loan/homeLoanCatalog.js'
 import {
   PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES,
   PERSONAL_LOAN_PRODUCT,
   PERSONAL_LOAN_STEP3_PRIMARY_ID_DOCUMENT_TYPES,
   primaryIdDocumentTypeLabel,
+  primaryIdUploadValuesForProduct,
 } from '../../lib/loanProductCatalog.js'
 
 const openApiSpec = JSON.parse(
@@ -53,13 +55,26 @@ describe('Personal Loan primary ID LOV', () => {
     expect(primaryIdDocumentTypeLabel('UNKNOWN_CODE')).toBe('UNKNOWN CODE')
   })
 
-  it('OpenAPI PrimaryIdDocumentType enum matches full catalogue (Step 7 / PATCH)', () => {
+  it('OpenAPI PrimaryIdDocumentType covers Personal Loan and Home Loan upload LOVs', () => {
     const enumVals = openApiSpec.components?.schemas?.PrimaryIdDocumentType?.enum
-    expect(enumVals).toEqual([...PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES])
+    expect(enumVals).toBeDefined()
+    for (const v of PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES) {
+      expect(enumVals).toContain(v)
+    }
+    for (const v of HOME_LOAN_PRIMARY_ID_DOCUMENT_TYPES) {
+      expect(enumVals).toContain(v)
+    }
   })
 
   it('OpenAPI Step3PrimaryIdDocumentType matches Step 3 subset (basic details only)', () => {
     const enumVals = openApiSpec.components?.schemas?.Step3PrimaryIdDocumentType?.enum
     expect(enumVals).toEqual([...PERSONAL_LOAN_STEP3_PRIMARY_ID_DOCUMENT_TYPES])
+  })
+
+  it('primaryIdUploadValuesForProduct matches full Step 7 / POST …/documents LOV', () => {
+    expect(primaryIdUploadValuesForProduct(PERSONAL_LOAN_PRODUCT)).toEqual([
+      ...PERSONAL_LOAN_PRIMARY_ID_DOCUMENT_TYPES,
+    ])
+    expect(primaryIdUploadValuesForProduct(undefined)).toEqual([])
   })
 })

@@ -11,6 +11,7 @@ import { LoanApiClient, LoanApiError } from '../../lib/loanApiClient.js'
 import { isLocalMockConfigured } from '../../lib/config.js'
 import {
   buildConditionalUnderwritingExample,
+  buildHomeLoanSampleApplication,
   buildPersonalLoanSampleApplication,
   buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit,
   buildPersonalLoanSampleApplicationNotYetMetrobankClient,
@@ -68,15 +69,19 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
           { status: 201 },
         )
       }),
-      http.post(`${MOCK_BASE}/loan-applications/${applicationId}/documents`, () =>
-        HttpResponse.json({
-          id: applicationId,
-          status: 'DRAFT',
-          document_intake: {
-            primary_id_document_type: sample.borrower.primary_id_document_type,
-            completed_at: '2026-01-01T00:00:00.000Z',
-          },
-        }),
+      http.post(
+        `${MOCK_BASE}/loan-applications/${applicationId}/documents`,
+        async ({ request }) => {
+          const docBody = await request.json()
+          return HttpResponse.json({
+            id: applicationId,
+            status: 'DRAFT',
+            document_intake: {
+              primary_id_document_type: docBody.primary_id_document_type,
+              completed_at: '2026-01-01T00:00:00.000Z',
+            },
+          })
+        },
       ),
       http.post(`${MOCK_BASE}/loan-applications/${applicationId}/compliance/pep-clearance`, () =>
         HttpResponse.json({
@@ -217,6 +222,54 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
     expect(closed.balance_cents).toBe(0)
   })
 
+  it('Metrobank Home Loan: walks through create → fund → payment → payoff (MSW)', async () => {
+    const client = new LoanApiClient({ baseUrl: MOCK_BASE })
+    await loginAndCompleteKyc(client)
+    const sample = buildHomeLoanSampleApplication(240)
+
+    const created = await client.createApplication(sample)
+    expect(created.status).toBe('DRAFT')
+    expect(created.product_code).toBe('HOME_LOAN')
+
+    await registerDocumentsForPayload(client, applicationId, sample)
+
+    const submitted = await client.submitApplication(applicationId)
+    expect(submitted.status).toBe('SUBMITTED')
+
+    const proc = await client.acceptForProcessing(applicationId)
+    expect(proc.status).toBe('IN_PROCESSING')
+    const disc = await client.acknowledgeDisclosures(applicationId)
+    expect(disc.disclosures_acknowledged_at).toBeTruthy()
+
+    const credit = await client.runCreditCheck(applicationId, creditCheckForcePass)
+    expect(credit.status).toBe('CREDIT_COMPLETED')
+
+    const queued = await client.startUnderwriting(applicationId)
+    expect(queued.status).toBe('IN_UNDERWRITING')
+
+    const uw = await client.underwritingDecision(applicationId, buildUnderwritingBody('APPROVE'))
+    expect(uw.loan.id).toBe(loanId)
+    expect(uw.loan.balance_cents).toBe(sample.principal_cents)
+
+    const cleared = await client.authorizeFunding(loanId)
+    expect(cleared.status).toBe('CLEARED_FOR_BOOKING')
+
+    const funded = await client.fundLoan(loanId)
+    expect(funded.status).toBe('FUNDED')
+    const disbursed = await client.disburseLoan(loanId)
+    expect(disbursed.status).toBe('ACTIVE')
+
+    const sched = await client.getPaymentSchedule(loanId)
+    expect(sched.loan_id).toBe(loanId)
+
+    const pay = await client.recordPayment(loanId, buildPaymentBody(1_000_000))
+    expect(pay.loan.balance_cents).toBe(sample.principal_cents - 1_000_000)
+
+    const closed = await client.payoffLoan(loanId)
+    expect(closed.status).toBe('CLOSED')
+    expect(closed.balance_cents).toBe(0)
+  })
+
   it('surfaces a clear error when the API rejects the request', async () => {
     server.use(
       http.post(`${MOCK_BASE}/loan-applications`, () =>
@@ -264,13 +317,17 @@ describe.skipIf(!isLocalMockConfigured())(
       expect(health.status).toBe('UP')
       expect(health.api_revision).toBeTruthy()
       const ref = await client.getLoanProductReference()
-      expect(ref.products).toHaveLength(1)
-      const personal = ref.products[0]
+      expect(ref.products.length).toBeGreaterThanOrEqual(2)
+      const personal = ref.products.find((p) => p.product_code === 'PERSONAL_LOAN')
+      const home = ref.products.find((p) => p.product_code === 'HOME_LOAN')
       expect(personal?.product_code).toBe('PERSONAL_LOAN')
       expect(personal?.currency).toBe('PHP')
       expect(personal?.loan_type).toBe('personal')
       expect(personal?.name).toBe('Personal Loan')
       expect(personal?.term_options?.length).toBe(4)
+      expect(home?.product_code).toBe('HOME_LOAN')
+      expect(home?.loan_type).toBe('home')
+      expect(home?.purpose_options?.length).toBeGreaterThan(0)
     })
 
     it('loan computation preview matches add-on model for PHP 20k × 12', async () => {
@@ -329,6 +386,58 @@ describe.skipIf(!isLocalMockConfigured())(
       const created = await client.createApplication(buildPersonalLoanSampleApplication(24))
       expect(created.status).toBe('DRAFT')
       expect(created.product_code).toBe('PERSONAL_LOAN')
+    })
+
+    it('accepts HOME_LOAN draft when intake matches residential mortgage catalogue', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const created = await client.createApplication(buildHomeLoanSampleApplication(240))
+      expect(created.status).toBe('DRAFT')
+      expect(created.product_code).toBe('HOME_LOAN')
+      const prev = await client.getLoanComputationPreview({
+        product_code: 'HOME_LOAN',
+        principal_cents: created.principal_cents,
+        term_months: created.term_months,
+        loan_purpose: created.loan_purpose,
+      })
+      expect(prev.pricing_model).toBe('LEVEL_ANNUAL_PERCENT_BY_LOCK_IN_BUCKET')
+    })
+
+    it('Metrobank Home Loan: full mock happy path from create through payoff (buildHomeLoanSampleApplication)', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const sample = buildHomeLoanSampleApplication(240)
+
+      const created = await client.createApplication(sample)
+      const appId = created.id
+      await registerDocumentsForPayload(client, appId, sample)
+      await completePepComplianceGateIfRequired(client, appId, sample)
+      await client.submitApplication(appId)
+      await client.acceptForProcessing(appId)
+      await client.acknowledgeDisclosures(appId)
+      await client.runCreditCheck(appId, creditCheckForcePass)
+      await client.startUnderwriting(appId)
+      const out = await client.underwritingDecision(appId, buildUnderwritingBody('APPROVE'))
+      const loanId = out.loan.id
+      expect(out.application.status).toBe('APPROVED_CLEAR_TO_CLOSE')
+
+      await client.authorizeFunding(loanId)
+      await client.fundLoan(loanId)
+      expect((await client.getLoan(loanId)).status).toBe('FUNDED')
+      await client.disburseLoan(loanId)
+      const loan = await client.getLoan(loanId)
+      expect(loan.status).toBe('ACTIVE')
+
+      const sched = await client.getPaymentSchedule(loanId)
+      expect(sched.installments?.length).toBe(sample.term_months)
+
+      await client.recordPayment(loanId, buildPaymentBody(loan.balance_cents))
+      const final = await client.getLoan(loanId)
+      expect(final.status).toBe('PAID_OFF')
+
+      await client.payoffLoan(loanId)
+      const closed = await client.getLoan(loanId)
+      expect(closed.status).toBe('CLOSED')
     })
 
     it('rejects DELETE DRAFT before minimum retention (policy, Problem Details + retry hint)', async () => {
