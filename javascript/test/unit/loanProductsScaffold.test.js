@@ -10,6 +10,8 @@ describe('loan-products scaffold (catalog + computation dispatch)', () => {
   it('getLoanProductByCode returns catalogue row for PERSONAL_LOAN', () => {
     const p = getLoanProductByCode('PERSONAL_LOAN')
     expect(p?.product_code).toBe('PERSONAL_LOAN')
+    expect(p?.product_loan_type).toBe('PERSONAL')
+    expect(p?.loan_type).toBe('personal')
     expect(Array.isArray(p?.allowed_term_months)).toBe(true)
   })
 
@@ -21,6 +23,9 @@ describe('loan-products scaffold (catalog + computation dispatch)', () => {
     expect(registeredLoanProductCodes()).toEqual(
       expect.arrayContaining(['PERSONAL_LOAN', 'HOME_LOAN']),
     )
+    const home = getLoanProductByCode('HOME_LOAN')
+    expect(home?.product_loan_type).toBe('PERSONAL')
+    expect(home?.loan_type).toBe('home')
   })
 
   it('computeLoanPreviewForProduct runs for registered PERSONAL_LOAN', () => {

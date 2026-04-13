@@ -31,8 +31,42 @@ describe('evaluateHomeLoanEligibility', () => {
   it('fails when term exceeds purpose max for OFW', () => {
     const body = buildHomeLoanSampleApplication(300)
     body.additional_information.home_loan_applicant_category = 'OFW'
+    body.additional_information.ofw_employment_basis = 'LAND_BASED'
     const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
     expect(out.eligible).toBe(false)
+  })
+
+  it('fails when applicant is over 65 at application date', () => {
+    const body = buildHomeLoanSampleApplication(240)
+    body.borrower.date_of_birth = '1938-01-01'
+    const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
+    expect(out.eligible).toBe(false)
+  })
+
+  it('passes for foreigner with permanent resident visa (same income/tenure)', () => {
+    const body = buildHomeLoanSampleApplication(240)
+    body.borrower.citizenship = 'FOREIGNER_PERMANENT_RESIDENT'
+    const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
+    expect(out.eligible).toBe(true)
+  })
+
+  it('fails OFW sea-based when contract months under 24', () => {
+    const body = buildHomeLoanSampleApplication(180)
+    body.additional_information.home_loan_applicant_category = 'OFW'
+    body.additional_information.ofw_employment_basis = 'SEA_BASED'
+    body.additional_information.ofw_sea_contract_months_total = 20
+    const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
+    expect(out.eligible).toBe(false)
+  })
+
+  it('passes OFW sea-based when contract months at least 24', () => {
+    const body = buildHomeLoanSampleApplication(180)
+    body.additional_information.home_loan_applicant_category = 'OFW'
+    body.additional_information.ofw_employment_basis = 'SEA_BASED'
+    body.additional_information.ofw_sea_contract_months_total = 24
+    body.employment.years_with_current_employer = 0
+    const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
+    expect(out.eligible).toBe(true)
   })
 
   it('fails LTV when principal exceeds cap vs appraisal', () => {

@@ -15,5 +15,5 @@ export const PRODUCT_CODES_WITH_PEP_COMPLIANCE_GATE = Object.freeze(
 
 /** **POST …/metrobank-deposit-account/confirm** (ADA) applies to these products only. */
 export const PRODUCT_CODES_WITH_METROBANK_DEPOSIT_CONFIRM = Object.freeze(
-  new Set(['PERSONAL_LOAN']),
+  new Set(['PERSONAL_LOAN', 'HOME_LOAN']),
 )

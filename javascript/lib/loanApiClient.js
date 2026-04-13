@@ -210,6 +210,17 @@ export class LoanApiClient {
   }
 
   /**
+   * **HOME_LOAN** — record post-approval booking fee lines (handling, notarial, DST / MRI / property insurance acknowledgements)
+   * before **POST /loans/{loanId}/funding/authorize**. Amounts must match **`GET /reference/loan-products`** → **fees_and_charges.after_approval**.
+   */
+  submitHomeLoanBookingFees(applicationId, payload) {
+    return this._request('POST', `/loan-applications/${applicationId}/home-loan/fees/booking`, {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  }
+
+  /**
    * **PEP enhanced due diligence** gate — mirrors Compliance sign-off after intake when Step 6 indicates **Yes**.
    * Call **after** **POST …/documents** and **before** **submit** when either **`additional_information`** PEP boolean is **true**.
    * **400** if PEP screening is both **false**; **409** if documents are not registered yet.
@@ -222,7 +233,7 @@ export class LoanApiClient {
   }
 
   /**
-   * **Metrobank deposit for ADA** — after **POST …/documents**, when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`**. Allowed while status is **DRAFT**, **SUBMITTED**, **IN_PROCESSING**, **CREDIT_COMPLETED**, or **IN_UNDERWRITING** (before a successful approval decision). Sets **`metrobank_deposit_account_confirmed_at`** (required for **underwriting** **APPROVE** / **CONDITIONAL**; **submit** does not require this call). Re-runs eligibility (**422** if capacity-to-pay checks fail). **400** if not applicable.
+   * **Metrobank deposit for ADA** — **PERSONAL_LOAN** and **HOME_LOAN**. After **POST …/documents**, when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`**. Allowed while status is **DRAFT**, **SUBMITTED**, **IN_PROCESSING**, **CREDIT_COMPLETED**, or **IN_UNDERWRITING** (before a successful approval decision). Sets **`metrobank_deposit_account_confirmed_at`** (required for **underwriting** **APPROVE** / **CONDITIONAL**; **submit** does not require this call). Re-runs eligibility (**422** if capacity-to-pay checks fail). **400** if not applicable.
    */
   confirmMetrobankDepositAccount(applicationId) {
     return this._request(

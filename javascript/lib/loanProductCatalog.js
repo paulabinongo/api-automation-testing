@@ -5,6 +5,8 @@
 
 import {
   HOME_LOAN_APPLICANT_CATEGORIES,
+  HOME_LOAN_CITIZENSHIP_ACCEPTED,
+  HOME_LOAN_OFW_EMPLOYMENT_BASIS,
   HOME_LOAN_PRIMARY_ID_DOCUMENT_TYPES,
   HOME_LOAN_PRODUCT,
   HOME_LOAN_PURPOSES,
@@ -15,6 +17,9 @@ import {
   PERSONAL_LOAN_OCCUPATION_CODES,
 } from './loan-products/personal-loan/personalLoanOccupations.js'
 import { PH_ADDRESS_VALID_ROWS, isValidPhAddressTriplet } from './philippineAddressReference.js'
+import { PRODUCT_LOAN_TYPE } from './productLoanTaxonomy.js'
+
+export { PRODUCT_LOAN_TYPE } from './productLoanTaxonomy.js'
 
 /** @param {number} pesos Whole PHP */
 function phpToCentavos(pesos) {
@@ -22,7 +27,8 @@ function phpToCentavos(pesos) {
 }
 
 /**
- * **`metrobank_client_type`** values accepted on **POST /loan-applications** for **PERSONAL_LOAN**.
+ * **`metrobank_client_type`** values accepted on **POST /loan-applications** for **PERSONAL_LOAN** and **HOME_LOAN**
+ * (Metrobank **ADA** against a deposit account).
  * **`EXISTING_CLIENT_CREDIT_CARD`** and **`NOT_METROBANK_CLIENT`** may **create** and **submit** without a deposit yet; **APPROVE** / **CONDITIONAL** remain **422** until **`metrobank_deposit_account_confirmed_at`** (or switching to **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**).
  */
 export const PERSONAL_LOAN_METROBANK_CLIENT_TYPES = Object.freeze([
@@ -264,7 +270,9 @@ const personalTermOptions = Object.freeze([
 /** Metrobank-style Personal Loan — sole product in this sandbox (PHP). */
 export const PERSONAL_LOAN_PRODUCT = Object.freeze({
   product_code: 'PERSONAL_LOAN',
+  /** Consumer retail bucket — see **`product_loan_type`**. */
   loan_type: 'personal',
+  product_loan_type: PRODUCT_LOAN_TYPE.PERSONAL,
   name: 'Personal Loan',
   bank_marketing_name: 'Metrobank Personal Loan',
   currency: 'PHP',
@@ -460,6 +468,7 @@ export const PERSONAL_LOAN_PRODUCT = Object.freeze({
 /** Borrower/employment LOVs aligned with **PERSONAL_LOAN** reference (shared intake UX for **HOME_LOAN**). */
 const HOME_LOAN_CATALOG_ROW = Object.freeze({
   ...HOME_LOAN_PRODUCT,
+  metrobank_client_prerequisite: PERSONAL_LOAN_PRODUCT.metrobank_client_prerequisite,
   landline_area_code_options: PERSONAL_LOAN_PRODUCT.landline_area_code_options,
   home_ownership_options: PERSONAL_LOAN_PRODUCT.home_ownership_options,
   gender_options: PERSONAL_LOAN_PRODUCT.gender_options,
@@ -492,7 +501,7 @@ export function buildLoanProductReferencePayload() {
   }))
   return {
     products,
-    note: '**All amounts** in **PHP centavos** on **principal_cents**, **employment.gross_monthly_income_cents**, and **additional_information.property_appraised_value_cents** (Home Loan) unless a product specifies otherwise. **Personal Loan:** **PHP 20,000**–**2,000,000** (whole pesos). **Home Loan:** **PHP 500,000**–**50,000,000** (whole pesos); **purpose_options**, **fixed_interest_rates**, **loan_requirements**. **loan_purpose**, **term_months**, **additional_information**, **borrower**, **employment** — see each catalogue row. Multi-product: **javascript/lib/loan-products/README.md**. **Swagger** `/docs` / **openapi.json**.',
+    note: '**All amounts** in **PHP centavos** on **principal_cents**, **employment.gross_monthly_income_cents**, and **additional_information.property_appraised_value_cents** (Home Loan) unless a product specifies otherwise. **product_loan_type** is **PERSONAL** (consumer: Personal / Home / Car-style products) or **BUSINESS** (commercial-only). **loan_type** is the product family within that (**personal**, **home**, **car**, …). **Personal Loan:** **PHP 20,000**–**2,000,000** (whole pesos). **Home Loan:** **PHP 500,000**–**50,000,000** (whole pesos); **purpose_options**, **fixed_interest_rates**, **loan_requirements**. **loan_purpose**, **term_months**, **additional_information**, **borrower**, **employment** — see each catalogue row. Multi-product: **javascript/lib/loan-products/README.md**. **Swagger** `/docs` / **openapi.json**.',
   }
 }
 
@@ -1111,6 +1120,43 @@ export function validateHomeLoanIntakeShape(body, options = {}) {
     ) {
       errs.push('additional_information.home_equity_for_improvement must be boolean when provided')
     }
+
+    if (String(ai.home_loan_applicant_category) === 'OFW') {
+      const basis = ai.ofw_employment_basis
+      if (basis == null || !HOME_LOAN_OFW_EMPLOYMENT_BASIS.includes(String(basis))) {
+        errs.push(
+          'additional_information.ofw_employment_basis required for OFW — LAND_BASED | SEA_BASED',
+        )
+      }
+      if (String(basis) === 'SEA_BASED') {
+        const seaM = ai.ofw_sea_contract_months_total
+        if (typeof seaM !== 'number' || !Number.isFinite(seaM) || seaM < 0) {
+          errs.push(
+            'additional_information.ofw_sea_contract_months_total required — non-negative number (total sea contract months) when ofw_employment_basis is SEA_BASED',
+          )
+        }
+      }
+    }
+
+    const mtHl = String(body.metrobank_client_type || '')
+    const needsDepositRepaymentPlanHl =
+      mtHl === 'NOT_METROBANK_CLIENT' || mtHl === 'EXISTING_CLIENT_CREDIT_CARD'
+    if (needsDepositRepaymentPlanHl) {
+      const planHl = ai.metrobank_deposit_repayment_plan
+      const P = METROBANK_DEPOSIT_REPAYMENT_PLAN
+      const validPlansHl = [
+        P.WILL_OPEN_METROBANK_DEPOSIT,
+        P.DECLINES_METROBANK_DEPOSIT,
+        P.WILL_USE_OTHER_BANK_DEPOSIT_ONLY,
+      ]
+      if (planHl != null && planHl !== '' && !validPlansHl.includes(planHl)) {
+        errs.push(
+          'additional_information.metrobank_deposit_repayment_plan must be one of: ' +
+            validPlansHl.join(', ') +
+            ' when provided (optional for NOT_METROBANK_CLIENT or EXISTING_CLIENT_CREDIT_CARD)',
+        )
+      }
+    }
   }
 
   const fn = b.first_name
@@ -1157,8 +1203,10 @@ export function validateHomeLoanIntakeShape(body, options = {}) {
   }
 
   if (!b.citizenship) errs.push('borrower.citizenship required')
-  else if (String(b.citizenship) !== 'FILIPINO') {
-    errs.push('borrower.citizenship must be FILIPINO for this product')
+  else if (!HOME_LOAN_CITIZENSHIP_ACCEPTED.includes(String(b.citizenship))) {
+    errs.push(
+      'borrower.citizenship must be one of: ' + HOME_LOAN_CITIZENSHIP_ACCEPTED.join(', '),
+    )
   }
 
   const pid = b.primary_id_document_type
@@ -1372,6 +1420,19 @@ function appendProductSpecificIntakeValidation(errs, product, body, options) {
       break
     case 'HOME_LOAN':
       errs.push(...validateHomeLoanIntakeShape(body, { primaryIdPolicy: idPol }))
+      {
+        const mt = body.metrobank_client_type
+        if (mt == null || mt === '') {
+          errs.push(
+            'metrobank_client_type required — EXISTING_CLIENT_DEPOSIT_ACCOUNT, EXISTING_CLIENT_CREDIT_CARD, or NOT_METROBANK_CLIENT (see product metrobank_client_prerequisite on GET /v1/reference/loan-products)',
+          )
+        } else if (!PERSONAL_LOAN_METROBANK_CLIENT_TYPES.includes(String(mt))) {
+          errs.push(
+            'metrobank_client_type must be one of: ' +
+              PERSONAL_LOAN_METROBANK_CLIENT_TYPES.join(', '),
+          )
+        }
+      }
       break
     default:
       break

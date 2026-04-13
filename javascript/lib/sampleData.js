@@ -3,6 +3,11 @@ import {
   PAYMENT_METHODS,
   STIPULATION_DESCRIPTION_EXAMPLES,
 } from './loanConstants.js'
+import {
+  computeHomeLoanApplicationNonRefundableFees,
+  computeHomeLoanBookingFeeExpectations,
+  getRequiredHomeLoanDocumentKeys,
+} from './loan-products/home-loan/homeLoanLosValidation.js'
 import { METROBANK_DEPOSIT_REPAYMENT_PLAN } from './loanProductCatalog.js'
 
 export { ALLOWED_LOAN_TERM_MONTHS, PAYMENT_METHODS, STIPULATION_DESCRIPTION_EXAMPLES }
@@ -29,6 +34,7 @@ export function buildHomeLoanSampleApplication(termMonths = 240) {
     product_code: 'HOME_LOAN',
     principal_cents: SAMPLE_HOME_PRINCIPAL,
     term_months: termMonths,
+    metrobank_client_type: 'EXISTING_CLIENT_DEPOSIT_ACCOUNT',
     loan_purpose: 'PURCHASE_HOUSE_AND_LOT',
     additional_information: {
       pep_close_family_or_public_position: false,
@@ -90,6 +96,23 @@ export function buildHomeLoanSampleApplication(termMonths = 240) {
       },
       years_with_current_employer: 5,
       is_regular_employment: true,
+    },
+  }
+}
+
+/**
+ * **HOME_LOAN** — **NOT_METROBANK_CLIENT** with **WILL_OPEN_METROBANK_DEPOSIT** (confirm **POST …/metrobank-deposit-account/confirm** after documents, before **underwriting** **APPROVE**).
+ * @param {number} [termMonths=240]
+ */
+export function buildHomeLoanSampleApplicationNotYetMetrobankClient(termMonths = 240) {
+  const base = buildHomeLoanSampleApplication(termMonths)
+  return {
+    ...base,
+    metrobank_client_type: 'NOT_METROBANK_CLIENT',
+    additional_information: {
+      ...base.additional_information,
+      metrobank_deposit_repayment_plan:
+        METROBANK_DEPOSIT_REPAYMENT_PLAN.WILL_OPEN_METROBANK_DEPOSIT,
     },
   }
 }
@@ -235,6 +258,45 @@ export function buildUnderwritingBody(outcome, stipulations) {
   const body = { outcome }
   if (stipulations?.length) body.stipulations = stipulations
   return body
+}
+
+/**
+ * **POST /loan-applications/{id}/documents** body for **HOME_LOAN** — LOS document checklist + application-phase fees (Metro Manila, one title).
+ * @param {object} payload Same shape as **buildHomeLoanSampleApplication** (must match the draft being uploaded).
+ */
+export function buildHomeLoanDocumentsRegistrationBody(payload) {
+  const required = getRequiredHomeLoanDocumentKeys(payload)
+  const checklist = {}
+  for (const k of required) checklist[k] = true
+  const region = 'METRO_MANILA'
+  const titleCount = 1
+  const fees = computeHomeLoanApplicationNonRefundableFees(region, titleCount)
+  return {
+    primary_id_document_type: payload.borrower.primary_id_document_type,
+    home_loan_document_checklist: checklist,
+    home_loan_property_region: region,
+    home_loan_title_investigation_title_count: titleCount,
+    home_loan_application_fee_payments: {
+      appraisal_fee_cents: fees.appraisal_fee_cents,
+      title_investigation_cents: fees.title_investigation_cents,
+    },
+  }
+}
+
+/**
+ * **POST /loan-applications/{id}/home-loan/fees/booking** — post-approval booking fee lines (before **funding/authorize**).
+ * @param {number} [notarialDocumentCount=3]
+ */
+export function buildHomeLoanBookingFeesBody(notarialDocumentCount = 3) {
+  const exp = computeHomeLoanBookingFeeExpectations(notarialDocumentCount)
+  return {
+    handling_fee_cents: exp.handling_fee_cents,
+    notarial_document_count: exp.notarial_document_count,
+    notarial_fee_cents: exp.notarial_fee_cents,
+    dst_acknowledged: true,
+    mri_insurance_acknowledged: true,
+    property_insurance_acknowledged: true,
+  }
 }
 
 /**

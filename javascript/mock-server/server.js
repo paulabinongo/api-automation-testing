@@ -26,6 +26,13 @@ import {
   PRODUCT_CODES_WITH_PEP_COMPLIANCE_GATE,
 } from '../lib/loan-products/lifecyclePolicies.js'
 import { evaluateEligibilityForProduct } from '../lib/loan-products/registry.js'
+import { computeMetrobankHomeLoanLifecyclePhase } from '../lib/loan-products/home-loan/metrobankHomeLoanLifecyclePhase.js'
+import {
+  computeHomeLoanApplicationNonRefundableFees,
+  hasValidHomeLoanBookingFeesRecorded,
+  validateHomeLoanBookingFeesBody,
+  validateHomeLoanDocumentsPostBody,
+} from '../lib/loan-products/home-loan/homeLoanLosValidation.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const openApiSpec = JSON.parse(readFileSync(path.join(__dirname, 'openapi.json'), 'utf8'))
@@ -274,11 +281,26 @@ function getLoanRow(loanId) {
   return row
 }
 
-/** Strip internal **owner_user_id** from API responses. */
+/** Strip internal **owner_user_id** from API responses; add derived Metrobank Home Loan phase when applicable. */
 function sanitizeApplicationOut(row) {
   if (!row || typeof row !== 'object') return row
   const { owner_user_id: _omit, ...rest } = row
+  if (row.product_code === 'HOME_LOAN') {
+    const loan = row.loan_id ? getLoanRow(row.loan_id) : null
+    const phase = computeMetrobankHomeLoanLifecyclePhase(row, loan)
+    if (phase) return { ...rest, metrobank_home_loan_lifecycle_phase: phase }
+  }
   return rest
+}
+
+/** Echo **`metrobank_home_loan_lifecycle_phase`** on **HOME_LOAN** loan reads (same derivation as **ApplicationOut**). */
+function enrichLoanOut(loan) {
+  if (!loan || loan.product_code !== 'HOME_LOAN') return loan
+  const app = loan.application_id ? getApp(loan.application_id) : null
+  if (!app) return loan
+  const phase = computeMetrobankHomeLoanLifecyclePhase(app, loan)
+  if (!phase) return loan
+  return { ...loan, metrobank_home_loan_lifecycle_phase: phase }
 }
 
 /** Step 6 PEP screening — **Yes** on either boolean flags heightened scrutiny (AML/CFT-style). */
@@ -669,6 +691,7 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
   const newPid = String(mergedBody.borrower?.primary_id_document_type || '')
   if (row.document_intake?.completed_at && oldPid !== newPid) {
     delete row.document_intake
+    delete row.home_loan_booking_fees
   }
   if (p.additional_information && typeof p.additional_information === 'object') {
     row.pep_compliance_clearance_at = null
@@ -741,9 +764,44 @@ v1.post('/loan-applications/:applicationId/documents', (req, res) => {
       `primary_id_document_type at upload (${u}) must match borrower.primary_id_document_type (${d || 'none'}). Update the declared ID via PATCH or select the same ID type you declared in personal details.`,
     )
   }
-  row.document_intake = {
-    primary_id_document_type: u,
-    completed_at: new Date().toISOString(),
+  if (row.product_code === 'HOME_LOAN') {
+    const losErrs = validateHomeLoanDocumentsPostBody(body, row)
+    if (losErrs.length) {
+      return sendError(req, res, 422, losErrs)
+    }
+    const region = String(body.home_loan_property_region).trim()
+    const tc =
+      body.home_loan_title_investigation_title_count != null
+        ? Number(body.home_loan_title_investigation_title_count)
+        : 1
+    const feeSpec = computeHomeLoanApplicationNonRefundableFees(
+      region === 'METRO_MANILA' ? 'METRO_MANILA' : 'OTHER',
+      tc,
+    )
+    row.document_intake = {
+      primary_id_document_type: u,
+      completed_at: new Date().toISOString(),
+      home_loan: {
+        document_checklist: {
+          ...(body.home_loan_document_checklist &&
+          typeof body.home_loan_document_checklist === 'object'
+            ? body.home_loan_document_checklist
+            : {}),
+        },
+        property_region: feeSpec.property_region,
+        title_investigation_title_count: feeSpec.title_investigation_title_count,
+        application_fees: {
+          appraisal_fee_cents: feeSpec.appraisal_fee_cents,
+          title_investigation_cents: feeSpec.title_investigation_cents,
+          verified_at: new Date().toISOString(),
+        },
+      },
+    }
+  } else {
+    row.document_intake = {
+      primary_id_document_type: u,
+      completed_at: new Date().toISOString(),
+    }
   }
   res.json(sanitizeApplicationOut(row))
 })
@@ -935,6 +993,21 @@ v1.post('/loan-applications/:applicationId/submit', (req, res) => {
       'Document intake required before submit: POST /v1/loan-applications/{applicationId}/documents with primary_id_document_type equal to borrower.primary_id_document_type',
     )
   }
+  if (
+    row.product_code === 'HOME_LOAN' &&
+    !(
+      row.document_intake &&
+      row.document_intake.home_loan &&
+      row.document_intake.home_loan.application_fees?.verified_at
+    )
+  ) {
+    return sendError(
+      req,
+      res,
+      409,
+      'HOME_LOAN: complete LOS document checklist and application non-refundable fee lines via POST /v1/loan-applications/{applicationId}/documents (see OpenAPI: home_loan_document_checklist, home_loan_property_region, home_loan_application_fee_payments) before submit',
+    )
+  }
   if (applicationRequiresPepComplianceClearance(row) && !row.pep_compliance_clearance_at) {
     return sendError(
       req,
@@ -1111,12 +1184,12 @@ v1.post('/loan-applications/:applicationId/underwriting/decision', (req, res) =>
     }))
     row.status = 'APPROVED_CONDITIONAL'
     const loan = createLoanRecord(req.params.applicationId, row, 'PENDING_STIPS')
-    return res.json({ application: sanitizeApplicationOut(row), loan })
+    return res.json({ application: sanitizeApplicationOut(row), loan: enrichLoanOut(loan) })
   }
   row.status = 'APPROVED_CLEAR_TO_CLOSE'
   row.stipulations = []
   const loan = createLoanRecord(req.params.applicationId, row, 'PENDING_FUNDING')
-  res.json({ application: sanitizeApplicationOut(row), loan })
+  res.json({ application: sanitizeApplicationOut(row), loan: enrichLoanOut(loan) })
 })
 
 v1.post('/loan-applications/:applicationId/stipulations/fulfill-all', (req, res) => {
@@ -1153,7 +1226,7 @@ v1.post('/loan-applications/:applicationId/stipulations/fulfill-all', (req, res)
   loan.status = 'PENDING_FUNDING'
   res.json({
     application: sanitizeApplicationOut(row),
-    loan,
+    loan: enrichLoanOut(loan),
     fulfilled_stipulation_ids: row.stipulations.map((s) => s.id),
   })
 })
@@ -1188,13 +1261,67 @@ v1.post('/loan-applications/:applicationId/stipulations/:stipulationId/fulfill',
     row.status = 'APPROVED_CLEAR_TO_CLOSE'
     loan.status = 'PENDING_FUNDING'
   }
-  res.json({ application: sanitizeApplicationOut(row), loan })
+  res.json({ application: sanitizeApplicationOut(row), loan: enrichLoanOut(loan) })
+})
+
+/**
+ * **HOME_LOAN** — record post-approval booking fee lines (handling, notarial, DST / MRI / property insurance acknowledgements)
+ * before **POST /v1/loans/{loanId}/funding/authorize**. Amounts must match **`GET /reference/loan-products`** → **fees_and_charges.after_approval**.
+ */
+v1.post('/loan-applications/:applicationId/home-loan/fees/booking', (req, res) => {
+  const row = getApp(req.params.applicationId)
+  if (!row) return sendError(req, res, 404, 'Application not found')
+  if (row.owner_user_id !== req.bankSession.user_id) {
+    return sendError(req, res, 403, 'Application belongs to another session')
+  }
+  if (row.product_code !== 'HOME_LOAN') {
+    return sendError(req, res, 400, 'This endpoint applies only to product_code HOME_LOAN')
+  }
+  if (!row.loan_id) {
+    return sendError(
+      req,
+      res,
+      409,
+      'No loan on file — run underwriting decision (APPROVE or CONDITIONAL) first',
+    )
+  }
+  const loan = getLoanRow(row.loan_id)
+  if (!loan || loan.status !== 'PENDING_FUNDING') {
+    return sendError(
+      req,
+      res,
+      409,
+      'HOME_LOAN booking fees: loan must be PENDING_FUNDING (clear-to-close after underwriting). Complete stipulations first if CONDITIONAL.',
+    )
+  }
+  const okStatus = new Set(['APPROVED_CLEAR_TO_CLOSE', 'APPROVED_CONDITIONAL'])
+  if (!okStatus.has(row.status)) {
+    return sendError(
+      req,
+      res,
+      409,
+      'Application must be APPROVED_CLEAR_TO_CLOSE or APPROVED_CONDITIONAL',
+    )
+  }
+  const body = req.body || {}
+  const berr = validateHomeLoanBookingFeesBody(body)
+  if (berr.length) return sendError(req, res, 422, berr)
+  row.home_loan_booking_fees = {
+    handling_fee_cents: Number(body.handling_fee_cents),
+    notarial_document_count: Number(body.notarial_document_count),
+    notarial_fee_cents: Number(body.notarial_fee_cents),
+    dst_acknowledged: true,
+    mri_insurance_acknowledged: true,
+    property_insurance_acknowledged: true,
+    recorded_at: new Date().toISOString(),
+  }
+  res.json(sanitizeApplicationOut(row))
 })
 
 v1.get('/loans/:loanId', (req, res) => {
   const row = getLoanRow(req.params.loanId)
   if (!row) return sendError(req, res, 404, 'Loan not found')
-  res.json({ ...row })
+  res.json(enrichLoanOut(row))
 })
 
 function executeFund(loanId) {
@@ -1244,21 +1371,32 @@ v1.post('/loans/:loanId/funding/authorize', (req, res) => {
         row.status,
     )
   }
+  if (row.product_code === 'HOME_LOAN') {
+    const appRow = row.application_id ? getApp(row.application_id) : null
+    if (!appRow || !hasValidHomeLoanBookingFeesRecorded(appRow.home_loan_booking_fees)) {
+      return sendError(
+        req,
+        res,
+        422,
+        'HOME_LOAN: record booking fee lines via POST /v1/loan-applications/{applicationId}/home-loan/fees/booking (handling, notarial, DST, MRI, property insurance acknowledgements) before funding/authorize',
+      )
+    }
+  }
   row.status = 'CLEARED_FOR_BOOKING'
   row.funding_authorized_at = todayISO()
-  res.json(row)
+  res.json(enrichLoanOut(row))
 })
 
 v1.post('/loans/:loanId/fund', (req, res) => {
   const result = executeFund(req.params.loanId)
   if (result.error) return sendError(req, res, result.error, result.detail)
-  res.json(result.loan)
+  res.json(enrichLoanOut(result.loan))
 })
 
 v1.post('/loans/:loanId/disburse', (req, res) => {
   const result = executeDisburse(req.params.loanId)
   if (result.error) return sendError(req, res, result.error, result.detail)
-  res.json(result.loan)
+  res.json(enrichLoanOut(result.loan))
 })
 
 v1.get('/loans/:loanId/payment-schedule', (req, res) => {
@@ -1322,7 +1460,7 @@ v1.post('/loans/:loanId/payments', (req, res) => {
   row.balance_cents = bal
   if (bal === 0) row.status = 'PAID_OFF'
   res.json({
-    loan: row,
+    loan: enrichLoanOut(row),
     payment_amount_cents: body.amount_cents,
     payment_method: paymentMethod,
   })
@@ -1331,10 +1469,10 @@ v1.post('/loans/:loanId/payments', (req, res) => {
 v1.post('/loans/:loanId/payoff', (req, res) => {
   const row = getLoanRow(req.params.loanId)
   if (!row) return sendError(req, res, 404, 'Loan not found')
-  if (row.status === 'CLOSED') return res.json(row)
+  if (row.status === 'CLOSED') return res.json(enrichLoanOut(row))
   if (row.balance_cents > 0) row.balance_cents = 0
   row.status = 'CLOSED'
-  res.json(row)
+  res.json(enrichLoanOut(row))
 })
 
 app.use('/v1', v1)

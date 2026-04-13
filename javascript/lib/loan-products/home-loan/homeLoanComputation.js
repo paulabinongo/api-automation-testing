@@ -83,7 +83,7 @@ export function computeHomeLoanPreview(principalCents, termMonths, options = {})
       amortization:
         'Amortizing loan: monthly payment from level annual rate; bucket = min(5, ceil(term_months/12)); Home Equity purpose uses +1% tier per year row.',
       disclaimer:
-        'Marketing rates shown are illustrative for the initial repricing bucket; long tenors may be subject to repricing in production.',
+        'Marketing rates apply the initial fixing bucket (1–5 years). At end of fixing, repricing follows Metrobank / market policy — not modeled as a separate API step.',
     }),
     fees_note:
       'Application: appraisal (PHP 4,000 NCR / PHP 4,500 countryside) + PHP 1,000 title investigation per title. After approval: PHP 5,000 handling, notarial, RD registration, MRI, and property insurance per quotes.',

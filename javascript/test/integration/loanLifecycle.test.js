@@ -11,7 +11,9 @@ import { LoanApiClient, LoanApiError } from '../../lib/loanApiClient.js'
 import { isLocalMockConfigured } from '../../lib/config.js'
 import {
   buildConditionalUnderwritingExample,
+  buildHomeLoanBookingFeesBody,
   buildHomeLoanSampleApplication,
+  buildHomeLoanSampleApplicationNotYetMetrobankClient,
   buildPersonalLoanSampleApplication,
   buildPersonalLoanSampleApplicationCreditCardWillOpenDeposit,
   buildPersonalLoanSampleApplicationNotYetMetrobankClient,
@@ -22,6 +24,7 @@ import {
 } from '../../lib/sampleData.js'
 import { loginAndCompleteKyc } from './sessionHelpers.js'
 import {
+  completeMetrobankDepositConfirmIfRequired,
   completePepComplianceGateIfRequired,
   registerDocumentsForPayload,
   throughCredit,
@@ -232,6 +235,7 @@ describe('Happy path (pretend API — fast, no server needed)', () => {
     expect(created.product_code).toBe('HOME_LOAN')
 
     await registerDocumentsForPayload(client, applicationId, sample)
+    await completeMetrobankDepositConfirmIfRequired(client, applicationId, sample)
 
     const submitted = await client.submitApplication(applicationId)
     expect(submitted.status).toBe('SUBMITTED')
@@ -322,10 +326,12 @@ describe.skipIf(!isLocalMockConfigured())(
       const home = ref.products.find((p) => p.product_code === 'HOME_LOAN')
       expect(personal?.product_code).toBe('PERSONAL_LOAN')
       expect(personal?.currency).toBe('PHP')
+      expect(personal?.product_loan_type).toBe('PERSONAL')
       expect(personal?.loan_type).toBe('personal')
       expect(personal?.name).toBe('Personal Loan')
       expect(personal?.term_options?.length).toBe(4)
       expect(home?.product_code).toBe('HOME_LOAN')
+      expect(home?.product_loan_type).toBe('PERSONAL')
       expect(home?.loan_type).toBe('home')
       expect(home?.purpose_options?.length).toBeGreaterThan(0)
     })
@@ -411,6 +417,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const created = await client.createApplication(sample)
       const appId = created.id
       await registerDocumentsForPayload(client, appId, sample)
+      await completeMetrobankDepositConfirmIfRequired(client, appId, sample)
       await completePepComplianceGateIfRequired(client, appId, sample)
       await client.submitApplication(appId)
       await client.acceptForProcessing(appId)
@@ -421,6 +428,7 @@ describe.skipIf(!isLocalMockConfigured())(
       const loanId = out.loan.id
       expect(out.application.status).toBe('APPROVED_CLEAR_TO_CLOSE')
 
+      await client.submitHomeLoanBookingFees(appId, buildHomeLoanBookingFeesBody(3))
       await client.authorizeFunding(loanId)
       await client.fundLoan(loanId)
       expect((await client.getLoan(loanId)).status).toBe('FUNDED')
@@ -708,6 +716,29 @@ describe.skipIf(!isLocalMockConfigured())(
       const payload = buildPersonalLoanSampleApplicationNotYetMetrobankClient(12)
       const appId = await throughCredit(client, payload)
       expect(appId).toBeTruthy()
+    })
+
+    it('HOME_LOAN: submit before metrobank confirm; confirm in underwriting unlocks APPROVE', async () => {
+      const client = new LoanApiClient()
+      await loginAndCompleteKyc(client)
+      const body = buildHomeLoanSampleApplicationNotYetMetrobankClient(240)
+      const created = await client.createApplication(body)
+      await registerDocumentsForPayload(client, created.id, body)
+      await completePepComplianceGateIfRequired(client, created.id, body)
+      const submitted = await client.submitApplication(created.id)
+      expect(submitted.status).toBe('SUBMITTED')
+      await client.acceptForProcessing(created.id)
+      await client.acknowledgeDisclosures(created.id)
+      await client.runCreditCheck(created.id, creditCheckForcePass)
+      await client.startUnderwriting(created.id)
+      await expectRejectsWithStatus(
+        client.underwritingDecision(created.id, buildUnderwritingBody('APPROVE')),
+        422,
+      )
+      await client.confirmMetrobankDepositAccount(created.id)
+      const uw = await client.underwritingDecision(created.id, buildUnderwritingBody('APPROVE'))
+      expect(uw.application.status).toBe('APPROVED_CLEAR_TO_CLOSE')
+      expect(uw.loan).toBeTruthy()
     })
 
     it('rejects create when primary_id is outside Step 3 subset (use PATCH then upload for PRC, etc.)', async () => {

@@ -4,12 +4,22 @@
  */
 
 import { PH_ADDRESS_VALID_ROWS } from '../../philippineAddressReference.js'
+import { PRODUCT_LOAN_TYPE } from '../../productLoanTaxonomy.js'
 
 function phpToCentavos(pesos) {
   return Math.round(pesos * 100)
 }
 
 export const HOME_LOAN_APPLICANT_CATEGORIES = Object.freeze(['RESIDENT', 'OFW'])
+
+/** Intake **`borrower.citizenship`** — **Personal Loan** remains Filipino-only; **Home Loan** matches Metrobank pre-qual. */
+export const HOME_LOAN_CITIZENSHIP_ACCEPTED = Object.freeze([
+  'FILIPINO',
+  'FOREIGNER_PERMANENT_RESIDENT',
+])
+
+/** Required when **`home_loan_applicant_category`** is **`OFW`** (Metrobank land-based vs sea-based tenure rules). */
+export const HOME_LOAN_OFW_EMPLOYMENT_BASIS = Object.freeze(['LAND_BASED', 'SEA_BASED'])
 
 /** Government-issued IDs accepted for **Home Loan** (Passport preferred). */
 export const HOME_LOAN_PRIMARY_ID_DOCUMENT_TYPES = Object.freeze([
@@ -217,25 +227,40 @@ function homeIdLabel(value) {
 
 export const HOME_LOAN_PRODUCT = Object.freeze({
   product_code: 'HOME_LOAN',
+  /** Residential mortgage — still under **`product_loan_type`:** **PERSONAL** (consumer retail). */
   loan_type: 'home',
+  product_loan_type: PRODUCT_LOAN_TYPE.PERSONAL,
   name: 'Home Loan',
   bank_marketing_name: 'Metrobank Home Loan (Residential)',
   currency: 'PHP',
   principal_minor_unit_label: 'centavo (1 PHP = 100 centavos)',
   general_information:
-    'Residential mortgage for purchase, construction, renovation, reimbursement, refinancing, and home equity (subject to collateral and purpose rules). Passport or PhilID preferred for ID; marriage contract if applicable.',
+    'Residential mortgage for purchase, construction, renovation, reimbursement, refinancing, and home equity (subject to collateral and purpose rules). Lifecycle phases (eligibility through closing) are summarized in **metrobank_lifecycle_phases** on this catalogue row.',
+  citizenship_options: Object.freeze([
+    Object.freeze({ value: 'FILIPINO', label: 'Filipino citizen' }),
+    Object.freeze({
+      value: 'FOREIGNER_PERMANENT_RESIDENT',
+      label: 'Foreign national with permanent resident visa',
+    }),
+  ]),
+  ofw_employment_basis_options: Object.freeze([
+    Object.freeze({ value: 'LAND_BASED', label: 'OFW — land-based (continuous employment)' }),
+    Object.freeze({ value: 'SEA_BASED', label: 'OFW — sea-based (total contract months)' }),
+  ]),
   eligibility: Object.freeze([
-    'Minimum age 21 at application',
+    'Repayments via Metrobank ADA from a deposit account — same metrobank_client_type and POST …/metrobank-deposit-account/confirm rules as Personal Loan (see GET /reference/loan-products → metrobank_client_prerequisite)',
+    'Citizenship: Filipino citizen or foreigner with permanent resident visa (mock: borrower.citizenship)',
+    'Age: 21–65 at application; not older than 70 at loan maturity (mock: date_of_birth + term_months)',
     'Minimum gross monthly family income of PHP 40,000 (mock: employment.gross_monthly_income_cents × 12 vs threshold)',
-    'If employed: at least 2 years with current employer',
-    'If self-employed / in business: profitable operations at least 3 years in current business (mock: years_in_current_business ≥ 3)',
+    'Resident — Employed: at least 2 years with current employer (regular). Resident — Self-employed: at least 3 years in current business',
+    'OFW — Land-based: at least 2 years continuous employment with current employer (regular). OFW — Sea-based: at least 24 months total contract (mock: additional_information.ofw_sea_contract_months_total). OFW — Self-employed: at least 3 years in current business',
     'Good credit history with no adverse findings (mock: additional_information.no_adverse_credit_history === true)',
     'Collateral must be residential (additional_information.collateral_property_type === RESIDENTIAL)',
   ]),
   loan_requirements: Object.freeze({
     basic_documents: Object.freeze([
-      'Application form — fully filled-out and signed',
-      'Valid ID — one (1) government-issued ID (Passport preferred)',
+      'Filled-out application form (signed)',
+      'One (1) valid government-issued ID (e.g. Passport, Driver\'s License, PhilID)',
       'Marriage contract — if applicable',
     ]),
     id_types_acknowledged: Object.freeze([
@@ -259,16 +284,14 @@ export const HOME_LOAN_PRODUCT = Object.freeze({
     ]),
     source_of_repayment: Object.freeze({
       employed_salaried: Object.freeze([
-        'Certificate of Employment (COE) with compensation, position, tenure',
-        'OR latest three (3) months payslips / payroll bank statements',
-        'OR latest ITR or BIR 2316 (ITR may be required for total loans > PHP 3M)',
+        'Certificate of Employment (COE) with compensation',
+        'Latest three (3) months\' payslips, or',
+        'Latest ITR (BIR Form 2316) — ITR emphasis when total loans > PHP 3M',
       ]),
       individual_in_business: Object.freeze([
-        'Single prop: BIR 2303 + DTI / business permit',
-        'Partnership: Articles of Partnership with partner names',
-        'Corporation: SEC registration, AOI/By-laws, updated GIS',
+        'DTI / SEC registration and business permit (single prop, partnership, or corp docs as applicable)',
         'Latest six (6) months bank statements',
-        'If exposure > PHP 3M: latest ITR and 2 years audited financials',
+        'Loans > PHP 3M: two (2) years audited financial statements (typical Metrobank reference)',
       ]),
       ofw: Object.freeze([
         'Land-based: original COEC with salary, position, tenure, employer email',
@@ -278,12 +301,88 @@ export const HOME_LOAN_PRODUCT = Object.freeze({
       ]),
     }),
     collateral: Object.freeze([
-      "Owner's duplicate TCT or CCT",
+      'Copy of TCT or CCT (title)',
       'Tax declaration of land and/or improvement',
-      'Construction: plans, bill of materials, specifications',
-      'Developer tie-ups: CTS or reservation agreement',
+      'Construction: house plans, bill of materials, and building specifications',
+      'Developer purchases: CTS or reservation agreement as applicable',
     ]),
   }),
+  /**
+   * Metrobank-style **end-to-end lifecycle** (training / UX reference). The mock maps steps to the same **`/v1/loan-applications`** and **`/v1/loans`** routes as **§5.0**; **`metrobank_home_loan_lifecycle_phase`** on **`ApplicationOut`** / **`LoanOut`** echoes the current phase (**1–6**) from application + loan state (**`metrobankHomeLoanLifecyclePhase.js`**).
+   */
+  metrobank_lifecycle_phases: Object.freeze([
+    Object.freeze({
+      phase: 1,
+      title: 'Eligibility & Pre-Qualification',
+      summary:
+        'Baseline checks before formal application — mirrored in **`evaluateHomeLoanEligibility`** and intake validation.',
+      bullets: Object.freeze([
+        'Citizenship: Filipino citizen or foreign national with permanent resident visa (**borrower.citizenship** on **HOME_LOAN**)',
+        'Age: 21 to 65 at application; not older than 70 at loan maturity',
+        'Income: minimum gross monthly **family** income PHP 40,000',
+        'Employees: at least 2 years with current employer',
+        'Self-employed: business profitable at least 3 years in current operations',
+        'OFWs: at least 2 years continuous employment (land-based) **or** 24 months total contract (sea-based) — **additional_information.ofw_employment_basis** + **ofw_sea_contract_months_total** when sea-based',
+      ]),
+    }),
+    Object.freeze({
+      phase: 2,
+      title: 'Documentation & Application',
+      summary: 'Three categories of paperwork — lists also appear under **loan_requirements** on this catalogue row.',
+      bullets: Object.freeze([
+        'Personal: filled-out application form; one valid government ID; marriage contract if applicable',
+        'Income — Employed: COE with compensation; latest 3 months payslips; or latest ITR / BIR Form 2316',
+        'Income — Self-employed: DTI/SEC registration; 6 months bank statements; 2 years audited financial statements when loan > PHP 3M',
+        'Collateral: copy of TCT/CCT; tax declaration; construction documents when applicable',
+      ]),
+    }),
+    Object.freeze({
+      phase: 3,
+      title: 'Processing & Appraisal',
+      summary:
+        'Bank evaluation and collateral verification — fees in **fees_and_charges.application_non_refundable**.',
+      bullets: Object.freeze([
+        'Evaluation may complete in as fast as ~5 business days (typical marketing reference; not simulated as delay in the mock)',
+        'Appraisal fee: PHP 4,000 (Metro Manila) / PHP 4,500 (other areas), usually upon application',
+        'Property inspection / appraisal for fair market value',
+        'Title investigation — standard per-title fee (PHP 1,000 in catalogue)',
+      ]),
+    }),
+    Object.freeze({
+      phase: 4,
+      title: 'Approval & Loan Booking',
+      summary:
+        'NOA/LOG-style outcome — in the API, **`underwriting/decision`** creates the **loan** with amount and terms from the approved application.',
+      bullets: Object.freeze([
+        'Notice of Approval (NOA) / Letter of Guarantee — loan amount (e.g. up to ~80% of appraised value per purpose), interest rate, term',
+        'Loan term: up to ~25 years for house-and-lot-style purposes; ~10 years for vacant lot (see **purpose_options**)',
+        'Interest: choose a fixing period (1–5 years); indicative annual rates **6.25%–8.25%** by bucket in **fixed_interest_rates** (Home Equity tier +1%)',
+        'Booking / post-approval charges: handling fee (PHP 5,000), notarial, documentary stamp tax (DST), registration — see **fees_and_charges.after_approval**',
+      ]),
+    }),
+    Object.freeze({
+      phase: 5,
+      title: 'Disbursement & Repayment',
+      summary:
+        'Funds to seller/developer and ongoing servicing — ADA enforced in the mock via **metrobank_client_type** and **metrobank-deposit-account/confirm**.',
+      bullets: Object.freeze([
+        'Disbursement: bank pays seller or developer directly when technical conditions are met (**disburse** in the practice API)',
+        'Insurance: Mortgage Redemption Insurance (MRI) and property insurance become effective per insurer',
+        'Repayment: amortization **strictly** via Auto Debit Arrangement (ADA) from a **Metrobank deposit account**',
+        'Repricing: at end of fixing period, loan repriced per policy / market rates (**formulas.disclaimer** on computation preview)',
+      ]),
+    }),
+    Object.freeze({
+      phase: 6,
+      title: 'Loan Maturity & Closing',
+      summary:
+        'After full principal and interest are paid — use **`POST /v1/loans/{loanId}/payoff`** then **CLOSED** in the mock; physical title release is out of band.',
+      bullets: Object.freeze([
+        'Release of mortgage: bank releases original title and provides cancellation of mortgage documentation',
+        'Borrower files with the Registry of Deeds to remove the bank lien annotation from the title',
+      ]),
+    }),
+  ]),
   credit_evaluation_note:
     'Applications subject to credit evaluation, appraisal, title investigation, and insurance quotations.',
   tenor_heading: 'Purpose, LTV, and maximum term',
@@ -308,9 +407,11 @@ export const HOME_LOAN_PRODUCT = Object.freeze({
     after_approval: Object.freeze({
       handling_fee_cents: phpToCentavos(5000),
       notarial_per_document_cents: phpToCentavos(400),
+      documentary_stamp_tax_note:
+        'Documentary stamp tax (DST) — per BIR rules / loan amount; confirm current rate and base with branch',
       registration_fee_note: 'Quoted by Registry of Deeds',
-      mri_note: 'Quoted by insurer (e.g. AXA)',
-      property_insurance_note: 'Quoted by insurer (e.g. AXA)',
+      mri_note: 'Mortgage Redemption Insurance (MRI) — quoted by insurer (e.g. AXA)',
+      property_insurance_note: 'Property insurance — quoted by insurer (e.g. AXA)',
     }),
   }),
   allowed_term_months: HOME_LOAN_ALLOWED_TERM_MONTHS,

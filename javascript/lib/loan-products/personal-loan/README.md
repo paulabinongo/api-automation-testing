@@ -10,4 +10,4 @@ Implementation is **not** fully moved under this folder yet; it stays in the mai
 | Occupation LOV | **`personalLoanOccupations.js`** |
 | Sample payloads | **`javascript/lib/sampleData.js`** |
 
-When you add **`AUTO_LOAN`** (or similar), mirror this README under **`../auto-loan/`** and register eligibility (**`../registry.js`**), computation (**`../computationRegistry.js`**), and lifecycle gates (**`../lifecyclePolicies.js`**) as needed.
+For a net-new slug, copy **`../_template/new-product/`** or follow **`../auto-loan/README.md`**, then register eligibility (**`../registry.js`**), computation (**`../computationRegistry.js`**), and lifecycle gates (**`../lifecyclePolicies.js`**) as needed.

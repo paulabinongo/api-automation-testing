@@ -3,6 +3,7 @@
  */
 
 import {
+  HOME_LOAN_CITIZENSHIP_ACCEPTED,
   HOME_LOAN_PRODUCT,
   homeLoanEffectiveLtvCapPercent,
   homeLoanMaxTermMonthsAllowed,
@@ -23,24 +24,26 @@ export function evaluateHomeLoanEligibility(body, options = {}) {
       ? body.additional_information
       : /** @type {Record<string, never>} */ ({})
 
-  const okCitizen = b?.citizenship === 'FILIPINO'
+  const cit = String(b?.citizenship || '')
+  const okCitizen = HOME_LOAN_CITIZENSHIP_ACCEPTED.includes(/** @type {any} */ (cit))
   checks.push({
-    id: 'filipino_citizen',
-    criterion: 'Filipino citizen (Home Loan intake)',
+    id: 'citizenship_pre_qualification',
+    criterion:
+      'Citizenship: Filipino citizen or foreigner with permanent resident visa (borrower.citizenship)',
     passed: okCitizen,
   })
 
   const termMonths = Number(body.term_months)
-  let okAge = false
+  let okAgeApp = false
   const dob = b?.date_of_birth
-  if (dob && /^\d{4}-\d{2}-\d{2}$/.test(String(dob)) && Number.isFinite(termMonths)) {
+  if (dob && /^\d{4}-\d{2}-\d{2}$/.test(String(dob))) {
     const ageApp = ageOnDate(dob, refDate)
-    okAge = ageApp >= 21 && Number.isFinite(ageApp)
+    okAgeApp = ageApp >= 21 && ageApp <= 65 && Number.isFinite(ageApp)
   }
   checks.push({
-    id: 'minimum_age_21',
-    criterion: 'Minimum age 21 at time of application',
-    passed: okAge,
+    id: 'age_at_application_21_to_65',
+    criterion: 'Age between 21 and 65 at time of application (Metrobank pre-qualification)',
+    passed: okAgeApp,
   })
 
   const gmi = body.employment?.gross_monthly_income_cents
@@ -55,16 +58,29 @@ export function evaluateHomeLoanEligibility(body, options = {}) {
   })
 
   const emp = body.employment
+  const isOfwCat = String(ai.home_loan_applicant_category || '') === 'OFW'
   let okTenure = false
-  if (emp?.status === 'EMPLOYED') {
-    okTenure = emp.is_regular_employment === true && Number(emp.years_with_current_employer) >= 2
+  if (!isOfwCat) {
+    if (emp?.status === 'EMPLOYED') {
+      okTenure = emp.is_regular_employment === true && Number(emp.years_with_current_employer) >= 2
+    } else if (emp?.status === 'SELF_EMPLOYED') {
+      okTenure = Number(emp.years_in_current_business) >= 3
+    }
   } else if (emp?.status === 'SELF_EMPLOYED') {
     okTenure = Number(emp.years_in_current_business) >= 3
+  } else if (String(ai.ofw_employment_basis) === 'LAND_BASED') {
+    okTenure =
+      emp?.status === 'EMPLOYED' &&
+      emp.is_regular_employment === true &&
+      Number(emp.years_with_current_employer) >= 2
+  } else if (String(ai.ofw_employment_basis) === 'SEA_BASED') {
+    okTenure = Number(ai.ofw_sea_contract_months_total) >= 24
   }
   checks.push({
     id: 'employment_or_business_tenure',
-    criterion:
-      'Employed: at least 2 years with current employer (regular). Business: at least 3 years in current business',
+    criterion: isOfwCat
+      ? 'OFW — Land-based: ≥2 years with current employer (regular). Sea-based: ≥24 months total contract. Self-employed OFW: ≥3 years in current business'
+      : 'Resident — Employed: ≥2 years with current employer (regular). Self-employed: ≥3 years in current business',
     passed: okTenure,
   })
 
@@ -76,13 +92,26 @@ export function evaluateHomeLoanEligibility(body, options = {}) {
     passed: okCredit,
   })
 
-  const isOfw = String(ai.home_loan_applicant_category || '') === 'OFW'
+  const mt = String(body.metrobank_client_type || '')
+  let okMb = false
+  if (mt === 'EXISTING_CLIENT_DEPOSIT_ACCOUNT') {
+    okMb = true
+  } else if (mt === 'NOT_METROBANK_CLIENT' || mt === 'EXISTING_CLIENT_CREDIT_CARD') {
+    okMb = true
+  }
+  checks.push({
+    id: 'metrobank_deposit_for_ada',
+    criterion:
+      'Metrobank deposit account for ADA is required before approval — existing deposit client, or **POST …/metrobank-deposit-account/confirm** after **WILL_OPEN_METROBANK_DEPOSIT**',
+    passed: okMb,
+  })
+
   const vacantLot = ai.collateral_is_vacant_lot === true
   const homeEquityImprove =
     body.loan_purpose === 'HOME_EQUITY_PERSONAL_CONSUMPTION' &&
     ai.home_equity_for_improvement === true
 
-  const maxTerm = homeLoanMaxTermMonthsAllowed(String(body.loan_purpose), isOfw, vacantLot, {
+  const maxTerm = homeLoanMaxTermMonthsAllowed(String(body.loan_purpose), isOfwCat, vacantLot, {
     home_equity_for_improvement: homeEquityImprove,
   })
   const okTerm =
@@ -114,9 +143,9 @@ export function evaluateHomeLoanEligibility(body, options = {}) {
     okMaturity = Number.isFinite(ageMat) && ageMat <= 70
   }
   checks.push({
-    id: 'age_upper_prudent_cap',
+    id: 'age_at_maturity_max_70',
     criterion:
-      'Borrower age at loan maturity ≤ 70 years (prudent sandbox cap — not in marketing sheet)',
+      'Borrower age at loan maturity not older than 70 (Metrobank-style cap; mock uses date_of_birth + term_months)',
     passed: okMaturity,
   })
 

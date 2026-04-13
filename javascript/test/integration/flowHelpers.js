@@ -1,15 +1,27 @@
 import { applicationRequiresMetrobankDepositAccountConfirmation } from '../../lib/loanProductCatalog.js'
-import { buildUnderwritingBody, creditCheckForcePass } from '../../lib/sampleData.js'
+import {
+  buildHomeLoanBookingFeesBody,
+  buildHomeLoanDocumentsRegistrationBody,
+  buildUnderwritingBody,
+  creditCheckForcePass,
+} from '../../lib/sampleData.js'
 
-/** Step 7 — **personal** applications need document registration before **submit**. */
+/** Step 7 — **personal** applications need document registration before **submit**. **HOME_LOAN:** LOS checklist + application-phase fee lines. */
 export async function registerDocumentsForPayload(client, applicationId, payload) {
+  if (payload.product_code === 'HOME_LOAN') {
+    await client.registerApplicationDocuments(
+      applicationId,
+      buildHomeLoanDocumentsRegistrationBody(payload),
+    )
+    return
+  }
   await client.registerApplicationDocuments(applicationId, {
     primary_id_document_type: payload.borrower.primary_id_document_type,
   })
 }
 
 /**
- * **Step 7b (Metrobank ADA)** — when intake is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`**, call **POST …/metrobank-deposit-account/confirm** after documents so **`metrobank_deposit_account_confirmed_at`** is set before **underwriting** can **APPROVE** (submit does not require it).
+ * **Step 7b (Metrobank ADA)** — **PERSONAL_LOAN** / **HOME_LOAN**: when intake is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`**, call **POST …/metrobank-deposit-account/confirm** after documents so **`metrobank_deposit_account_confirmed_at`** is set before **underwriting** can **APPROVE** (submit does not require it).
  */
 export async function completeMetrobankDepositConfirmIfRequired(client, applicationId, payload) {
   if (!applicationRequiresMetrobankDepositAccountConfirmation(payload)) return
@@ -62,6 +74,9 @@ export async function activeLoan(client, payload) {
   const appId = await throughCredit(client, payload)
   const out = await throughUnderwritingDecision(client, appId, buildUnderwritingBody('APPROVE'))
   const loanId = out.loan.id
+  if (payload.product_code === 'HOME_LOAN') {
+    await client.submitHomeLoanBookingFees(appId, buildHomeLoanBookingFeesBody(3))
+  }
   await client.authorizeFunding(loanId)
   await client.fundLoan(loanId)
   await client.disburseLoan(loanId)

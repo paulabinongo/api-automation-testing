@@ -1,6 +1,14 @@
 # Loan products (multi-product scaffold)
 
-This folder holds **registration and documentation** for adding more loan types beside **`PERSONAL_LOAN`**. Shared catalogue validation still lives in **`javascript/lib/loanProductCatalog.js`** until you split a product into its own module.
+This folder holds **registration and documentation** for adding more loan types beside **`PERSONAL_LOAN`**. Shared catalogue validation still lives in **`javascript/lib/loanProductCatalog.js`** until you split a product into its own module. Each catalogue row exposes **`product_loan_type`** (**`PERSONAL`** = consumer retail incl. home/car, **`BUSINESS`** = commercial only) and **`loan_type`** as the narrower product family (**personal**, **home**, **car**, …) — see **`javascript/lib/productLoanTaxonomy.js`**.
+
+## Scaffold a new product folder
+
+1. **Copy** **`_template/new-product/`** → **`<slug>/`** (kebab-case directory next to **`personal-loan/`**).
+2. **Follow** **`_template/new-product/README.md`** — rename exports, implement eligibility/computation, then wire **`registry.js`** and **`computationRegistry.js`**.
+3. **Track** remaining steps in **`_template/add-product-checklist.md`** (catalogue, lifecycle, OpenAPI, tests).
+
+**`index.js`** re-exports **`catalog`**, **`registry`**, **`computationRegistry`**, and **`lifecyclePolicies`** for a single import path (e.g. `import { … } from '../lib/loan-products/index.js'` from **`mock-server/`**).
 
 ## What to do when you add another product (e.g. `AUTO_LOAN`)
 
@@ -18,15 +26,19 @@ This folder holds **registration and documentation** for adding more loan types 
 
 | Path | Role |
 |------|------|
+| **`index.js`** | Barrel: catalogue + registries + lifecycle exports |
 | **`catalog.js`** | **`getLoanProductByCode`**, **`registeredLoanProductCodes`** |
 | **`registry.js`** | **`ELIGIBILITY_BY_PRODUCT_CODE`**, **`evaluateEligibilityForProduct`** |
 | **`computationRegistry.js`** | **`COMPUTATION_BY_PRODUCT_CODE`**, **`computeLoanPreviewForProduct`** |
 | **`lifecyclePolicies.js`** | Per-product submit / PEP / Metrobank gates |
 | **`shared/borrowerAge.js`** | **`ageOnDate`**, **`addCalendarMonths`** (eligibility) |
+| **`shared/README.md`** | When to use shared helpers for new products |
 | **`personal-loan/`** | **`personalLoanEligibility.js`**, **`personalLoanComputation.js`**, **`personalLoanOccupations.js`** + **`README.md`** |
-| **`home-loan/README.md`** | **HOME_LOAN** (residential mortgage) pointers |
-| **`auto-loan/README.md`** | Scaffold for another product |
-| **`_template/add-product-checklist.md`** | Copy/paste checklist |
+| **`home-loan/`** | **HOME_LOAN** catalogue + eligibility + computation + **`README.md`** |
+| **`auto-loan/`** | Stub eligibility/computation + **`README.md`** (not registered until catalogue) |
+| **`_template/README.md`** | How to use the **new-product** template |
+| **`_template/new-product/`** | Copy-paste **`eligibility.js`** + **`computation.js`** + **`README.md`** |
+| **`_template/add-product-checklist.md`** | Full checklist (catalogue → tests) |
 
 ## Server entry
 
