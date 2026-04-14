@@ -16,7 +16,7 @@ export const COMPUTATION_BY_PRODUCT_CODE = Object.freeze({
  * @param {string} productCode
  * @param {number} principalCents
  * @param {number} termMonths
- * @param {{ loan_purpose?: string }} [computationOptions] — **HOME_LOAN** uses **loan_purpose** for Home Equity rate tier
+ * @param {{ loan_purpose?: string, interest_fixing_years?: number }} [computationOptions] — **HOME_LOAN:** **loan_purpose** (Home Equity tier); **interest_fixing_years** **1–5** (defaults to **1**)
  * @returns {{ ok: true, payload: object } | { ok: false, errors: string[] }}
  */
 export function computeLoanPreviewForProduct(

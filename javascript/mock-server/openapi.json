@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Retail Bank Loan API (Mock)",
-    "description": "Practice API for **API automation** and demos.\n\n**Flow (production-shaped):** **login** → **KYC** → **DRAFT** → **documents** (**POST …/documents**) → (**optional:** **NOT / credit-card** + **WILL_OPEN:** **POST …/metrobank-deposit-account/confirm** — required before **underwriting** **APPROVE**, **not** required before **submit**) → (**PEP Yes:** **POST …/compliance/pep-clearance** after documents, before submit — **`docs/DOCUMENTATION.md`** Step **7b**) → **submit** → **processing/accept** (**IN_PROCESSING**) → **disclosures/acknowledge** → **credit-check** → **underwriting/start** (**IN_UNDERWRITING**) → **underwriting/decision** → optional **stipulations** → **funding/authorize** (**CLEARED_FOR_BOOKING**) → **fund** (**FUNDED**) → **disburse** (**ACTIVE**) → **payments** → **payoff** (**CLOSED**) → **logout**.\n\n**Swagger UI** at **`/docs`** renders this file (**`/openapi.json`**); contract is the same as **`javascript/mock-server/openapi.json`** in the repo.\n\n**Production alignment:** Extra steps mirror **ops intake**, **initial disclosures**, **underwriting queue**, **PEP/AML-style** intake gate, and **funding authorization** before booking. **Products:** **PERSONAL_LOAN** (Metrobank-style unsecured; **`metrobank_client_type`** + optional **POST …/metrobank-deposit-account/confirm** before **underwriting** **APPROVE**) and **HOME_LOAN** (Metrobank Home Loan — residential mortgage; **same** **`metrobank_client_type`** / **ADA** confirm rules as Personal Loan — **`docs/DOCUMENTATION.md`** §**5.0.1**). **Catalogue taxonomy** (**`GET /reference/loan-products`**): each row includes **`product_loan_type`** **`PERSONAL`** (consumer retail: unsecured, home, car-style products) or **`BUSINESS`** (commercial-only products when added) and **`loan_type`** (family slug: **`personal`**, **`home`**, **`car`**, …). Constants: **`javascript/lib/productLoanTaxonomy.js`**.\n\n**Metrobank Home Loan lifecycle (phases 1–6):** The **`HOME_LOAN`** row on **`GET /reference/loan-products`** includes **`metrobank_lifecycle_phases`** (structured **Eligibility & Pre-Qualification** through **Loan Maturity & Closing**) — see component **`MetrobankHomeLoanLifecyclePhase`** and **`LoanProductCatalogEntry.metrobank_lifecycle_phases`**. **`ApplicationOut`** and **`LoanOut`** add **`metrobank_home_loan_lifecycle_phase`** (**`MetrobankHomeLoanLifecyclePhaseState`**) — derived from **`status`** and **`loan.status`** (same **`title`** as the catalogue row for that **`phase`** number). Source: **`javascript/lib/loan-products/home-loan/homeLoanCatalog.js`** + **`metrobankHomeLoanLifecyclePhase.js`** + **`homeLoanLosValidation.js`** (**HOME_LOAN** **`POST …/documents`** checklist + application fees; **`POST …/home-loan/fees/booking`** before **`funding/authorize`**); Phase **1** rules are enforced in **`evaluateHomeLoanEligibility`**. **Phase map:** **`docs/DOCUMENTATION.md`** §**5.0** / §**5.0.1** (Home Loan E2E) / §**5.4**. **Postman:** **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** — **Flow — Happy path** (Personal) and **Flow — Metrobank Home Loan** (§**7**).\n\n**Auth:** All `/v1/*` routes except **GET /health**, **GET /reference/loan-products**, and **POST /auth/login** require `Authorization: Bearer <access_token>`.\n\n**Ops headers (production-style):** Responses are tagged with **`X-Correlation-Id`**, **`X-Request-Id`** (echo or minted), **`X-API-Environment`** (default **sandbox**; set **`BANK_API_ENV`**), **`X-API-Revision`**, **`Cache-Control: no-store`**. Send **`X-Correlation-Id`** from the client to tie logs to your own trace (optional unless **`BANK_REQUIRE_CORRELATION_ID=1`**). Optional **`Idempotency-Key`** on **authenticated POST** retries: same key + same path + same body replays the first **2xx** (`Idempotent-Replayed: true`); a different body with the same key returns **409**. Optional **`BANK_API_RATE_LIMIT_PER_MINUTE`** (per client IP) returns **429** with **`Retry-After`**.\n\n**Implementation:** **`javascript/mock-server/server.js`**. **Product logic (same repo):** **`javascript/lib/loanProductCatalog.js`** (catalogue + intake validation); **`javascript/lib/loan-products/computationRegistry.js`** dispatches **GET /reference/loan-computation-preview** to **`javascript/lib/loan-products/personal-loan/personalLoanComputation.js`** (**PERSONAL_LOAN**) and **`javascript/lib/loan-products/home-loan/homeLoanComputation.js`** (**HOME_LOAN**); **`javascript/lib/loan-products/registry.js`** dispatches eligibility; **`javascript/lib/loan-products/shared/borrowerAge.js`** — shared borrower age helpers. File map: **`docs/DOCUMENTATION.md`** §**6**.",
-    "version": "0.8.21"
+    "description": "Practice API for **API automation** and demos.\n\n**Flow (production-shaped):** **login** → **KYC** → **DRAFT** → **documents** (**POST …/documents**) → (**optional:** **NOT / credit-card** + **WILL_OPEN:** **POST …/metrobank-deposit-account/confirm** — required before **underwriting** **APPROVE**, **not** required before **submit**) → (**PEP Yes:** **POST …/compliance/pep-clearance** after documents, before submit — **`docs/DOCUMENTATION.md`** Step **7b**) → **submit** → **processing/accept** (**IN_PROCESSING**) → **disclosures/acknowledge** → **credit-check** → **underwriting/start** (**IN_UNDERWRITING**) → **underwriting/decision** → optional **stipulations** → **funding/authorize** (**CLEARED_FOR_BOOKING**) → **fund** (**FUNDED**) → **disburse** (**ACTIVE**) → **payments** → **payoff** (**CLOSED**) → **logout**.\n\n**Swagger UI** at **`/docs`** renders this file (**`/openapi.json`**); contract is the same as **`javascript/mock-server/openapi.json`** in the repo.\n\n**Production alignment:** Extra steps mirror **ops intake**, **initial disclosures**, **underwriting queue**, **PEP/AML-style** intake gate, and **funding authorization** before booking. **Products:** **PERSONAL_LOAN** (Metrobank-style unsecured; **`metrobank_client_type`** + optional **POST …/metrobank-deposit-account/confirm** before **underwriting** **APPROVE**) and **HOME_LOAN** (Metrobank Home Loan — residential mortgage; **same** **`metrobank_client_type`** / **ADA** confirm rules as Personal Loan — **`docs/DOCUMENTATION.md`** §**5.0.1**). **Catalogue taxonomy** (**`GET /reference/loan-products`**): each row includes **`product_loan_type`** **`PERSONAL`** (consumer retail: unsecured, home, car-style products) or **`BUSINESS`** (commercial-only products when added) and **`loan_type`** (family slug: **`personal`**, **`home`**, **`car`**, …). Constants: **`javascript/lib/productLoanTaxonomy.js`**.\n\n**Metrobank Home Loan lifecycle (phases 1–6):** The **`HOME_LOAN`** row on **`GET /reference/loan-products`** includes **`metrobank_lifecycle_phases`** (structured **Eligibility & Pre-Qualification** through **Loan Maturity & Closing**) — see component **`MetrobankHomeLoanLifecyclePhase`** and **`LoanProductCatalogEntry.metrobank_lifecycle_phases`**. **`ApplicationOut`** and **`LoanOut`** add **`metrobank_home_loan_lifecycle_phase`** (**`MetrobankHomeLoanLifecyclePhaseState`**) — derived from **`status`** and **`loan.status`** (same **`title`** as the catalogue row for that **`phase`** number). Source: **`javascript/lib/loan-products/home-loan/homeLoanCatalog.js`** + **`metrobankHomeLoanLifecyclePhase.js`** + **`homeLoanLosValidation.js`** (**HOME_LOAN** **`POST …/documents`** checklist + application fees; **`POST …/home-loan/fees/booking`** before **`funding/authorize`**); Phase **1** rules are enforced in **`evaluateHomeLoanEligibility`**. **Phase map:** **`docs/DOCUMENTATION.md`** §**5.0** / §**5.0.1** (Home Loan E2E) / §**5.4**. **Postman:** **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** — **Flow — Happy path** (Personal) and **Flow — Metrobank Home Loan** (§**7**). **HOME_LOAN** policy/consent reference copy: **`docs/METROBANK_HOME_LOAN_POLICIES.md`** (full Metrobank text; **`BorrowerConsentsIn`** stores acknowledgements only).\n\n**Auth:** All `/v1/*` routes except **GET /health**, **GET /reference/loan-products**, and **POST /auth/login** require `Authorization: Bearer <access_token>`.\n\n**Ops headers (production-style):** Responses are tagged with **`X-Correlation-Id`**, **`X-Request-Id`** (echo or minted), **`X-API-Environment`** (default **sandbox**; set **`BANK_API_ENV`**), **`X-API-Revision`**, **`Cache-Control: no-store`**. Send **`X-Correlation-Id`** from the client to tie logs to your own trace (optional unless **`BANK_REQUIRE_CORRELATION_ID=1`**). Optional **`Idempotency-Key`** on **authenticated POST** retries: same key + same path + same body replays the first **2xx** (`Idempotent-Replayed: true`); a different body with the same key returns **409**. Optional **`BANK_API_RATE_LIMIT_PER_MINUTE`** (per client IP) returns **429** with **`Retry-After`**.\n\n**Implementation:** **`javascript/mock-server/server.js`**. **Product logic (same repo):** **`javascript/lib/loanProductCatalog.js`** (catalogue + intake validation); **`javascript/lib/loan-products/computationRegistry.js`** dispatches **GET /reference/loan-computation-preview** to **`javascript/lib/loan-products/personal-loan/personalLoanComputation.js`** (**PERSONAL_LOAN**) and **`javascript/lib/loan-products/home-loan/homeLoanComputation.js`** (**HOME_LOAN**); **`javascript/lib/loan-products/registry.js`** dispatches eligibility; **`javascript/lib/loan-products/shared/borrowerAge.js`** — shared borrower age helpers. File map: **`docs/DOCUMENTATION.md`** §**6**.",
+    "version": "0.8.25"
   },
   "servers": [{ "url": "/", "description": "Same host as this Swagger page" }],
   "security": [{ "bearerAuth": [] }],
@@ -50,7 +50,7 @@
                 "example": {
                   "status": "UP",
                   "environment": "sandbox",
-                  "api_revision": "0.8.21",
+                  "api_revision": "0.8.25",
                   "time": "2026-04-06T12:00:00.000Z"
                 }
               }
@@ -82,7 +82,7 @@
       "get": {
         "tags": ["Reference"],
         "summary": "Loan payment preview (catalogue dispatch)",
-        "description": "**No auth.** Computes **total interest**, **monthly amortization**, **fees**, **net proceeds**, and **effective interest rate (annual %)** from the catalogue. **PERSONAL_LOAN:** add-on rate + EIR ( **`term_months`** **12|18|24|36** ). **HOME_LOAN** (set query **`product_code`** to **HOME_LOAN**; optional **`loan_purpose`** for Home Equity tier): **level annual %** buckets (**`pricing_model`:** **`LEVEL_ANNUAL_PERCENT_BY_LOCK_IN_BUCKET`**); **`term_months`** in **12–300** (12-step) per **`GET /reference/loan-products`**. Query: **`principal_cents`** (PHP centavos; within product min/max). Optional **`product_code`** defaults to **PERSONAL_LOAN**. Example (**Personal**): **`principal_cents=2000000`**, **`term_months=12`**. Example (**Home**): **`product_code=HOME_LOAN`**, **`loan_purpose=PURCHASE_HOUSE_AND_LOT`**, **`principal_cents=50000000`**, **`term_months=240`**. **Dispatch:** **`javascript/lib/loan-products/computationRegistry.js`** (**`computeLoanPreviewForProduct`**) — implementations **`javascript/lib/loan-products/personal-loan/personalLoanComputation.js`**, **`javascript/lib/loan-products/home-loan/homeLoanComputation.js`**.",
+        "description": "**No auth.** Computes **total interest**, **monthly amortization**, **fees**, **net proceeds**, and **effective interest rate (annual %)** from the catalogue. **PERSONAL_LOAN:** add-on rate + EIR ( **`term_months`** **12|18|24|36** ). **HOME_LOAN** (query **`product_code`** **`HOME_LOAN`**; optional **`loan_purpose`** for Home Equity tier; optional **`interest_fixing_years`** **1–5**, default **1**): **level annual %** by **initial interest fixing** (**`pricing_model`:** **`LEVEL_ANNUAL_PERCENT_BY_LOCK_IN_BUCKET`**). **Loan term** **`term_months`** is amortization length only (**12–300**, **12**-month steps = **1–25 years**), independent of fixing. Query: **`principal_cents`**, **`term_months`**. Optional **`product_code`** defaults to **PERSONAL_LOAN**. Example (**Home**): **`product_code=HOME_LOAN`**, **`loan_purpose=PURCHASE_HOUSE_AND_LOT`**, **`interest_fixing_years=1`**, **`principal_cents=50000000`**, **`term_months=240`**. **Dispatch:** **`javascript/lib/loan-products/computationRegistry.js`** — **`personalLoanComputation.js`**, **`homeLoanComputation.js`**.",
         "operationId": "loanComputationPreview",
         "security": [],
         "parameters": [
@@ -121,7 +121,18 @@
               "maximum": 300,
               "multipleOf": 12
             },
-            "description": "Amortization term in months — must be listed in the product **`allowed_term_months`** (e.g. **12–36** Personal Loan; **12–300** Home Loan in **12**-month steps)."
+            "description": "Amortization term in months — must be listed in the product **`allowed_term_months`** (e.g. **12–36** Personal Loan; **HOME_LOAN:** **12–300** in **12**-month steps = **1–25** years)."
+          },
+          {
+            "name": "interest_fixing_years",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "description": "**HOME_LOAN** only — initial **interest fixing** period (**1**–**5** years), Metrobank calculator–style. Selects the annual rate row; **ignored** when **`product_code`** is not **HOME_LOAN**. Defaults to **1**."
           }
         ],
         "responses": {
@@ -555,8 +566,8 @@
     "/v1/loan-applications/{applicationId}/computation-preview": {
       "get": {
         "tags": ["Applications"],
-        "summary": "Personal loan payment preview from application",
-        "description": "Same body as **GET /reference/loan-computation-preview**, but **principal_cents** and **term_months** are taken from the borrower’s **DRAFT** (or later) application — no query params. Requires **Bearer**; only the session that **created** the application may call (**403** otherwise). Includes **`application_id`** in the response.",
+        "summary": "Loan payment preview from application",
+        "description": "Same shapes as **GET /reference/loan-computation-preview**, but **principal_cents**, **term_months**, **`loan_purpose`**, and (**HOME_LOAN**) **`additional_information.interest_fixing_years`** (defaults **1**) come from the application — no query params. Requires **Bearer**; only the session that **created** the application may call (**403** otherwise). Includes **`application_id`** in the response.",
         "operationId": "loanComputationPreviewFromApplication",
         "parameters": [{ "$ref": "#/components/parameters/applicationId" }],
         "responses": {
@@ -1412,6 +1423,22 @@
           "product_code": { "type": "string" },
           "principal_cents": { "type": "integer" },
           "term_months": { "type": "integer" },
+          "interest_fixing_years": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "**HOME_LOAN** — initial fixing period used for pricing (**1**–**5** years)."
+          },
+          "pricing_model": {
+            "type": "string",
+            "description": "**HOME_LOAN:** **`LEVEL_ANNUAL_PERCENT_BY_LOCK_IN_BUCKET`**"
+          },
+          "lock_in_pricing_years": {
+            "type": "integer",
+            "description": "**HOME_LOAN** — same as **`interest_fixing_years`** (legacy alias on response)."
+          },
+          "annual_interest_percent_on_file": { "type": "number" },
+          "loan_purpose_used": { "type": "string", "nullable": true },
           "monthly_add_on_rate_percent": { "type": "number" },
           "annual_contractual_rate_percent_on_file": { "type": "number" },
           "formulas": { "type": "object", "additionalProperties": { "type": "string" } },
@@ -1599,22 +1626,26 @@
       },
       "PresentHomeAddressIn": {
         "type": "object",
-        "description": "**Present Home Address** (Step 4). **Canonical:** **street_line**, **province**, **city_town**, **barangay**, **postal_code** — the four geographic fields + ZIP must match one row in **GET /reference/loan-products** → **philippine_address_sample_rows** (sandbox sample of dependent PH LOVs). **Legacy:** **line1**, **city**, **province_region**, **postal_code** if **street_line** is omitted.",
+        "description": "**Present Home Address** (Step 4). **Canonical:** **street_line**, **province**, **city_town**, **barangay**, **postal_code** — **PERSONAL_LOAN:** Province/City/Barangay/ZIP must match one row in **GET /reference/loan-products** → **philippine_address_sample_rows**. **HOME_LOAN (Metrobank):** also send **`region`** — **Region**, Province, City/Municipality, Barangay, and ZIP must match **one** row (**`region`** is the label, e.g. **Region VIII - Eastern Visayas**). **Legacy:** **line1**, **city**, **province_region**, **postal_code** if **street_line** is omitted.",
         "properties": {
           "street_line": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 30,
-            "description": "**No./Blk./St.** — letters and spaces only (no digits or special characters); 1–30 chars; no leading/trailing spaces."
+            "maxLength": 200,
+            "description": "**No./Blk./St.** — **PERSONAL_LOAN:** letters/spaces only, 1–30 chars. **HOME_LOAN:** 1–200 chars — searchable street in the Philippines; letters, numbers, spaces, `# . , / ' - & ( )` (see **`validateHomeLoanIntakeShape`**)."
           },
           "subdivision_village": {
             "type": "string",
-            "maxLength": 30,
-            "description": "**Subdivision/Village** — optional; same character rules as **street_line** when provided."
+            "maxLength": 256,
+            "description": "**Subdivision/Village** — optional. **PERSONAL_LOAN:** max **30**, letters/spaces only. **HOME_LOAN (Metrobank form):** max **256**, alphanumeric with single spaces between words (optional field)."
+          },
+          "region": {
+            "type": "string",
+            "description": "**HOME_LOAN** — **required** on **HOME_LOAN** intake. Philippine **Region** label (e.g. **Region VIII - Eastern Visayas**, **National Capital Region (NCR)**) — must match **`region`** on the same **`philippine_address_sample_rows`** row as **province** / **city_town** / **barangay** / **postal_code**. Omitted for **PERSONAL_LOAN** (ignored if sent)."
           },
           "province": {
             "type": "string",
-            "description": "**Province** — must pair with **city_town**, **barangay**, and **postal_code** per **philippine_address_sample_rows**."
+            "description": "**Province** — must pair with **city_town**, **barangay**, and **postal_code** per **philippine_address_sample_rows** (and with **region** on **HOME_LOAN**)."
           },
           "city_town": {
             "type": "string",
@@ -1745,7 +1776,7 @@
       "AdditionalInformationIn": {
         "type": "object",
         "required": ["pep_close_family_or_public_position", "pep_financial_transactions_on_behalf"],
-        "description": "Step 6 PEP-style questions (both mandatory **boolean**; UI often defaults **false**). **Either `true`:** after **POST …/documents**, **`POST …/compliance/pep-clearance`** is **required** before **submit** in this sandbox (**409** otherwise). When **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`**, **`metrobank_deposit_repayment_plan`** is **optional**; if present it must be a valid enum **string** in JSON (e.g. `\"metrobank_deposit_repayment_plan\": \"WILL_OPEN_METROBANK_DEPOSIT\"` — unquoted enum tokens are invalid). Deposit confirmation for **`WILL_OPEN`** is required before **underwriting** **APPROVE** — see **`POST …/metrobank-deposit-account/confirm`**. See **docs/DOCUMENTATION.md** (Step 6–7b).",
+        "description": "Step 6 PEP-style questions (both mandatory **boolean**; UI often defaults **false**). **Either `true`:** after **POST …/documents**, **`POST …/compliance/pep-clearance`** is **required** before **submit** in this sandbox (**409** otherwise). When **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`**, **`metrobank_deposit_repayment_plan`** is **optional**; if present it must be a valid enum **string** in JSON (e.g. `\"metrobank_deposit_repayment_plan\": \"WILL_OPEN_METROBANK_DEPOSIT\"` — unquoted enum tokens are invalid). Deposit confirmation for **`WILL_OPEN`** is required before **underwriting** **APPROVE** — see **`POST …/metrobank-deposit-account/confirm`**. **HOME_LOAN:** **`metrobank_preferred_contact_date`** and **`metrobank_preferred_contact_time`** are **required** (Metrobank application form — preferred callback / visit; date must be **strictly after** today). **HOME_LOAN** collateral and appraisal fields remain **required** per **`validateHomeLoanIntakeShape`**. See **docs/DOCUMENTATION.md** (Step 6–7b, §**5.0.1** Metrobank form).",
         "properties": {
           "pep_close_family_or_public_position": {
             "type": "boolean",
@@ -1801,6 +1832,22 @@
           "home_equity_for_improvement": {
             "type": "boolean",
             "description": "**HOME_LOAN** — when **loan_purpose** is **HOME_EQUITY_PERSONAL_CONSUMPTION**, **true** selects longer max term (home improvement)."
+          },
+          "metrobank_preferred_contact_date": {
+            "type": "string",
+            "format": "date",
+            "description": "**HOME_LOAN** — **Preferred Date** for callback or branch visit (**YYYY-MM-DD**). Must be a **valid calendar date strictly after** the server’s current local **today** (Metrobank form)."
+          },
+          "metrobank_preferred_contact_time": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "description": "**HOME_LOAN** — **Preferred Time** as **time of day** (**HH:MM**, 24-hour, e.g. **09:30**, **14:00**) — not a calendar date."
+          },
+          "interest_fixing_years": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "**HOME_LOAN** — initial **interest fixing** period (**1**–**5** years), aligned with Metrobank calculator. Used for **GET …/loan-applications/{id}/computation-preview** — defaults to **1** when omitted. Independent of **`term_months`** (loan tenor **1–25** years in **12**-month steps)."
           }
         }
       },
@@ -1811,11 +1858,32 @@
           "terms_and_conditions_accepted",
           "data_privacy_policy_accepted"
         ],
-        "description": "All three must be **true** (sandbox mirrors checkbox gate).",
+        "description": "All listed booleans must be **true** (sandbox mirrors checkbox gate). **PERSONAL_LOAN:** the first three only. **HOME_LOAN (Metrobank Home Loan application form):** also require **`home_loan_undertaking_accepted`**, **`metrobank_amla_disclosure_acknowledged`**, and **`metrobank_policies_footer_disclaimer_acknowledged`** — maps to Metrobank **Privacy Policy & Terms of Use**, **Terms of Use**, **Data Privacy Consent**, **Home Loan Undertaking**, **AMLA**, and footer **Disclaimer** (reference copy: **`docs/METROBANK_HOME_LOAN_POLICIES.md`**; see **`docs/DOCUMENTATION.md`** §**5.0.1**).",
         "properties": {
-          "terms_of_use_accepted": { "type": "boolean" },
-          "terms_and_conditions_accepted": { "type": "boolean" },
-          "data_privacy_policy_accepted": { "type": "boolean" }
+          "terms_of_use_accepted": {
+            "type": "boolean",
+            "description": "**Terms of Use** — must be **true**."
+          },
+          "terms_and_conditions_accepted": {
+            "type": "boolean",
+            "description": "**Terms and Conditions** (product) — must be **true**."
+          },
+          "data_privacy_policy_accepted": {
+            "type": "boolean",
+            "description": "**Privacy Policy & Data Privacy** — must be **true**."
+          },
+          "home_loan_undertaking_accepted": {
+            "type": "boolean",
+            "description": "**HOME_LOAN** — **Home Loan Undertaking** (credit bureau / collateral appraisal authorizations). Required **true** when **`product_code`** is **`HOME_LOAN`**."
+          },
+          "metrobank_amla_disclosure_acknowledged": {
+            "type": "boolean",
+            "description": "**HOME_LOAN** — **AMLA compliance** disclosure. Required **true** when **`product_code`** is **`HOME_LOAN`**."
+          },
+          "metrobank_policies_footer_disclaimer_acknowledged": {
+            "type": "boolean",
+            "description": "**HOME_LOAN** — **Disclaimer:** *The information you provide will be used according to applicable laws and internal Metrobank process and regulations.* Required **true** when **`product_code`** is **`HOME_LOAN`**. Full policy copy: **`docs/METROBANK_HOME_LOAN_POLICIES.md`**."
+          }
         }
       },
       "PrimaryIdDocumentType": {
@@ -1866,19 +1934,23 @@
           "mailing_same_as_residential",
           "residential_address"
         ],
-        "description": "Alternative: send **full_name** instead of **first_name**/**last_name** — server accepts either pattern (see **`validatePersonalLoanIntakeShape`**). OpenAPI lists structured names as canonical.",
+        "description": "Alternative: send **full_name** instead of **first_name**/**last_name** — server accepts either pattern (see **`validatePersonalLoanIntakeShape`** / **`validateHomeLoanIntakeShape`**). OpenAPI lists structured names as canonical. **Name length:** **PERSONAL_LOAN** enforces **1–30** chars per part; **HOME_LOAN** (Metrobank Home Loan form) enforces **1–40**.",
         "properties": {
           "first_name": {
             "type": "string",
-            "maxLength": 30,
-            "description": "Letters and spaces; trimmed; 1–30 chars; no leading/trailing spaces."
+            "maxLength": 40,
+            "description": "Letters and spaces; trimmed; no leading/trailing spaces. **PERSONAL_LOAN:** 1–30. **HOME_LOAN:** 1–40 (Metrobank application form)."
           },
           "middle_name": {
             "type": "string",
             "maxLength": 30,
             "description": "Optional. When present: **1–30** characters, letters and spaces only (no digits or punctuation), single spaces between words; **no** leading or trailing spaces. Omit or leave empty to skip."
           },
-          "last_name": { "type": "string", "maxLength": 30 },
+          "last_name": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Same rules as **first_name** (30 vs 40 by product — see **`validateHomeLoanIntakeShape`**)."
+          },
           "full_name": {
             "type": "string",
             "description": "Legacy single field if structured names are omitted (letters/spaces, trimmed)."
@@ -1886,7 +1958,7 @@
           "email": { "type": "string", "format": "email" },
           "mobile_phone": {
             "type": "string",
-            "description": "Philippine mobile — **+639XXXXXXXXX**, **09XXXXXXXXX**, or **9XXXXXXXXX** (national first digit **9**)."
+            "description": "Philippine mobile (**country code +63**) — **+639XXXXXXXXX**, **09XXXXXXXXX**, or **9XXXXXXXXX** (national first digit **9**, i.e. **(+63)9XXXXXXXXX** display form)."
           },
           "date_of_birth": {
             "type": "string",
@@ -1900,8 +1972,7 @@
           "primary_id_document_type": { "$ref": "#/components/schemas/Step3PrimaryIdDocumentType" },
           "primary_id_document_number": {
             "type": "string",
-            "pattern": "^\\d{11}$",
-            "description": "Declared ID number — **11 digits** in this sandbox."
+            "description": "Declared ID number. **PERSONAL_LOAN:** **11 digits**. **HOME_LOAN:** **6–40** characters (letters, digits, hyphen) — passport-friendly (**`validateHomeLoanIntakeShape`**)."
           },
           "consents": { "$ref": "#/components/schemas/BorrowerConsentsIn" },
           "gender": {
@@ -2043,7 +2114,7 @@
           "gross_monthly_income_cents": {
             "type": "integer",
             "minimum": 0,
-            "description": "**PHP centavos** — **Gross Monthly Income**; ×12 must meet product **min_annual_income_cents** (PHP **250,000**/year minimum)."
+            "description": "**PHP centavos** — **Gross Monthly Income**; ×12 must meet product **min_annual_income_cents** (**PERSONAL_LOAN:** PHP **250,000**/year minimum; **HOME_LOAN:** PHP **40,000**/month minimum — Metrobank family income rule in this mock)."
           },
           "employer_name": { "type": "string" },
           "employer_address": {
@@ -2085,7 +2156,7 @@
             "type": "integer",
             "minimum": 1,
             "multipleOf": 100,
-            "description": "**PHP centavos**; whole pesos (**divisible by 100**). Range: product **min_principal_cents**–**max_principal_cents**."
+            "description": "**PHP centavos**; whole pesos (**divisible by 100**). Range: product **min_principal_cents**–**max_principal_cents** (**HOME_LOAN:** min **PHP 500,000**; principal must not exceed **LTV %** × **`additional_information.property_appraised_value_cents`** for the chosen **loan_purpose** — e.g. up to **80%** for house-and-lot purchase / construction / renovation per catalogue)."
           },
           "term_months": {
             "type": "integer",

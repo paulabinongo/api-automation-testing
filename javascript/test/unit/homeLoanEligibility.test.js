@@ -3,6 +3,36 @@ import { describe, expect, it } from 'vitest'
 import { evaluateHomeLoanEligibility } from '../../lib/loan-products/home-loan/homeLoanEligibility.js'
 import { buildHomeLoanSampleApplication } from '../../lib/sampleData.js'
 
+/**
+ * Income-only intake skips age / tenure / citizenship / OFW contract checks. Use this for tests that assert those rules.
+ * @param {ReturnType<typeof buildHomeLoanSampleApplication>} body
+ * @param {{ borrower?: object, additional_information?: object, employment?: object }} [overrides]
+ */
+function homeLoanWithFullEligibilityFields(body, overrides = {}) {
+  const out = structuredClone(body)
+  out.borrower = {
+    ...out.borrower,
+    citizenship: 'FILIPINO',
+    date_of_birth: out.borrower.date_of_birth || '1990-01-01',
+    ...overrides.borrower,
+  }
+  out.additional_information = {
+    ...out.additional_information,
+    no_adverse_credit_history: true,
+    ...overrides.additional_information,
+  }
+  out.employment = {
+    ...out.employment,
+    status: 'EMPLOYED',
+    source_of_funds: 'EMPLOYED',
+    employment_status: 'REGULAR',
+    is_regular_employment: true,
+    years_with_current_employer: 5,
+    ...overrides.employment,
+  }
+  return out
+}
+
 describe('evaluateHomeLoanEligibility', () => {
   const ref = new Date('2026-06-15T12:00:00.000Z')
 
@@ -22,8 +52,9 @@ describe('evaluateHomeLoanEligibility', () => {
   })
 
   it('fails when employed tenure under 2 years', () => {
-    const body = buildHomeLoanSampleApplication()
-    body.employment.years_with_current_employer = 1
+    const body = homeLoanWithFullEligibilityFields(buildHomeLoanSampleApplication(), {
+      employment: { years_with_current_employer: 1 },
+    })
     const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
     expect(out.eligible).toBe(false)
   })
@@ -37,34 +68,42 @@ describe('evaluateHomeLoanEligibility', () => {
   })
 
   it('fails when applicant is over 65 at application date', () => {
-    const body = buildHomeLoanSampleApplication(240)
-    body.borrower.date_of_birth = '1938-01-01'
+    const body = homeLoanWithFullEligibilityFields(buildHomeLoanSampleApplication(240), {
+      borrower: { date_of_birth: '1938-01-01' },
+    })
     const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
     expect(out.eligible).toBe(false)
   })
 
   it('passes for foreigner with permanent resident visa (same income/tenure)', () => {
-    const body = buildHomeLoanSampleApplication(240)
-    body.borrower.citizenship = 'FOREIGNER_PERMANENT_RESIDENT'
+    const body = homeLoanWithFullEligibilityFields(buildHomeLoanSampleApplication(240), {
+      borrower: { citizenship: 'FOREIGNER_PERMANENT_RESIDENT' },
+    })
     const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
     expect(out.eligible).toBe(true)
   })
 
   it('fails OFW sea-based when contract months under 24', () => {
-    const body = buildHomeLoanSampleApplication(180)
-    body.additional_information.home_loan_applicant_category = 'OFW'
-    body.additional_information.ofw_employment_basis = 'SEA_BASED'
-    body.additional_information.ofw_sea_contract_months_total = 20
+    const body = homeLoanWithFullEligibilityFields(buildHomeLoanSampleApplication(180), {
+      additional_information: {
+        home_loan_applicant_category: 'OFW',
+        ofw_employment_basis: 'SEA_BASED',
+        ofw_sea_contract_months_total: 20,
+      },
+    })
     const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
     expect(out.eligible).toBe(false)
   })
 
   it('passes OFW sea-based when contract months at least 24', () => {
-    const body = buildHomeLoanSampleApplication(180)
-    body.additional_information.home_loan_applicant_category = 'OFW'
-    body.additional_information.ofw_employment_basis = 'SEA_BASED'
-    body.additional_information.ofw_sea_contract_months_total = 24
-    body.employment.years_with_current_employer = 0
+    const body = homeLoanWithFullEligibilityFields(buildHomeLoanSampleApplication(180), {
+      additional_information: {
+        home_loan_applicant_category: 'OFW',
+        ofw_employment_basis: 'SEA_BASED',
+        ofw_sea_contract_months_total: 24,
+      },
+      employment: { years_with_current_employer: 0 },
+    })
     const out = evaluateHomeLoanEligibility(body, { referenceDate: ref })
     expect(out.eligible).toBe(true)
   })

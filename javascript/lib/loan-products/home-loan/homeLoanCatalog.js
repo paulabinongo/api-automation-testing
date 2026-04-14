@@ -308,7 +308,8 @@ export const HOME_LOAN_PRODUCT = Object.freeze({
     ]),
   }),
   /**
-   * Metrobank-style **end-to-end lifecycle** (training / UX reference). The mock maps steps to the same **`/v1/loan-applications`** and **`/v1/loans`** routes as **§5.0**; **`metrobank_home_loan_lifecycle_phase`** on **`ApplicationOut`** / **`LoanOut`** echoes the current phase (**1–6**) from application + loan state (**`metrobankHomeLoanLifecyclePhase.js`**).
+   * Metrobank-style **end-to-end lifecycle** (training / UX reference). Not enforced as separate API phases —
+   * the mock maps steps to the same **`/v1/loan-applications`** and **`/v1/loans`** routes as **§5.0**.
    */
   metrobank_lifecycle_phases: Object.freeze([
     Object.freeze({

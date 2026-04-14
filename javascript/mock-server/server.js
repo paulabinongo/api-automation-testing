@@ -13,6 +13,8 @@ import { randomUUID } from 'crypto'
 import { PAYMENT_METHODS } from '../lib/loanConstants.js'
 import {
   applicationRequiresMetrobankDepositAccountConfirmation,
+  applyHomeLoanInternalFieldDefaults,
+  applyHomeLoanPublicFormDefaults,
   buildLoanProductReferencePayload,
   METROBANK_DEPOSIT_REPAYMENT_PLAN,
   primaryIdUploadValuesForProduct,
@@ -358,6 +360,13 @@ function validateCreateBody(body, options) {
   return validateApplicationAgainstCatalog(body, options || {})
 }
 
+/** HOME_LOAN: merge Metrobank public-form defaults before catalogue validation. */
+function normalizeLoanApplicationBody(body) {
+  const raw = body && typeof body === 'object' ? body : {}
+  if (raw.product_code === 'HOME_LOAN') return applyHomeLoanPublicFormDefaults(raw)
+  return raw
+}
+
 function authRequired(req, res, next) {
   const h = req.headers.authorization || ''
   const m = /^Bearer\s+(\S+)/i.exec(h)
@@ -411,6 +420,12 @@ function sendLoanComputationPreview(req, res) {
     req.query.loan_purpose != null && String(req.query.loan_purpose).trim() !== ''
       ? String(req.query.loan_purpose)
       : undefined
+  let interestFixingYears = 1
+  if (productCodeRaw === 'HOME_LOAN') {
+    if (req.query.interest_fixing_years != null && String(req.query.interest_fixing_years).trim() !== '') {
+      interestFixingYears = Number(req.query.interest_fixing_years)
+    }
+  }
   const errs = []
   if (!Number.isFinite(principalCents) || principalCents !== Math.round(principalCents)) {
     errs.push('principal_cents must be a whole number (PHP centavos)')
@@ -431,6 +446,14 @@ function sendLoanComputationPreview(req, res) {
         (Array.isArray(allowedTerms) ? allowedTerms.join(', ') : '(see product catalogue)'),
     )
   }
+  if (
+    productCodeRaw === 'HOME_LOAN' &&
+    req.query.interest_fixing_years != null &&
+    String(req.query.interest_fixing_years).trim() !== '' &&
+    (!Number.isInteger(interestFixingYears) || interestFixingYears < 1 || interestFixingYears > 5)
+  ) {
+    errs.push('interest_fixing_years must be an integer from 1 to 5 (HOME_LOAN initial fixing period)')
+  }
   if (errs.length) return sendError(req, res, 422, errs)
   const minP = /** @type {number} */ (product.min_principal_cents)
   const maxP = /** @type {number} */ (product.max_principal_cents)
@@ -444,6 +467,7 @@ function sendLoanComputationPreview(req, res) {
   }
   const preview = computeLoanPreviewForProduct(productCodeRaw, principalCents, termMonths, {
     loan_purpose: loanPurposeQ,
+    ...(productCodeRaw === 'HOME_LOAN' ? { interest_fixing_years: interestFixingYears } : {}),
   })
   if (!preview.ok) return sendError(req, res, 422, preview.errors)
   res.json(preview.payload)
@@ -456,11 +480,17 @@ function sendLoanComputationPreviewFromApplication(req, res) {
   if (row.owner_user_id != null && row.owner_user_id !== req.bankSession.user_id) {
     return sendError(req, res, 403, 'Not allowed to access this application')
   }
+  const ai = row.additional_information && typeof row.additional_information === 'object' ? row.additional_information : {}
+  let fixingYears = ai.interest_fixing_years != null ? Number(ai.interest_fixing_years) : 1
+  if (!Number.isInteger(fixingYears) || fixingYears < 1 || fixingYears > 5) fixingYears = 1
   const preview = computeLoanPreviewForProduct(
     String(row.product_code),
     row.principal_cents,
     row.term_months,
-    { loan_purpose: row.loan_purpose },
+    {
+      loan_purpose: row.loan_purpose,
+      ...(String(row.product_code) === 'HOME_LOAN' ? { interest_fixing_years: fixingYears } : {}),
+    },
   )
   if (!preview.ok) return sendError(req, res, 422, preview.errors)
   res.json({ ...preview.payload, application_id: row.id })
@@ -564,11 +594,12 @@ v1.post('/loan-applications', (req, res) => {
       'Complete customer onboarding first: POST /v1/onboarding/kyc with a logged-in session, then create an application',
     )
   }
-  const errors = validateCreateBody(req.body)
+  const body = normalizeLoanApplicationBody(req.body)
+  const errors = validateCreateBody(body)
   if (errors.length) {
     return sendError(req, res, 422, errors)
   }
-  const elig = evaluateEligibilityForProduct(req.body)
+  const elig = evaluateEligibilityForProduct(body)
   if (!elig.eligible) {
     return sendError(
       req,
@@ -577,6 +608,7 @@ v1.post('/loan-applications', (req, res) => {
       elig.failed_checks.map((c) => 'Eligibility: ' + c),
     )
   }
+  const persisted = applyHomeLoanInternalFieldDefaults(body)
   const {
     product_code,
     principal_cents,
@@ -586,7 +618,7 @@ v1.post('/loan-applications', (req, res) => {
     employment,
     loan_purpose,
     additional_information,
-  } = req.body
+  } = persisted
   const aid = uuid()
   const row = {
     id: aid,
@@ -626,11 +658,12 @@ v1.post('/loan-applications/eligibility-preview', (req, res) => {
       'Complete customer onboarding first: POST /v1/onboarding/kyc with a logged-in session, then run eligibility preview',
     )
   }
-  const errors = validateCreateBody(req.body)
+  const body = normalizeLoanApplicationBody(req.body)
+  const errors = validateCreateBody(body)
   if (errors.length) {
     return sendError(req, res, 422, errors)
   }
-  const result = evaluateEligibilityForProduct(req.body)
+  const result = evaluateEligibilityForProduct(body)
   res.json({
     eligible: result.eligible,
     checks: result.checks,
@@ -674,11 +707,12 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
       ...(p.employment && typeof p.employment === 'object' ? p.employment : {}),
     },
   }
-  const errors = validateCreateBody(mergedBody, { personalLoanPrimaryIdPolicy: 'full' })
+  const body = normalizeLoanApplicationBody(mergedBody)
+  const errors = validateCreateBody(body, { personalLoanPrimaryIdPolicy: 'full' })
   if (errors.length) {
     return sendError(req, res, 422, errors)
   }
-  const elig = evaluateEligibilityForProduct(mergedBody)
+  const elig = evaluateEligibilityForProduct(body)
   if (!elig.eligible) {
     return sendError(
       req,
@@ -687,8 +721,9 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
       elig.failed_checks.map((c) => 'Eligibility: ' + c),
     )
   }
+  const persisted = applyHomeLoanInternalFieldDefaults(body)
   const oldPid = String(row.borrower?.primary_id_document_type || '')
-  const newPid = String(mergedBody.borrower?.primary_id_document_type || '')
+  const newPid = String(persisted.borrower?.primary_id_document_type || '')
   if (row.document_intake?.completed_at && oldPid !== newPid) {
     delete row.document_intake
     delete row.home_loan_booking_fees
@@ -704,14 +739,14 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
     row.metrobank_deposit_account_confirmed_at = null
   }
   Object.assign(row, {
-    product_code: mergedBody.product_code,
-    principal_cents: mergedBody.principal_cents,
-    term_months: mergedBody.term_months,
-    metrobank_client_type: mergedBody.metrobank_client_type,
-    loan_purpose: mergedBody.loan_purpose,
-    additional_information: mergedBody.additional_information,
-    borrower: mergedBody.borrower,
-    employment: mergedBody.employment,
+    product_code: persisted.product_code,
+    principal_cents: persisted.principal_cents,
+    term_months: persisted.term_months,
+    metrobank_client_type: persisted.metrobank_client_type,
+    loan_purpose: persisted.loan_purpose,
+    additional_information: persisted.additional_information,
+    borrower: persisted.borrower,
+    employment: persisted.employment,
   })
   res.json(sanitizeApplicationOut(row))
 })

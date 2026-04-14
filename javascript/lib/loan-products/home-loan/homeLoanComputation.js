@@ -1,9 +1,12 @@
 /**
- * Home Loan payment preview — level **annual %** by lock-in bucket (years 1–5) with Home Equity +1% tier.
+ * Home Loan payment preview — level **annual %** by **interest fixing** bucket (1–5 years) with Home Equity +1% tier.
+ * **Loan term** (amortization length, 1–25 years) is independent of the **initial fixing period** (Metrobank calculator UX).
  */
 
 import {
   HOME_LOAN_ANNUAL_RATES_BY_LOCK_IN_YEARS,
+  HOME_LOAN_MAX_TERM_YEARS,
+  HOME_LOAN_MIN_TERM_YEARS,
   HOME_LOAN_PRODUCT,
   HOME_LOAN_PURPOSE_DETAILS,
 } from './homeLoanCatalog.js'
@@ -25,29 +28,42 @@ function levelMonthlyPaymentCents(principalCents, annualPercent, nMonths) {
 }
 
 /**
- * @param {number} termMonths
+ * @param {number} lockYears 1–5 — **interest fixing** period (not loan tenor)
  * @param {boolean} useHomeEquityTier
  */
-function annualPercentForTerm(termMonths, useHomeEquityTier) {
-  const bucket = Math.min(5, Math.max(1, Math.ceil(termMonths / 12)))
-  const row = HOME_LOAN_ANNUAL_RATES_BY_LOCK_IN_YEARS[bucket - 1]
+function annualPercentForFixing(lockYears, useHomeEquityTier) {
+  const idx = Math.min(5, Math.max(1, lockYears)) - 1
+  const row = HOME_LOAN_ANNUAL_RATES_BY_LOCK_IN_YEARS[idx]
   return useHomeEquityTier ? row.home_equity_annual_percent : row.annual_interest_percent
 }
 
 /**
  * @param {number} principalCents
- * @param {number} termMonths
- * @param {{ loan_purpose?: string }} [options]
+ * @param {number} termMonths amortization tenor (**12–300** months = **1–25** years in **12**-month steps)
+ * @param {{ loan_purpose?: string, interest_fixing_years?: number }} [options] `interest_fixing_years` **1–5** (defaults **1**); invalid → **null**
  */
 export function computeHomeLoanPreview(principalCents, termMonths, options = {}) {
+  const minM = HOME_LOAN_MIN_TERM_YEARS * 12
+  const maxM = HOME_LOAN_MAX_TERM_YEARS * 12
   if (
     typeof principalCents !== 'number' ||
     !Number.isFinite(principalCents) ||
     principalCents <= 0 ||
     typeof termMonths !== 'number' ||
     !Number.isFinite(termMonths) ||
-    termMonths < 12
+    termMonths < minM ||
+    termMonths > maxM ||
+    termMonths % 12 !== 0
   ) {
+    return null
+  }
+
+  let fixingYears = options.interest_fixing_years
+  if (fixingYears == null) fixingYears = 1
+  if (typeof fixingYears !== 'number' || !Number.isInteger(fixingYears)) {
+    return null
+  }
+  if (fixingYears < 1 || fixingYears > 5) {
     return null
   }
 
@@ -57,7 +73,7 @@ export function computeHomeLoanPreview(principalCents, termMonths, options = {})
     HOME_LOAN_PURPOSE_DETAILS[/** @type {keyof typeof HOME_LOAN_PURPOSE_DETAILS} */ (purpose)]
       ?.uses_home_equity_rate_tier === true
 
-  const annualPercent = annualPercentForTerm(termMonths, useHomeEquity)
+  const annualPercent = annualPercentForFixing(fixingYears, useHomeEquity)
   const monthlyAmortizationCents = levelMonthlyPaymentCents(
     principalCents,
     annualPercent,
@@ -65,7 +81,6 @@ export function computeHomeLoanPreview(principalCents, termMonths, options = {})
   )
   const totalRepaymentCents = monthlyAmortizationCents * termMonths
   const totalInterestCents = Math.max(0, totalRepaymentCents - principalCents)
-  const lockYears = Math.min(5, Math.max(1, Math.ceil(termMonths / 12)))
 
   return {
     currency: 'PHP',
@@ -73,15 +88,16 @@ export function computeHomeLoanPreview(principalCents, termMonths, options = {})
     principal_cents: principalCents,
     term_months: termMonths,
     loan_purpose_used: purpose ?? null,
+    interest_fixing_years: fixingYears,
     pricing_model: 'LEVEL_ANNUAL_PERCENT_BY_LOCK_IN_BUCKET',
-    lock_in_pricing_years: lockYears,
+    lock_in_pricing_years: fixingYears,
     annual_interest_percent_on_file: annualPercent,
     monthly_amortization_cents: monthlyAmortizationCents,
     total_interest_cents: totalInterestCents,
     total_repayment_cents: totalRepaymentCents,
     formulas: Object.freeze({
       amortization:
-        'Amortizing loan: monthly payment from level annual rate; bucket = min(5, ceil(term_months/12)); Home Equity purpose uses +1% tier per year row.',
+        'Amortizing loan: monthly payment from level annual rate for the selected **interest fixing** period (**interest_fixing_years** 1–5). **term_months** is amortization length only (1–25 years); it does not select the rate bucket.',
       disclaimer:
         'Marketing rates apply the initial fixing bucket (1–5 years). At end of fixing, repricing follows Metrobank / market policy — not modeled as a separate API step.',
     }),

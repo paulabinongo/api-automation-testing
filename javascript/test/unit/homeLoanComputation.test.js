@@ -24,4 +24,26 @@ describe('computeHomeLoanPreview', () => {
       )
     }
   })
+
+  it('uses interest_fixing_years for the rate bucket, not loan term length', () => {
+    const tenYearTerm = computeHomeLoanPreview(50_000_000, 120, {
+      loan_purpose: 'PURCHASE_HOUSE_AND_LOT',
+      interest_fixing_years: 1,
+    })
+    const tenYearTermFiveYearFixing = computeHomeLoanPreview(50_000_000, 120, {
+      loan_purpose: 'PURCHASE_HOUSE_AND_LOT',
+      interest_fixing_years: 5,
+    })
+    expect(tenYearTerm && tenYearTermFiveYearFixing).toBeTruthy()
+    if (tenYearTerm && tenYearTermFiveYearFixing) {
+      expect(tenYearTerm.interest_fixing_years).toBe(1)
+      expect(tenYearTermFiveYearFixing.interest_fixing_years).toBe(5)
+      expect(tenYearTermFiveYearFixing.annual_interest_percent_on_file).toBeGreaterThan(
+        tenYearTerm.annual_interest_percent_on_file,
+      )
+      expect(tenYearTermFiveYearFixing.monthly_amortization_cents).toBeGreaterThan(
+        tenYearTerm.monthly_amortization_cents,
+      )
+    }
+  })
 })

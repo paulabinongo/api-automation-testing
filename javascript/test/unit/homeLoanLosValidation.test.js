@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import {
+  applyHomeLoanInternalFieldDefaults,
+  applyHomeLoanPublicFormDefaults,
+} from '../../lib/loanProductCatalog.js'
 import { buildHomeLoanSampleApplication } from '../../lib/sampleData.js'
 import {
   computeHomeLoanApplicationNonRefundableFees,
@@ -11,21 +15,29 @@ import {
   validateHomeLoanDocumentChecklistAgainstProfile,
 } from '../../lib/loan-products/home-loan/homeLoanLosValidation.js'
 
+/** Row as stored after mock-server defaults (internal KYC + expanded employment). */
+function persistedHomeLoanSample(termMonths = 240) {
+  return applyHomeLoanInternalFieldDefaults(
+    applyHomeLoanPublicFormDefaults(buildHomeLoanSampleApplication(termMonths)),
+  )
+}
+
 describe('getRequiredHomeLoanDocumentKeys', () => {
-  it('includes income and marriage for default sample (MARRIED, RESIDENT, EMPLOYED)', () => {
-    const keys = getRequiredHomeLoanDocumentKeys(buildHomeLoanSampleApplication(240))
-    expect(keys).toContain(HOME_LOAN_DOC_KEYS.PERSONAL_MARRIAGE_CONTRACT_IF_APPLICABLE)
+  it('includes income for persisted default sample (SINGLE, RESIDENT, EMPLOYED)', () => {
+    const keys = getRequiredHomeLoanDocumentKeys(persistedHomeLoanSample(240))
+    expect(keys).not.toContain(HOME_LOAN_DOC_KEYS.PERSONAL_MARRIAGE_CONTRACT_IF_APPLICABLE)
     expect(keys).toContain(HOME_LOAN_DOC_KEYS.INCOME_EMPLOYED_COE_PAYSLIPS_OR_ITR)
     expect(keys).not.toContain(HOME_LOAN_DOC_KEYS.INCOME_SELF_EMPLOYED_AUDITED_FS_2Y)
   })
 
   it('requires audited FS when principal above PHP 3M', () => {
-    const body = buildHomeLoanSampleApplication(240)
+    const body = persistedHomeLoanSample(240)
     body.principal_cents = HOME_LOAN_AUDITED_FS_PRINCIPAL_THRESHOLD_CENTS + 100
     body.employment = {
       ...body.employment,
       status: 'SELF_EMPLOYED',
       source_of_funds: 'SELF_EMPLOYED',
+      years_in_current_business: 5,
     }
     const keys = getRequiredHomeLoanDocumentKeys(body)
     expect(keys).toContain(HOME_LOAN_DOC_KEYS.INCOME_SELF_EMPLOYED_AUDITED_FS_2Y)
@@ -64,7 +76,7 @@ describe('fees', () => {
 
 describe('validateHomeLoanDocumentChecklistAgainstProfile', () => {
   it('returns errors when a required key is false', () => {
-    const body = buildHomeLoanSampleApplication(240)
+    const body = persistedHomeLoanSample(240)
     const required = getRequiredHomeLoanDocumentKeys(body)
     const checklist = Object.fromEntries(required.map((k) => [k, true]))
     checklist[required[0]] = false

@@ -3,20 +3,17 @@
  * Catalogue is **PHP-only**: **`principal_cents`** and **`employment.gross_monthly_income_cents`** are **PHP centavos** (1 PHP = 100 centavos).
  */
 
-import {
-  HOME_LOAN_APPLICANT_CATEGORIES,
-  HOME_LOAN_CITIZENSHIP_ACCEPTED,
-  HOME_LOAN_OFW_EMPLOYMENT_BASIS,
-  HOME_LOAN_PRIMARY_ID_DOCUMENT_TYPES,
-  HOME_LOAN_PRODUCT,
-  HOME_LOAN_PURPOSES,
-  HOME_LOAN_STEP3_PRIMARY_ID_DOCUMENT_TYPES,
-} from './loan-products/home-loan/homeLoanCatalog.js'
+import { HOME_LOAN_PRODUCT, HOME_LOAN_PURPOSES } from './loan-products/home-loan/homeLoanCatalog.js'
 import {
   PERSONAL_LOAN_OCCUPATIONS,
   PERSONAL_LOAN_OCCUPATION_CODES,
 } from './loan-products/personal-loan/personalLoanOccupations.js'
-import { PH_ADDRESS_VALID_ROWS, isValidPhAddressTriplet } from './philippineAddressReference.js'
+import {
+  PH_ADDRESS_VALID_ROWS,
+  isValidPhAddressRow,
+  isValidPhAddressTriplet,
+} from './philippineAddressReference.js'
+import { isHomeLoanEmploymentIncomeOnly } from './loan-products/home-loan/homeLoanEligibility.js'
 import { PRODUCT_LOAN_TYPE } from './productLoanTaxonomy.js'
 
 export { PRODUCT_LOAN_TYPE } from './productLoanTaxonomy.js'
@@ -518,10 +515,35 @@ export function primaryIdUploadValuesForProduct(product) {
 
 const NAME_PART_RE = /^[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]+( [A-Za-z\u00C0-\u024F\u1E00-\u1EFF]+)*$/
 
+/** Metrobank Home Loan application form: first/last name max length (Personal Loan remains **30**). */
+export const METROBANK_HOME_LOAN_NAME_MAX_LEN = 40
+
+/** Optional **Subdivision/Village** on **HOME_LOAN** — letters, digits, single spaces between words. */
+const HOME_LOAN_SUBDIVISION_VILLAGE_RE =
+  /^[A-Za-z0-9]+(?: [A-Za-z0-9]+)*$/
+
 function isValidNamePart(s, maxLen = 30) {
   const t = String(s || '').trim()
   if (t.length < 1 || t.length > maxLen) return false
   return NAME_PART_RE.test(t)
+}
+
+/**
+ * @param {string} ymd
+ * @param {Date} [refDate]
+ */
+function isDateStrictlyAfterToday(ymd, refDate = new Date()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) return false
+  const [y, mo, d] = String(ymd).split('-').map(Number)
+  const candidate = new Date(y, mo - 1, d)
+  if (Number.isNaN(candidate.getTime())) return false
+  const today = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate())
+  return candidate.getTime() > today.getTime()
+}
+
+/** **HH:MM** (24-hour). */
+function isMetrobankPreferredContactTime(s) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(s))
 }
 
 /** Optional middle name: omit, whitespace-only, or 1–30 chars, letters/spaces only, no lead/trail space. */
@@ -564,7 +586,28 @@ function validateStreetLineNoBlkSt(raw, errs, fieldPath) {
   return true
 }
 
-function validateOptionalSubdivisionVillage(ra, errs) {
+/** **HOME_LOAN** — Metrobank **Street Address** (searchable, Philippines): letters, numbers, spaces, `#.,/-'&()`. */
+function validateStreetLineHomeLoan(raw, errs, fieldPath) {
+  if (raw !== raw.trim()) {
+    errs.push(`${fieldPath} must not have leading or trailing spaces`)
+    return false
+  }
+  if (raw.length < 1 || raw.length > 200) {
+    errs.push(
+      `${fieldPath} must be 1–200 characters (Metrobank Home Loan — street address in the Philippines)`,
+    )
+    return false
+  }
+  if (!/^[\p{L}\p{N}\s#.,\/'\-&()]+$/u.test(raw)) {
+    errs.push(
+      `${fieldPath} may use letters, numbers, spaces, and # . , / ' - & ( ) only`,
+    )
+    return false
+  }
+  return true
+}
+
+function validateOptionalSubdivisionVillage(ra, errs, homeLoanMetrobank) {
   const m = ra.subdivision_village
   if (m == null) return
   const raw = String(m)
@@ -575,6 +618,14 @@ function validateOptionalSubdivisionVillage(ra, errs) {
     )
     return
   }
+  if (homeLoanMetrobank) {
+    if (raw.length < 1 || raw.length > 256 || !HOME_LOAN_SUBDIVISION_VILLAGE_RE.test(raw)) {
+      errs.push(
+        'borrower.residential_address.subdivision_village: optional; when provided, 1–256 characters, alphanumeric with single spaces between words (Metrobank Home Loan form)',
+      )
+    }
+    return
+  }
   if (raw.length > 30 || !NAME_PART_RE.test(raw)) {
     errs.push(
       'borrower.residential_address.subdivision_village: optional; when provided, max 30 characters, letters and spaces only (no digits or special characters)',
@@ -582,7 +633,13 @@ function validateOptionalSubdivisionVillage(ra, errs) {
   }
 }
 
-function validateResidentialAddress(ra, errs) {
+/**
+ * @param {unknown} ra
+ * @param {string[]} errs
+ * @param {{ homeLoanMetrobank?: boolean }} [options] — **HOME_LOAN** uses Metrobank-style **subdivision_village** rules.
+ */
+function validateResidentialAddress(ra, errs, options = {}) {
+  const homeLoanMetrobank = options.homeLoanMetrobank === true
   if (!ra || typeof ra !== 'object') {
     errs.push('borrower.residential_address required')
     return
@@ -609,14 +666,25 @@ function validateResidentialAddress(ra, errs) {
     )
     return
   }
-  validateStreetLineNoBlkSt(String(st), errs, 'borrower.residential_address.street_line')
+  if (homeLoanMetrobank) {
+    validateStreetLineHomeLoan(String(st), errs, 'borrower.residential_address.street_line')
+  } else {
+    validateStreetLineNoBlkSt(String(st), errs, 'borrower.residential_address.street_line')
+  }
 
-  validateOptionalSubdivisionVillage(ra, errs)
+  validateOptionalSubdivisionVillage(ra, errs, homeLoanMetrobank)
 
+  const reg = ra.region != null ? String(ra.region).trim() : ''
   const prov = ra.province != null ? String(ra.province).trim() : ''
   const city = ra.city_town != null ? String(ra.city_town).trim() : ''
   const brgy = ra.barangay != null ? String(ra.barangay).trim() : ''
   const zip = ra.postal_code != null ? String(ra.postal_code).trim() : ''
+
+  if (homeLoanMetrobank && !reg) {
+    errs.push(
+      'borrower.residential_address.region required — Philippine administrative Region label (must match GET /reference/loan-products → philippine_address_sample_rows[].region for the same row as Province/City/Barangay/ZIP)',
+    )
+  }
 
   if (!prov) errs.push('borrower.residential_address.province required (Province)')
   if (!city) errs.push('borrower.residential_address.city_town required (City/Town)')
@@ -629,7 +697,15 @@ function validateResidentialAddress(ra, errs) {
     )
   }
 
-  if (prov && city && brgy && zip && /^\d{4}$/.test(zip)) {
+  if (homeLoanMetrobank) {
+    if (reg && prov && city && brgy && zip && /^\d{4}$/.test(zip)) {
+      if (!isValidPhAddressRow(reg, prov, city, brgy, zip)) {
+        errs.push(
+          'borrower.residential_address: Region, Province, City/Town, Barangay, and ZIP must match one combined row in GET /reference/loan-products → philippine_address_sample_rows',
+        )
+      }
+    }
+  } else if (prov && city && brgy && zip && /^\d{4}$/.test(zip)) {
     if (!isValidPhAddressTriplet(prov, city, brgy, zip)) {
       errs.push(
         'borrower.residential_address: Province, City/Town, Barangay, and ZIP must match one combined row in GET /reference/loan-products → philippine_address_sample_rows',
@@ -786,6 +862,18 @@ export function normalizePhilippineMobileDigits(s) {
   if (m) return '9' + m[1]
   m = /^(9\d{9})$/.exec(raw)
   if (m) return m[1]
+
+  /** Metrobank-style display: **(+63)9XXXXXXXXX** — strip punctuation, keep digits. */
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length === 12 && digits.startsWith('63') && digits[2] === '9') {
+    return digits.slice(2)
+  }
+  if (digits.length === 11 && digits.startsWith('09')) {
+    return '9' + digits.slice(2)
+  }
+  if (digits.length === 10 && digits[0] === '9') {
+    return digits
+  }
   return null
 }
 
@@ -1061,13 +1149,98 @@ export function validatePersonalLoanIntakeShape(body, options = {}) {
 }
 
 /**
- * **HOME_LOAN** intake (borrower + employment shared with Personal Loan shape; different purpose, IDs, appraisal).
+ * **HOME_LOAN** — Metrobank **public application form** only (names, contact, address, loan amount vs appraisal, income, preferred callback, policy consents).
+ * Call **before** **`validateHomeLoanIntakeShape`** so PEP / category / collateral defaults exist for eligibility and LOS.
+ *
  * @param {unknown} body
- * @param {{ primaryIdPolicy?: 'step3_only' | 'full' }} [options]
+ * @returns {object}
+ */
+export function applyHomeLoanPublicFormDefaults(body) {
+  if (!body || typeof body !== 'object' || body.product_code !== 'HOME_LOAN') return /** @type {object} */ (body)
+  const src = /** @type {Record<string, unknown>} */ (body)
+  const borrower = src.borrower && typeof src.borrower === 'object' ? { ...src.borrower } : {}
+  const ai =
+    src.additional_information && typeof src.additional_information === 'object'
+      ? { ...src.additional_information }
+      : {}
+  if (typeof ai.pep_close_family_or_public_position !== 'boolean') ai.pep_close_family_or_public_position = false
+  if (typeof ai.pep_financial_transactions_on_behalf !== 'boolean') ai.pep_financial_transactions_on_behalf = false
+  ai.home_loan_applicant_category = ai.home_loan_applicant_category || 'RESIDENT'
+  ai.collateral_property_type = ai.collateral_property_type || 'RESIDENTIAL'
+  if (typeof ai.collateral_is_vacant_lot !== 'boolean') ai.collateral_is_vacant_lot = false
+  if (typeof ai.no_adverse_credit_history !== 'boolean') ai.no_adverse_credit_history = true
+  return {
+    ...src,
+    loan_purpose: src.loan_purpose || 'PURCHASE_HOUSE_AND_LOT',
+    metrobank_client_type: src.metrobank_client_type || 'EXISTING_CLIENT_DEPOSIT_ACCOUNT',
+    borrower,
+    additional_information: ai,
+    employment: src.employment && typeof src.employment === 'object' ? { ...src.employment } : {},
+  }
+}
+
+/**
+ * Internal LOS / underwriting placeholders — applied **after** validation + eligibility, before persistence.
+ * Fills KYC-style fields when the public form omits them.
+ *
+ * @param {unknown} body
+ * @returns {object}
+ */
+export function applyHomeLoanInternalFieldDefaults(body) {
+  if (!body || typeof body !== 'object' || body.product_code !== 'HOME_LOAN') return /** @type {object} */ (body)
+  const src = /** @type {Record<string, unknown>} */ (body)
+  const borrower = { ...(src.borrower && typeof src.borrower === 'object' ? src.borrower : {}) }
+  borrower.mailing_same_as_residential = true
+  borrower.citizenship = borrower.citizenship || 'FILIPINO'
+  borrower.date_of_birth = borrower.date_of_birth || '1990-06-15'
+  borrower.primary_id_document_type = borrower.primary_id_document_type || 'PASSPORT'
+  if (!borrower.primary_id_document_number || !String(borrower.primary_id_document_number).trim()) {
+    borrower.primary_id_document_number = 'P000000000'
+  }
+  borrower.gender = borrower.gender || 'MALE'
+  borrower.marital_status = borrower.marital_status || 'SINGLE'
+  borrower.education = borrower.education || 'COLLEGE_GRADUATE'
+  borrower.place_of_birth = borrower.place_of_birth || 'Manila'
+  if (!borrower.full_name && borrower.first_name && borrower.last_name) {
+    borrower.full_name = `${String(borrower.first_name).trim()} ${String(borrower.last_name).trim()}`
+  }
+  const empIn = src.employment && typeof src.employment === 'object' ? src.employment : {}
+  let employment = { ...empIn }
+  if (isHomeLoanEmploymentIncomeOnly(empIn)) {
+    const gmi = /** @type {{ gross_monthly_income_cents?: number }} */ (empIn).gross_monthly_income_cents
+    employment = {
+      status: 'EMPLOYED',
+      source_of_funds: 'EMPLOYED',
+      employment_status: 'REGULAR',
+      occupation: 'OFFICE_CLERK',
+      industry: 'Services',
+      business_email: borrower.email,
+      years_working_total: 10,
+      gross_monthly_income_cents: gmi,
+      employer_name: 'On file separately',
+      employer_address: {
+        street_line: 'N/A',
+        province: 'NCR',
+        city_town: 'Makati',
+        barangay: 'Bel-Air',
+        postal_code: '1209',
+      },
+      years_with_current_employer: 3,
+      is_regular_employment: true,
+    }
+  }
+  return { ...src, borrower, employment }
+}
+
+/**
+ * **HOME_LOAN** — Metrobank **public application form** fields only (see **docs/DOCUMENTATION.md** §**5.0.1**).
+ * Expect **`applyHomeLoanPublicFormDefaults`** to have run on the body first.
+ *
+ * @param {unknown} body
+ * @param {{ primaryIdPolicy?: 'step3_only' | 'full' }} [_options]
  * @returns {string[]}
  */
-export function validateHomeLoanIntakeShape(body, options = {}) {
-  const primaryIdPolicy = options.primaryIdPolicy === 'full' ? 'full' : 'step3_only'
+export function validateHomeLoanIntakeShape(body, _options = {}) {
   const errs = []
   if (!body || typeof body !== 'object') return errs
   const b = body.borrower
@@ -1081,61 +1254,42 @@ export function validateHomeLoanIntakeShape(body, options = {}) {
 
   const ai = body.additional_information
   if (!ai || typeof ai !== 'object') {
-    errs.push(
-      'additional_information required (PEP, Home Loan appraisal, applicant category, collateral, credit declaration)',
-    )
+    errs.push('additional_information required (appraised value, preferred contact date/time; PEP defaults may be applied server-side)')
   } else {
-    if (typeof ai.pep_close_family_or_public_position !== 'boolean') {
-      errs.push('additional_information.pep_close_family_or_public_position must be true or false')
-    }
-    if (typeof ai.pep_financial_transactions_on_behalf !== 'boolean') {
-      errs.push('additional_information.pep_financial_transactions_on_behalf must be true or false')
-    }
     if (
       typeof ai.property_appraised_value_cents !== 'number' ||
       !Number.isFinite(ai.property_appraised_value_cents) ||
       ai.property_appraised_value_cents <= 0
     ) {
       errs.push(
-        'additional_information.property_appraised_value_cents required — appraisal value in PHP centavos',
+        'additional_information.property_appraised_value_cents required — appraisal value in PHP centavos (LTV cap vs principal)',
       )
     }
-    const cat = ai.home_loan_applicant_category
-    if (cat == null || !HOME_LOAN_APPLICANT_CATEGORIES.includes(String(cat))) {
-      errs.push('additional_information.home_loan_applicant_category required — RESIDENT | OFW')
-    }
-    if (ai.collateral_property_type !== 'RESIDENTIAL') {
-      errs.push('additional_information.collateral_property_type must be RESIDENTIAL')
-    }
-    if (typeof ai.collateral_is_vacant_lot !== 'boolean') {
-      errs.push('additional_information.collateral_is_vacant_lot must be true or false')
-    }
-    if (typeof ai.no_adverse_credit_history !== 'boolean') {
-      errs.push('additional_information.no_adverse_credit_history must be true or false')
-    }
-    if (
-      body.loan_purpose === 'HOME_EQUITY_PERSONAL_CONSUMPTION' &&
-      ai.home_equity_for_improvement != null &&
-      typeof ai.home_equity_for_improvement !== 'boolean'
-    ) {
-      errs.push('additional_information.home_equity_for_improvement must be boolean when provided')
+
+    if (ai.interest_fixing_years != null) {
+      const ify = ai.interest_fixing_years
+      if (typeof ify !== 'number' || !Number.isInteger(ify) || ify < 1 || ify > 5) {
+        errs.push('additional_information.interest_fixing_years must be integer 1–5 when provided')
+      }
     }
 
-    if (String(ai.home_loan_applicant_category) === 'OFW') {
-      const basis = ai.ofw_employment_basis
-      if (basis == null || !HOME_LOAN_OFW_EMPLOYMENT_BASIS.includes(String(basis))) {
-        errs.push(
-          'additional_information.ofw_employment_basis required for OFW — LAND_BASED | SEA_BASED',
-        )
-      }
-      if (String(basis) === 'SEA_BASED') {
-        const seaM = ai.ofw_sea_contract_months_total
-        if (typeof seaM !== 'number' || !Number.isFinite(seaM) || seaM < 0) {
-          errs.push(
-            'additional_information.ofw_sea_contract_months_total required — non-negative number (total sea contract months) when ofw_employment_basis is SEA_BASED',
-          )
-        }
-      }
+    const prefDate = ai.metrobank_preferred_contact_date
+    if (prefDate == null || String(prefDate).trim() === '') {
+      errs.push(
+        'additional_information.metrobank_preferred_contact_date required (YYYY-MM-DD) — strictly after today',
+      )
+    } else if (!isDateStrictlyAfterToday(String(prefDate))) {
+      errs.push(
+        'additional_information.metrobank_preferred_contact_date must be a valid calendar date strictly after today',
+      )
+    }
+    const prefTime = ai.metrobank_preferred_contact_time
+    if (prefTime == null || String(prefTime).trim() === '') {
+      errs.push('additional_information.metrobank_preferred_contact_time required — HH:MM 24-hour (time of day)')
+    } else if (!isMetrobankPreferredContactTime(prefTime)) {
+      errs.push(
+        'additional_information.metrobank_preferred_contact_time must be HH:MM in 24-hour form (00:00–23:59)',
+      )
     }
 
     const mtHl = String(body.metrobank_client_type || '')
@@ -1163,160 +1317,59 @@ export function validateHomeLoanIntakeShape(body, options = {}) {
   const ln = b.last_name
   const hasParts = fn != null && String(fn).trim() !== '' && ln != null && String(ln).trim() !== ''
   if (hasParts) {
-    if (!isValidNamePart(fn)) {
+    if (!isValidNamePart(fn, METROBANK_HOME_LOAN_NAME_MAX_LEN)) {
       errs.push(
-        'borrower.first_name must be 1–30 letters/spaces only, trimmed, no leading/trailing spaces',
+        'borrower.first_name must be 1–40 letters/spaces only (Metrobank Home Loan application form)',
       )
     }
-    if (!isValidNamePart(ln)) {
+    if (!isValidNamePart(ln, METROBANK_HOME_LOAN_NAME_MAX_LEN)) {
       errs.push(
-        'borrower.last_name must be 1–30 letters/spaces only, trimmed, no leading/trailing spaces',
+        'borrower.last_name must be 1–40 letters/spaces only (Metrobank Home Loan application form)',
       )
     }
   } else {
-    if (!b.full_name || !String(b.full_name).trim()) {
-      errs.push(
-        'borrower.first_name and borrower.last_name required (or legacy borrower.full_name)',
-      )
-    } else {
-      const full = String(b.full_name).trim()
-      if (full.length < 1 || full.length > 100 || !NAME_PART_RE.test(full)) {
-        errs.push('borrower.full_name must be letters/spaces only, 1–100 characters, trimmed')
-      }
-    }
+    errs.push('borrower.first_name and borrower.last_name required')
   }
-
-  validateOptionalMiddleName(b, errs)
 
   if (!isValidEmailLoose(b.email)) errs.push('borrower.email must be a valid email address')
 
   if (!normalizePhilippineMobileDigits(b.mobile_phone)) {
     errs.push(
-      'borrower.mobile_phone required — Philippine mobile: +639XXXXXXXXX, 09XXXXXXXXX, or 9XXXXXXXXX (first national digit 9)',
+      'borrower.mobile_phone required — Philippine mobile: +639XXXXXXXXX, 09XXXXXXXXX, or 9XXXXXXXXX (national digit 9)',
     )
   }
 
-  if (!b.date_of_birth || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.date_of_birth))) {
-    errs.push('borrower.date_of_birth required (YYYY-MM-DD)')
-  } else if (!isDobStrictlyBeforeToday(b.date_of_birth)) {
-    errs.push('borrower.date_of_birth must be strictly before today (past date of birth)')
-  }
-
-  if (!b.citizenship) errs.push('borrower.citizenship required')
-  else if (!HOME_LOAN_CITIZENSHIP_ACCEPTED.includes(String(b.citizenship))) {
-    errs.push(
-      'borrower.citizenship must be one of: ' + HOME_LOAN_CITIZENSHIP_ACCEPTED.join(', '),
-    )
-  }
-
-  const pid = b.primary_id_document_type
-  const allowedPid =
-    primaryIdPolicy === 'full'
-      ? HOME_LOAN_PRIMARY_ID_DOCUMENT_TYPES
-      : HOME_LOAN_STEP3_PRIMARY_ID_DOCUMENT_TYPES
-  if (pid == null || String(pid).trim() === '') {
-    errs.push(
-      'borrower.primary_id_document_type required — create: Home Loan step3_primary_id_document_types; PATCH may use full primary_id_document_types',
-    )
-  } else if (!allowedPid.includes(String(pid))) {
-    errs.push(
-      'borrower.primary_id_document_type must be one of: ' +
-        allowedPid.join(', ') +
-        (primaryIdPolicy === 'step3_only'
-          ? ' (Step 3 subset on create — use PATCH then upload for other ID types)'
-          : ''),
-    )
-  }
-
-  const idNum = b.primary_id_document_number
-  const idStr = idNum != null ? String(idNum).trim() : ''
-  if (!/^[A-Za-z0-9\-]{6,40}$/.test(idStr)) {
-    errs.push(
-      'borrower.primary_id_document_number must be 6–40 characters: letters, digits, hyphen (Home Loan / passport-friendly)',
-    )
-  }
   const c = b.consents
-  if (!c || typeof c !== 'object') errs.push('borrower.consents required')
+  if (!c || typeof c !== 'object') errs.push('borrower.consents required (Metrobank policies & conditions)')
   else {
-    if (c.terms_of_use_accepted !== true) {
-      errs.push('borrower.consents.terms_of_use_accepted must be true')
-    }
+    if (c.terms_of_use_accepted !== true) errs.push('borrower.consents.terms_of_use_accepted must be true')
     if (c.terms_and_conditions_accepted !== true) {
       errs.push('borrower.consents.terms_and_conditions_accepted must be true')
     }
     if (c.data_privacy_policy_accepted !== true) {
       errs.push('borrower.consents.data_privacy_policy_accepted must be true')
     }
-  }
-
-  if (!PERSONAL_LOAN_GENDERS.includes(/** @type {any} */ (b.gender))) {
-    errs.push('borrower.gender required — FEMALE | MALE | UNKNOWN')
-  }
-  if (!PERSONAL_LOAN_MARITAL_STATUSES.includes(/** @type {any} */ (b.marital_status))) {
-    errs.push(
-      'borrower.marital_status required — see GET /v1/reference/loan-products → marital_status_options',
-    )
-  }
-  if (!PERSONAL_LOAN_EDUCATION_LEVELS.includes(/** @type {any} */ (b.education))) {
-    errs.push(
-      'borrower.education required — see GET /v1/reference/loan-products → education_options (dropdown + search in production)',
-    )
-  }
-  validatePlaceOfBirthStrict(b, errs)
-
-  validateResidentialAddress(b.residential_address, errs)
-  validateOptionalHomePhone(b, errs)
-
-  if (typeof b.mailing_same_as_residential !== 'boolean') {
-    errs.push('borrower.mailing_same_as_residential must be true or false')
-  } else if (!b.mailing_same_as_residential) {
-    const ma = b.mailing_address
-    if (!ma || typeof ma !== 'object')
-      errs.push('borrower.mailing_address required when mailing_same_as_residential is false')
-    else {
-      if (!String(ma.line1 || '').trim()) errs.push('borrower.mailing_address.line1 required')
-      if (!String(ma.city || '').trim()) errs.push('borrower.mailing_address.city required')
-      if (!String(ma.province_region || '').trim()) {
-        errs.push('borrower.mailing_address.province_region required')
-      }
-      if (ma.postal_code == null || String(ma.postal_code).trim() === '') {
-        errs.push('borrower.mailing_address.postal_code required')
-      }
+    if (c.home_loan_undertaking_accepted !== true) {
+      errs.push('borrower.consents.home_loan_undertaking_accepted must be true (Home Loan undertaking)')
     }
-  }
-
-  const emp = body.employment
-  if (!emp || typeof emp !== 'object') errs.push('employment required')
-  else {
-    if (
-      !emp.source_of_funds ||
-      !PERSONAL_LOAN_SOURCE_OF_FUNDS.includes(String(emp.source_of_funds))
-    ) {
-      errs.push('employment.source_of_funds required — ' + PERSONAL_LOAN_SOURCE_OF_FUNDS.join(', '))
+    if (c.metrobank_amla_disclosure_acknowledged !== true) {
+      errs.push('borrower.consents.metrobank_amla_disclosure_acknowledged must be true (AMLA)')
     }
-    if (
-      !emp.employment_status ||
-      !PERSONAL_LOAN_EMPLOYMENT_STATUSES.includes(String(emp.employment_status))
-    ) {
+    if (c.metrobank_policies_footer_disclaimer_acknowledged !== true) {
       errs.push(
-        'employment.employment_status required — ' + PERSONAL_LOAN_EMPLOYMENT_STATUSES.join(', '),
+        'borrower.consents.metrobank_policies_footer_disclaimer_acknowledged must be true (footer disclaimer)',
       )
     }
-    if (emp.occupation == null || !PERSONAL_LOAN_OCCUPATION_CODES.has(String(emp.occupation))) {
-      errs.push(
-        'employment.occupation must be one of occupations[].value on GET /v1/reference/loan-products',
-      )
-    }
-    const industry = String(emp.industry || '').trim()
-    if (industry.length < 2 || industry.length > 80) {
-      errs.push('employment.industry required (2–80 characters)')
-    }
-    if (!isValidEmailLoose(emp.business_email)) {
-      errs.push('employment.business_email must be a valid email (e.g. name@company.com)')
-    }
-    if (typeof emp.years_working_total !== 'number' || emp.years_working_total < 0) {
-      errs.push('employment.years_working_total must be a number >= 0')
-    }
+  }
+
+  validateResidentialAddress(b.residential_address, errs, { homeLoanMetrobank: true })
+
+  if (!isHomeLoanEmploymentIncomeOnly(body.employment)) {
+    errs.push(
+      'Metrobank Home Loan application form: employment must contain only gross_monthly_income_cents (PHP centavos; minimum PHP 40,000/month)',
+    )
+  } else {
+    const emp = /** @type {{ gross_monthly_income_cents?: number }} */ (body.employment)
     if (
       typeof emp.gross_monthly_income_cents !== 'number' ||
       !Number.isFinite(emp.gross_monthly_income_cents) ||
@@ -1328,48 +1381,9 @@ export function validateHomeLoanIntakeShape(body, options = {}) {
       emp.gross_monthly_income_cents * 12 < HOME_LOAN_PRODUCT.min_annual_income_cents
     ) {
       errs.push(
-        'employment.gross_monthly_income_cents × 12 must be at least the Home Loan minimum (PHP 40,000/month family income — see min_annual_income_cents on product)',
+        'employment.gross_monthly_income_cents × 12 must be at least PHP 40,000/month (see product min_annual_income_cents)',
       )
     }
-
-    if (emp.status !== 'EMPLOYED' && emp.status !== 'SELF_EMPLOYED') {
-      errs.push('employment.status must be EMPLOYED or SELF_EMPLOYED')
-    } else if (emp.source_of_funds === 'EMPLOYED' && emp.status !== 'EMPLOYED') {
-      errs.push('employment.status must be EMPLOYED when employment.source_of_funds is EMPLOYED')
-    } else if (emp.source_of_funds === 'SELF_EMPLOYED' && emp.status !== 'SELF_EMPLOYED') {
-      errs.push(
-        'employment.status must be SELF_EMPLOYED when employment.source_of_funds is SELF_EMPLOYED',
-      )
-    } else if (emp.status === 'EMPLOYED') {
-      if (!String(emp.employer_name || '').trim()) {
-        errs.push('employment.employer_name required when status is EMPLOYED')
-      }
-      if (typeof emp.years_with_current_employer !== 'number') {
-        errs.push('employment.years_with_current_employer must be a number')
-      }
-      if (typeof emp.is_regular_employment !== 'boolean') {
-        errs.push('employment.is_regular_employment must be true or false')
-      }
-      validateEmployerAddress(emp.employer_address, errs)
-    } else {
-      if (!String(emp.business_name || '').trim()) {
-        errs.push('employment.business_name required when status is SELF_EMPLOYED')
-      }
-      if (typeof emp.years_in_current_business !== 'number') {
-        errs.push('employment.years_in_current_business must be a number')
-      }
-    }
-
-    if (
-      typeof emp.years_with_current_employer === 'number' &&
-      typeof emp.years_working_total === 'number' &&
-      emp.years_with_current_employer > emp.years_working_total
-    ) {
-      errs.push('employment.years_with_current_employer must be <= employment.years_working_total')
-    }
-
-    validateOptionalBusinessMobile(emp, errs)
-    validateOptionalLandlinePhone(emp.business_phone, errs, 'employment.business_phone')
   }
 
   return errs
