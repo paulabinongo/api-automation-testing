@@ -9,7 +9,7 @@
  * - **Effective interest rate (EIR)** (annual %): solve monthly rate **r** from borrower cash flows:
  *   `net_proceeds = Σ monthly_amort / (1+r)^k` for k = 1..n, then **((1+r)^12 − 1) × 100**
  */
-import { PERSONAL_LOAN_PRODUCT } from '../../loanProductCatalog.js'
+import { PERSONAL_LOAN_PRODUCT } from '../../../loanProductCatalog.js'
 
 /** @param {number} termMonths */
 export function getPersonalLoanTermOption(termMonths) {

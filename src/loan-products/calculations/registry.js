@@ -3,8 +3,8 @@
  * Add a new **`product_code`** here when you implement **`evaluateXEligibility`** (and register the product object in **`loanProductCatalog.js`**).
  */
 
-import { evaluateHomeLoanEligibility } from './home-loan/homeLoanEligibility.js'
-import { evaluatePersonalLoanEligibility } from './personal-loan/personalLoanEligibility.js'
+import { evaluateHomeLoanEligibility } from '../types/home-loan/homeLoanEligibility.js'
+import { evaluatePersonalLoanEligibility } from '../types/personal-loan/personalLoanEligibility.js'
 
 /** @typedef {ReturnType<typeof evaluatePersonalLoanEligibility>} EligibilityResult */
 

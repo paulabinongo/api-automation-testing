@@ -1,10 +1,103 @@
 # Loan Lifecycle API Automation — Complete guide
 
-**Stack:** **JavaScript only**, **Node.js 20+**. **Vitest** runs tests; a small **HTTP client** calls the API; a **practice bank server** answers locally; **Swagger UI** shows the same contract as `**openapi.json`**.
+**Stack:** **JavaScript only**, **Node.js 20+**. **Vitest** runs tests; a small **HTTP client** calls API; a **practice bank server** answers locally; **Swagger UI** shows the same contract as `**openapi.json`**.
 
-This guide walks through **install**, **tests**, **mock API**, and the **loan lifecycle** (login → … → payoff) in accurate, easy-to-read language.
+This guide walks through **install**, **tests**, **mock API**, and **loan lifecycle** (login → … → payoff) in accurate, easy-to-read language.
 
-**Canonical location:** `**docs/DOCUMENTATION.md`** is the **only** full guide. **[README.md](../README.md)** links here in one sentence.
+**Canonical location:** `**docs/DOCUMENTATION.md`** is the **only** full guide. **[README.md](../README.md)** provides project overview and quick start.
+
+---
+
+---
+
+# Loan API Automation
+
+A comprehensive API automation testing framework for loan lifecycle management with mock server, tests, and documentation.
+
+## 🚀 Quick Start
+
+```bash
+# Clone and setup
+git clone https://github.com/paulabinongo/api-automation-testing.git
+cd api-automation-testing
+npm install
+
+# Run tests
+npm test
+
+# Start mock server with Swagger UI
+npm run start:mock
+# Visit http://127.0.0.1:8765/docs for interactive API docs
+```
+
+## 📋 Overview
+
+- **Mock API Server** - Local development server with full loan lifecycle
+- **Automated Tests** - Vitest-based unit and integration tests
+- **OpenAPI Contract** - Machine-readable API specification
+- **Postman Collections** - Ready-to-import API workflows
+- **Documentation** - Complete guide and reference
+
+## 🏗️ Project Structure
+
+```
+/
+|-- src/                    # Source code
+|   |-- api/               # API client code
+|   |-- config/            # Configuration files
+|   |-- loan-products/     # Loan product logic
+|   |   |-- types/         # Loan type definitions (auto, home, personal)
+|   |   |-- calculations/  # Computation and eligibility logic
+|   |   `-- shared/        # Shared utilities
+|   `-- utils/             # Utility functions
+|-- tests/                  # All test files
+|   |-- unit/              # Unit tests
+|   |-- integration/       # Integration tests
+|   `-- helpers/           # Test helpers
+|-- mock-server/            # Mock API server
+|-- config/                 # Development configuration
+|-- postman/                # Postman collections and environments
+|-- docs/                   # Documentation
+`-- scripts/                # Build and automation scripts
+```
+
+## 📚 Documentation
+
+**Complete Guide:** [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)
+
+**Key Sections:**
+- Loan lifecycle walkthrough
+- API reference and examples
+- Testing strategies
+- Development workflows
+- Product catalog details
+
+## 🔧 Available Scripts
+
+```bash
+npm test              # Run all tests
+npm run test:watch     # Watch mode for development
+npm run test:coverage  # Generate coverage report
+npm run start:mock     # Start mock server
+npm run lint           # Code linting
+npm run format         # Code formatting
+```
+
+## 📡 API Endpoints
+
+- **Mock Server:** `http://127.0.0.1:8765`
+- **Swagger UI:** `http://127.0.0.1:8765/docs`
+- **OpenAPI Spec:** `http://127.0.0.1:8765/openapi.json`
+
+## 🛠️ Tech Stack
+
+- **Node.js 20+** - Runtime environment
+- **Vitest** - Testing framework
+- **Express** - Mock server
+- **OpenAPI 3.0** - API specification
+- **Postman** - API testing collections
+
+---
 
 ---
 
@@ -16,7 +109,7 @@ This guide walks through **install**, **tests**, **mock API**, and the **loan li
 | **Vitest**                                          | Automated checks so changes do not silently break API behavior.                                                  |
 | **HTTP client** (`loanApiClient.js`)                | Same URLs as Postman/Swagger, usable from Node tests or scripts.                                                 |
 | **Practice API + Swagger**                          | A local “fake bank” plus a browser page to **Try it out** — no real core banking system required.                |
-| **OpenAPI** (`javascript/mock-server/openapi.json`) | Machine-readable **contract** (paths, JSON shapes). CI validates it. **Swagger** at `**/docs`** loads this file. |
+| **OpenAPI** (`mock-server/openapi.json`) | Machine-readable **contract** (paths, JSON shapes). CI validates it. **Swagger** at `**/docs`** loads this file. |
 
 
 **Sandbox Practice arning:** The **story** matches how many banks talk (KYC, underwriting, funding, disbursement). The **depth** is for **learning and automation**, **not** for regulatory or production sign-off.
@@ -37,7 +130,7 @@ This guide walks through **install**, **tests**, **mock API**, and the **loan li
 | **§12**   | **Manual update workflow** — beginner-friendly steps: tweak **Personal** / **Home**, run **another loan** in Postman, or add a **new product type**; keep mock, **OpenAPI**, Swagger, and Postman in sync.                                                |
 
 
-**Suggested path:** do **[Quick start](#quick-start-five-minutes)**, then open **[§5.0](#50-step-by-step-happy-path)** (and **[§5.0.1](#501-metrobank-home-loan--full-e2e-happy-path)** for **Metrobank Home Loan**) when you need the exact call order.
+**Suggested path:** See **[README.md](../README.md)** for quick start, then open **[§5.0](#50-step-by-step-happy-path)** (and **[§5.0.1](#501-metrobank-home-loan--full-e2e-happy-path)** for **Metrobank Home Loan**) when you need the exact call order.
 
 ---
 
@@ -46,7 +139,7 @@ This guide walks through **install**, **tests**, **mock API**, and the **loan li
 
 | If you are…                               | Start here                                                                                                                                                                                                                                            |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **QA or new to the repo**                 | [Run tests](#2-run-tests), [Practice API and Swagger](#3-practice-api--swagger), [Glossary](#9-glossary), [§11 Standards](#11-api-automation-standards-this-repo)                                                                                     |
+| **QA or new to repo**                 | [Run tests](#2-run-tests), [Practice API and Swagger](#3-practice-api--swagger), [Glossary](#9-glossary), [§11 Standards](#11-api-automation-standards-this-repo)                                                                                     |
 | **Developer changing routes or payloads** | [Modify the project](#4-modify-the-project), [Update Swagger / OpenAPI](#34-update-swagger-and-openapi), [§12 Manual update workflow](#12-manual-update-workflow-loan-lifecycle-artifacts); then use the **checklist table** under [§5.0](#50-step-by-step-happy-path) (*When your real product differs*).                               |
 | **PM or BA**                              | [§5 overview](#5-loan-lifecycle-business-view), [§5.0 happy path](#50-step-by-step-happy-path), [§5.4 production mapping](#54-mapping-to-production-bank-lifecycle), [§5.3 edge cases](#53-edge-cases-catalog), [§10 checklist](#10-pm--ba-checklist) |
 
@@ -68,13 +161,6 @@ This guide walks through **install**, **tests**, **mock API**, and the **loan li
 11. [API automation standards](#11-api-automation-standards-this-repo)
 12. [Manual update workflow (loan lifecycle artifacts)](#12-manual-update-workflow-loan-lifecycle-artifacts)
 
-### Quick start (five minutes)
-
-1. Open a terminal, `cd` to the project folder, run `**npm install`**.
-2. Run `**npm test`** — many tests use **MSW** and need **no** running server ([§2.1](#21-terminal--default-fast-no-server)).
-3. Optional: `**npm run start:mock`** → browser **[http://127.0.0.1:8765/docs](http://127.0.0.1:8765/docs)** for **Swagger**.
-
----
 
 ## 1. Prerequisites & setup
 
@@ -119,7 +205,7 @@ npm install
 | **Full integration**     | **Yes** — practice API | You set `**LOAN_API_BASE_URL`** to something like `**http://127.0.0.1:8765/v1`**. The same tests (where applicable) now make **real HTTP** to your running mock server. |
 
 
-**Rule of thumb:** If integration tests show as **skipped**, you probably have not set `**LOAN_API_BASE_URL`** to a loopback URL ending in `**/v1`**. The exact check lives in `**javascript/lib/config.js**` (`isLocalMockConfigured`).
+**Rule of thumb:** If integration tests show as **skipped**, you probably have not set `**LOAN_API_BASE_URL`** to a loopback URL ending in `**/v1`**. The exact check lives in `**src/config/config.js**` (`isLocalMockConfigured`).
 
 ### 2.1 Terminal — default (fast, no server)
 
@@ -127,10 +213,10 @@ npm install
 npm test
 ```
 
-Runs **MSW-backed** tests in memory. **Integration** cases stay **skipped** unless `**LOAN_API_BASE_URL`** is exactly a loopback base like `**http://127.0.0.1:<port>/v1`** (any port; the mock’s default port is `**8765**`) — see `**javascript/lib/config.js**` → `**isLocalMockConfigured**`.
+Runs **MSW-backed** tests in memory. **Integration** cases stay **skipped** unless `**LOAN_API_BASE_URL`** is exactly a loopback base like `**http://127.0.0.1:<port>/v1`** (any port; the mock’s default port is `**8765**`) — see `**src/config/config.js**` → `**isLocalMockConfigured**`.
 
-- `**javascript/test/unit/**` — exercises **pure logic** (product catalogue rules, eligibility math, loan computation) with **no** fake HTTP layer.
-- `**javascript/test/integration/`** — exercises the **HTTP client** with Vitest, using **MSW** unless the real mock URL is configured.
+- `**tests/unit/**` — exercises **pure logic** (product catalogue rules, eligibility math, loan computation) with **no** fake HTTP layer.
+- `**tests/integration/`** — exercises the **HTTP client** with Vitest, using **MSW** unless the real mock URL is configured.
 
 The printed **test count** changes as the suite grows; run `**npm test`** to see the current number.
 
@@ -187,7 +273,7 @@ This is for **tests**, not for calling the loan API (use **Swagger** or **Postma
 
 | Command                    | Role                                                                                                                                                                                                                                                                          |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run validate:openapi` | Confirms `**javascript/mock-server/openapi.json`** parses and `**$ref`**s resolve (contract discipline).                                                                                                                                                                      |
+| `npm run validate:openapi` | Confirms `**mock-server/openapi.json`** parses and `**$ref`**s resolve (contract discipline).                                                                                                                                                                      |
 | `npm run lint`             | **ESLint** on `javascript/` and `scripts/` (style + common bugs).                                                                                                                                                                                                             |
 | `npm run format:check`     | **Prettier** check on JS sources (no drift without `npm run format`).                                                                                                                                                                                                         |
 | `npm run test:coverage`    | Vitest + **coverage** with **thresholds** on `loanApiClient`, `config`, `sampleData`, `loanConstants` (the automation-facing surface).                                                                                                                                        |
@@ -203,7 +289,7 @@ Node **20+** is required (see `**.nvmrc`**); CI uses **ubuntu-latest** + **Node 
 
 ## 3. Practice API & Swagger
 
-The **practice API** is a small **Express**-style server in `**javascript/mock-server/server.js`**. It exposes the same JSON routes your tests and Postman use, and serves **Swagger UI** so you can explore and try endpoints in a browser.
+The **practice API** is a small **Express**-style server in `**mock-server/server.js`**. It exposes the same JSON routes your tests and Postman use, and serves **Swagger UI** so you can explore and try endpoints in a browser.
 
 **Typical uses**
 
@@ -251,19 +337,19 @@ If you use a non-default port, set `LOAN_API_BASE_URL` to that port on `**127.0.
 
 ### 3.4 Update Swagger and OpenAPI
 
-Swagger is driven by `**javascript/mock-server/openapi.json`** (served as `/openapi.json`). Keep it in sync when the API changes.
+Swagger is driven by `**mock-server/openapi.json`** (served as `/openapi.json`). Keep it in sync when the API changes.
 
-1. **Change behavior** — edit `**javascript/mock-server/server.js`** (routes, validation, responses).
-2. **Change the contract docs** — edit `**javascript/mock-server/openapi.json`**:
+1. **Change behavior** — edit `**mock-server/server.js`** (routes, validation, responses).
+2. **Change the contract docs** — edit `**mock-server/openapi.json`**:
   - `**paths`** — add or adjust URL templates (`/v1/...`), methods, `requestBody`, `responses`, examples.
   - `**components.schemas**` — reuse field shapes; add new schemas for new bodies. **Home Loan catalogue:** when `**metrobank_lifecycle_phases`** (or related `**LoanProductCatalogEntry`** fields) change in `**homeLoanCatalog.js**`, align `**MetrobankHomeLoanLifecyclePhase**`, `**MetrobankHomeLoanLifecyclePhaseState**` (`**metrobank_home_loan_lifecycle_phase**` on `**ApplicationOut**` / `**LoanOut**`), `**DocumentRegistrationIn**` (**HOME_LOAN** LOS fields), `**HomeLoanBookingFeesIn`**, path `**POST …/home-loan/fees/booking`**, and `**metrobankHomeLoanLifecyclePhase.js**` / `**homeLoanLosValidation.js**` mapping, descriptions on `**GET /reference/loan-products**`, bump `**info.version**`, and refresh **Postman** + **§5.0.1** in this guide.
 3. **Restart** — `npm run start:mock` and hard-refresh `**/docs`** in the browser (Swagger always loads the same `**openapi.json`**).
-4. **Keep clients aligned** — update `**javascript/lib/loanApiClient.js`**, `**javascript/test/**/\*.test.js`** (and MSW handler URLs/bodies), and Postman if paths or JSON differ. PEP gate: keep `**POST …/compliance/pep-clearance**`, `**ApplicationOut**`, and **submit** error text aligned with `**server.js`** and **§5.0** / **§5.0.1** / Step **7b in this guide.
+4. **Keep clients aligned** — update `**src/api/loanApiClient.js`**, `**javascript/test/**/\*.test.js`** (and MSW handler URLs/bodies), and Postman if paths or JSON differ. PEP gate: keep `**POST …/compliance/pep-clearance**`, `**ApplicationOut**`, and **submit** error text aligned with `**server.js`** and **§5.0** / **§5.0.1** / Step **7b in this guide.
 
 **Tip:** Valid JSON is required. Validate with:
 
 ```bash
-node -e "JSON.parse(require('fs').readFileSync('javascript/mock-server/openapi.json','utf8')); console.log('OK')"
+node -e "JSON.parse(require('fs').readFileSync('mock-server/openapi.json','utf8')); console.log('OK')"
 ```
 
 ---
@@ -275,10 +361,10 @@ When you add an endpoint or change a JSON field, **one change is rarely enough**
 
 | Goal                           | Files                                                                                                                      | Why it matters                                                                     |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **Paths / HTTP methods**       | `javascript/lib/loanApiClient.js`, `javascript/mock-server/server.js`, `javascript/mock-server/openapi.json`, Postman JSON | **Single URL shape** everywhere — otherwise tests pass locally but demos fail.     |
-| **Sample data**                | `javascript/lib/sampleData.js`                                                                                             | Builders for **examples** in tests and copy-paste bodies.                          |
-| **Fake responses (no server)** | MSW handlers in `javascript/test/integration/loanLifecycle.test.js`, `javascript/test/integration/loanEdgeCases.test.js`   | Keeps `**npm test`** fast when the mock is **not** running.                        |
-| **When integration tests run** | `javascript/lib/config.js` (`isLocalMockConfigured`, env vars)                                                             | Flips tests from **mocked HTTP** to **real HTTP** when `LOAN_API_BASE_URL` is set. |
+| **Paths / HTTP methods**       | `src/api/loanApiClient.js`, `mock-server/server.js`, `mock-server/openapi.json`, Postman JSON | **Single URL shape** everywhere — otherwise tests pass locally but demos fail.     |
+| **Sample data**                | `src/utils/sampleData.js`                                                                                             | Builders for **examples** in tests and copy-paste bodies.                          |
+| **Fake responses (no server)** | MSW handlers in `tests/integration/loanLifecycle.test.js`, `tests/integration/loanEdgeCases.test.js`   | Keeps `**npm test`** fast when the mock is **not** running.                        |
+| **When integration tests run** | `src/config/config.js` (`isLocalMockConfigured`, env vars)                                                             | Flips tests from **mocked HTTP** to **real HTTP** when `LOAN_API_BASE_URL` is set. |
 | **Env / secrets**              | `.env` (not committed), `LOAN_API_BASE_URL`, `LOAN_API_KEY`                                                                | Point at **local mock** or a **staging** host without committing secrets.          |
 
 
@@ -334,8 +420,8 @@ That mirrors how **Loan Origination Systems (LOS)** — software used to take ap
 **Calls you can make before login (no Bearer):**
 
 - `**GET /v1/health`** — simple alive check.
-- `**GET /v1/reference/loan-products`** — catalogue for all registered `**product_code**` values (**PERSONAL_LOAN**, **HOME_LOAN**, …): terms, limits, LOVs, fees — built from `**javascript/lib/loanProductCatalog.js`** (`**buildLoanProductReferencePayload`**). Each row includes `**product_loan_type**` (`**PERSONAL**` = consumer retail, incl. unsecured / home / car-style products; `**BUSINESS**` = commercial-only when such a product exists) and `**loan_type**` (narrower family slug, e.g. `**personal**`, `**home**`, `**car**`) — constants in `**javascript/lib/productLoanTaxonomy.js**`.
-- `**GET /v1/reference/loan-computation-preview**` — preview of interest, fees, net proceeds, and **EIR** for sample `**principal_cents`** / `**term_months`**; optional `**product_code**` / `**loan_purpose**` (**HOME_LOAN**); for **HOME_LOAN**, optional `**interest_fixing_years`** (**1–5**, default **1**) selects the **initial interest fixing** (Metrobank calculator), independent of `**term_months`** (**1–25** years in **12**-month steps). Dispatch: `**javascript/lib/loan-products/computationRegistry.js`**.
+- `**GET /v1/reference/loan-products`** — catalogue for all registered `**product_code**` values (**PERSONAL_LOAN**, **HOME_LOAN**, …): terms, limits, LOVs, fees — built from `**src/loanProductCatalog.js`** (`**buildLoanProductReferencePayload`**). Each row includes `**product_loan_type**` (`**PERSONAL**` = consumer retail, incl. unsecured / home / car-style products; `**BUSINESS**` = commercial-only when such a product exists) and `**loan_type**` (narrower family slug, e.g. `**personal**`, `**home**`, `**car**`) — constants in `**src/utils/productLoanTaxonomy.js**`.
+- `**GET /v1/reference/loan-computation-preview**` — preview of interest, fees, net proceeds, and **EIR** for sample `**principal_cents`** / `**term_months`**; optional `**product_code**` / `**loan_purpose**` (**HOME_LOAN**); for **HOME_LOAN**, optional `**interest_fixing_years`** (**1–5**, default **1**) selects the **initial interest fixing** (Metrobank calculator), independent of `**term_months`** (**1–25** years in **12**-month steps). Dispatch: `**src/loan-products/calculations/computationRegistry.js`**.
 
 Everything else in the happy path expects `**Authorization: Bearer <access_token>`**.
 
@@ -367,7 +453,7 @@ Everything else in the happy path expects `**Authorization: Bearer <access_token
 | **—**                         | **Log out** (invalidate token).                                 | `POST /v1/auth/logout`                                                                                                     | No body.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Bearer                                                                   | **204** — reuse requires **login** again.                                                                                                    |
 
 
-**Remember:** `**loan_id` does not exist until step 7** (underwriting decision) creates the loan. Until then only `**application_id`** matters. Helpers in `**javascript/test/integration/flowHelpers.js`** (`throughCredit`, `throughUnderwritingDecision`, `activeLoan`) chain these steps for **Vitest**; `**LoanApiClient`** exposes each **POST** separately for Postman and app code.
+**Remember:** `**loan_id` does not exist until step 7** (underwriting decision) creates the loan. Until then only `**application_id`** matters. Helpers in `**tests/integration/flowHelpers.js`** (`throughCredit`, `throughUnderwritingDecision`, `activeLoan`) chain these steps for **Vitest**; `**LoanApiClient`** exposes each **POST** separately for Postman and app code.
 
 ### 5.0.1 Metrobank Home Loan — full E2E happy path
 
@@ -375,7 +461,7 @@ This is the same **API sequence** as [§5.0](#50-step-by-step-happy-path), told 
 
 #### Metrobank Home Loan application form (field constraints)
 
-The public **Metrobank Home Loan** web form maps to this API as follows. Server validation lives in `**validateHomeLoanIntakeShape`** (`**javascript/lib/loanProductCatalog.js`**); eligibility (amount, LTV, income, age, tenure) in `**evaluateHomeLoanEligibility**` (`**javascript/lib/loan-products/home-loan/homeLoanEligibility.js**`). **OpenAPI** `**info.version`** **0.8.25** documents the same shapes (`**BorrowerIn`**, `**AdditionalInformationIn`**, `**PresentHomeAddressIn**`, `**BorrowerConsentsIn**`).
+The public **Metrobank Home Loan** web form maps to this API as follows. Server validation lives in `**validateHomeLoanIntakeShape`** (`**src/loanProductCatalog.js`**); eligibility (amount, LTV, income, age, tenure) in `**evaluateHomeLoanEligibility**` (`**src/loan-products/types/home-loan/homeLoanEligibility.js**`). **OpenAPI** `**info.version`** **0.8.25** documents the same shapes (`**BorrowerIn`**, `**AdditionalInformationIn`**, `**PresentHomeAddressIn**`, `**BorrowerConsentsIn**`).
 
 
 | Metrobank form concept                                       | API field(s)                                                                                                                                                                                                                                                               | Mock rule (summary)                                                                                                                                                              |
@@ -393,11 +479,11 @@ The public **Metrobank Home Loan** web form maps to this API as follows. Server 
 | Privacy / Terms / Data privacy / Undertaking / AMLA / Footer | `**borrower.consents`**: `**terms_of_use_accepted`**, `**terms_and_conditions_accepted**`, `**data_privacy_policy_accepted**`, `**home_loan_undertaking_accepted**`, `**metrobank_amla_disclosure_acknowledged**`, `**metrobank_policies_footer_disclaimer_acknowledged**` | All **true** for **HOME_LOAN**; reference copy of Metrobank policy text: **[METROBANK_HOME_LOAN_POLICIES.md](METROBANK_HOME_LOAN_POLICIES.md)**                                  |
 
 
-**Samples:** `**buildHomeLoanSampleApplication`** (`**javascript/lib/sampleData.js`**) sets preferred date dynamically (**7** days ahead), `**region`:** **National Capital Region (NCR)**, `**street_line`:** **123 Mabini Street**, and all **consents** including the footer. **Postman** **Flow — Metrobank Home Loan → 1. Create** uses a fixed future `**metrobank_preferred_contact_date`** so the collection works without a pre-request script.
+**Samples:** `**buildHomeLoanSampleApplication`** (`**src/utils/sampleData.js`**) sets preferred date dynamically (**7** days ahead), `**region`:** **National Capital Region (NCR)**, `**street_line`:** **123 Mabini Street**, and all **consents** including the footer. **Postman** **Flow — Metrobank Home Loan → 1. Create** uses a fixed future `**metrobank_preferred_contact_date`** so the collection works without a pre-request script.
 
 #### Metrobank Home Loan lifecycle (business phases — catalogue)
 
-`**GET /v1/reference/loan-products`** returns a structured `**metrobank_lifecycle_phases**` array on the `**HOME_LOAN**` row (same content as `**javascript/lib/loan-products/home-loan/homeLoanCatalog.js**`). **Swagger / OpenAPI:** shapes are `**MetrobankHomeLoanLifecyclePhase`** and `**LoanProductCatalogEntry.metrobank_lifecycle_phases`** in `**javascript/mock-server/openapi.json**`. It summarizes Metrobank’s **six** stages from pre-qualification through title release; the practice API does **not** expose one HTTP step per stage — it collapses them into the [§5.0](#50-step-by-step-happy-path) application and loan routes. **On each read,** `**GET /v1/loan-applications/{applicationId}`** and `**GET /v1/loans/{loanId}`** (and nested `**application**` / `**loan**` on underwriting and servicing responses) include `**metrobank_home_loan_lifecycle_phase**`: `**phase**` (**1–6**) and `**title`** matching the catalogue row for that phase — derived in `**javascript/lib/loan-products/home-loan/metrobankHomeLoanLifecyclePhase.js`** from `**application.status**` and `**loan.status**` (field omitted when `**application.status**` is `**DECLINED**`). **LOS-style validation (mock):** `**POST …/documents`** for `**HOME_LOAN`** requires a boolean checklist (`**home_loan_document_checklist**`) for every document line that applies to the applicant profile (income path, marriage, collateral add-ons, principal above PHP 3M audited FS, etc.) plus `**home_loan_application_fee_payments**` matching catalogue appraisal and title-investigation amounts — see `**javascript/lib/loan-products/home-loan/homeLoanLosValidation.js**`. After approval, `**POST …/loan-applications/{applicationId}/home-loan/fees/booking**` records handling / notarial / DST and insurance acknowledgements; `**POST …/loans/{loanId}/funding/authorize**` returns **422** for `**HOME_LOAN`** until booking fees are recorded. Helpers: `**buildHomeLoanDocumentsRegistrationBody`**, `**buildHomeLoanBookingFeesBody**` in `**javascript/lib/sampleData.js**`.
+`**GET /v1/reference/loan-products`** returns a structured `**metrobank_lifecycle_phases**` array on the `**HOME_LOAN**` row (same content as `**src/loan-products/types/home-loan/homeLoanCatalog.js**`). **Swagger / OpenAPI:** shapes are `**MetrobankHomeLoanLifecyclePhase`** and `**LoanProductCatalogEntry.metrobank_lifecycle_phases`** in `**mock-server/openapi.json**`. It summarizes Metrobank’s **six** stages from pre-qualification through title release; the practice API does **not** expose one HTTP step per stage — it collapses them into the [§5.0](#50-step-by-step-happy-path) application and loan routes. **On each read,** `**GET /v1/loan-applications/{applicationId}`** and `**GET /v1/loans/{loanId}`** (and nested `**application**` / `**loan**` on underwriting and servicing responses) include `**metrobank_home_loan_lifecycle_phase**`: `**phase**` (**1–6**) and `**title`** matching the catalogue row for that phase — derived in `**javascript/lib/loan-products/home-loan/metrobankHomeLoanLifecyclePhase.js`** from `**application.status**` and `**loan.status**` (field omitted when `**application.status**` is `**DECLINED**`). **LOS-style validation (mock):** `**POST …/documents`** for `**HOME_LOAN`** requires a boolean checklist (`**home_loan_document_checklist**`) for every document line that applies to the applicant profile (income path, marriage, collateral add-ons, principal above PHP 3M audited FS, etc.) plus `**home_loan_application_fee_payments**` matching catalogue appraisal and title-investigation amounts — see `**javascript/lib/loan-products/home-loan/homeLoanLosValidation.js**`. After approval, `**POST …/loan-applications/{applicationId}/home-loan/fees/booking**` records handling / notarial / DST and insurance acknowledgements; `**POST …/loans/{loanId}/funding/authorize**` returns **422** for `**HOME_LOAN`** until booking fees are recorded. Helpers: `**buildHomeLoanDocumentsRegistrationBody`**, `**buildHomeLoanBookingFeesBody**` in `**src/utils/sampleData.js**`.
 
 
 | Phase | Title                           | In this repo                                                                                                                                                                                    |
@@ -410,7 +496,7 @@ The public **Metrobank Home Loan** web form maps to this API as follows. Server 
 | **6** | Loan Maturity & Closing         | `**payoff`** → **CLOSED**; physical release of mortgage / Registry filing is **out of band**                                                                                                    |
 
 
-**Scenario tied to repo sample data** — use `**buildHomeLoanSampleApplication(240)`** in `**javascript/lib/sampleData.js`** (or mirror its fields in Postman):
+**Scenario tied to repo sample data** — use `**buildHomeLoanSampleApplication(240)`** in `**src/utils/sampleData.js`** (or mirror its fields in Postman):
 
 
 | Topic                             | Value in sample                                                                                                                                                                                                                                                  |
@@ -419,7 +505,7 @@ The public **Metrobank Home Loan** web form maps to this API as follows. Server 
 | Purpose                           | `**PURCHASE_HOUSE_AND_LOT**` (Purchase of House and Lot)                                                                                                                                                                                                         |
 | Principal                         | **PHP 500,000** (`principal_cents`: **50_000_000**)                                                                                                                                                                                                              |
 | Collateral appraisal (face value) | **PHP 1,000,000** (`property_appraised_value_cents`: **100_000_000**) → LTV **50%** vs **80%** catalogue max for this purpose                                                                                                                                    |
-| Term                              | **240** months (**20** years; within **25**-year resident cap for house-and-lot in `**javascript/lib/loan-products/home-loan/homeLoanCatalog.js`**)                                                                                                              |
+| Term                              | **240** months (**20** years; within **25**-year resident cap for house-and-lot in `**src/loan-products/types/home-loan/homeLoanCatalog.js`**)                                                                                                              |
 | Applicant category                | `**RESIDENT`** (`home_loan_applicant_category`) — not OFW                                                                                                                                                                                                        |
 | Collateral                        | `**RESIDENTIAL**`, not a vacant lot (`collateral_is_vacant_lot`: **false**)                                                                                                                                                                                      |
 | Credit attestation                | `**no_adverse_credit_history`:** **true**                                                                                                                                                                                                                        |
@@ -445,7 +531,7 @@ Application form (signed); **one** valid government ID (**Passport** preferred �
 Owner’s duplicate **TCT/CCT**; tax declaration; construction set or developer **CTS/RA** as applicable.
 
 **Loan evaluation before approval (mock mirrors these gates)**  
-Citizenship: **Filipino** or **foreigner with permanent resident visa**; age **21–65** at application and **not older than 70** at maturity; gross monthly family income **≥ PHP 40,000**; employed **≥ 2** years with current employer (or self-employed **≥ 3** years); **OFW** land-based **≥ 2** years with employer or sea-based **≥ 24** months total contract; good credit / **no adverse findings**; collateral **residential**. See `**homeLoanEligibility.js`**, `**HOME_LOAN_PRODUCT.eligibility`**, and `**metrobank_lifecycle_phases**` in `**javascript/lib/loan-products/home-loan/homeLoanCatalog.js**`.
+Citizenship: **Filipino** or **foreigner with permanent resident visa**; age **21–65** at application and **not older than 70** at maturity; gross monthly family income **≥ PHP 40,000**; employed **≥ 2** years with current employer (or self-employed **≥ 3** years); **OFW** land-based **≥ 2** years with employer or sea-based **≥ 24** months total contract; good credit / **no adverse findings**; collateral **residential**. See `**homeLoanEligibility.js`**, `**HOME_LOAN_PRODUCT.eligibility`**, and `**metrobank_lifecycle_phases**` in `**src/loan-products/types/home-loan/homeLoanCatalog.js**`.
 
 **Purpose, max term, max loanable value (headline)**  
 Purchase house and lot / townhouse **25y** resident (**15y** OFW), LTV **80%** (secondary cap **75%**). Condominium **70%** / **75%**. Vacant lot **10y**, LTV **60%**. Lot + construction, construction on owned lot, reimbursement, renovation, refinancing, home equity, personal investment — terms and LTV vary per `**purpose_options`** in the catalogue (including vacant-lot and OFW exceptions).
@@ -454,7 +540,7 @@ Purchase house and lot / townhouse **25y** resident (**15y** OFW), LTV **80%** (
 **1y** **6.25%** (**7.25%** Home Equity tier); **2y** **7.25%** (**8.25%**); **3y** **7.75%** (**8.75%**); **4y** **8.00%** (**9.00%**); **5y** **8.25%** (**9.25%**).
 
 **Fees**  
-**Upon application (non-refundable):** appraisal **PHP 4,000** (Metro Manila) / **4,500** (countryside); title investigation **PHP 1,000** per title. **After approval:** handling **PHP 5,000**; notarial **PHP 400**/document (or provider quote); registration per Registry of Deeds; MRI and property insurance per insurer quote (e.g. AXA). Structured fields: `**HOME_LOAN_PRODUCT.fees_and_charges`** in `**javascript/lib/loan-products/home-loan/homeLoanCatalog.js`**.
+**Upon application (non-refundable):** appraisal **PHP 4,000** (Metro Manila) / **4,500** (countryside); title investigation **PHP 1,000** per title. **After approval:** handling **PHP 5,000**; notarial **PHP 400**/document (or provider quote); registration per Registry of Deeds; MRI and property insurance per insurer quote (e.g. AXA). Structured fields: `**HOME_LOAN_PRODUCT.fees_and_charges`** in `**src/loan-products/types/home-loan/homeLoanCatalog.js`**.
 
 #### Step-by-step (happy path — API order)
 
@@ -480,7 +566,7 @@ Work top to bottom; Bearer required except **login** and public **GET**s.
 18. `**POST /v1/loans/{loanId}/payments`** until paid off, then `**POST /v1/loans/{loanId}/payoff**` → **CLOSED**.
 19. `**POST /v1/auth/logout`**.
 
-**Automated checks:** `**javascript/test/integration/loanLifecycle.test.js`** — (1) **MSW** test **Metrobank Home Loan: walks through create → … → payoff** runs on every `**npm test`** (no server); (2) with the **current** practice server (`**HOME_LOAN`** on `**GET /v1/reference/loan-products`**) running and `**LOAN_API_BASE_URL**` set, the live test **Metrobank Home Loan: full mock happy path …** exercises the same steps over real HTTP. If `**POST /loan-applications`** returns **422** with **Unknown product_code**, restart the mock from this repo so the catalogue includes **HOME_LOAN**.
+**Automated checks:** `**tests/integration/loanLifecycle.test.js`** — (1) **MSW** test **Metrobank Home Loan: walks through create → … → payoff** runs on every `**npm test`** (no server); (2) with the **current** practice server (`**HOME_LOAN`** on `**GET /v1/reference/loan-products`**) running and `**LOAN_API_BASE_URL**` set, the live test **Metrobank Home Loan: full mock happy path …** exercises the same steps over real HTTP. If `**POST /loan-applications`** returns **422** with **Unknown product_code**, restart the mock from this repo so the catalogue includes **HOME_LOAN**.
 
 **HTTP:** Every `**/v1/...`** call except `**POST /auth/login`**, `**GET /health**`, `**GET /reference/loan-products**`, and `**GET /reference/loan-computation-preview**` must send `**Authorization: Bearer**` with the `**access_token**` from login (Postman and `**LoanApiClient.setAccessToken**` handle this).
 
@@ -504,7 +590,7 @@ Use the same list whenever you change URLs, fields, or rules so **docs**, **test
 
 | If you change…                                                  | Update these (minimum)                                                                                                                                                       |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Path** (e.g. `/applications` instead of `/loan-applications`) | `javascript/lib/loanApiClient.js`, `javascript/mock-server/server.js`, `javascript/mock-server/openapi.json`, Postman collection, MSW URLs in `javascript/test/**/*.test.js` |
+| **Path** (e.g. `/applications` instead of `/loan-applications`) | `src/api/loanApiClient.js`, `mock-server/server.js`, `mock-server/openapi.json`, Postman collection, MSW URLs in `javascript/test/**/*.test.js` |
 | **Request JSON** (field names, types, money format)             | `server.js` validation + handlers, `openapi.json` schemas/examples, `sampleData.js`, tests’ payloads, Postman bodies                                                         |
 | **Response JSON** or **status values**                          | `openapi.json`, assertions in `javascript/test/**/*.test.js`, MSW mock JSON in same files                                                                                    |
 | **State machine** (when submit/credit/fund is allowed)          | `server.js` guards (`409` logic), edge-case tests, [§5.3 Edge cases catalog](#53-edge-cases-catalog)                                                                         |
@@ -522,7 +608,7 @@ Use the same list whenever you change URLs, fields, or rules so **docs**, **test
 | ---- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | —    | Health (liveness)                   | `GET /health` — **public**                                                                                                                                                                                                                                                                                                                |
 | —    | Product catalogue                   | `GET /reference/loan-products` — **public** (**PERSONAL_LOAN** + **HOME_LOAN** PHP JSON)                                                                                                                                                                                                                                                  |
-| —    | Payment / EIR preview               | `GET /reference/loan-computation-preview?principal_cents=&term_months=` — **public**; optional `**product_code`** / `**loan_purpose`** / (**HOME_LOAN**) `**interest_fixing_years`**; `**javascript/lib/loan-products/computationRegistry.js`** → `**personal-loan/personalLoanComputation.js**` / `**home-loan/homeLoanComputation.js**` |
+| —    | Payment / EIR preview               | `GET /reference/loan-computation-preview?principal_cents=&term_months=` — **public**; optional `**product_code`** / `**loan_purpose`** / (**HOME_LOAN**) `**interest_fixing_years`**; `**src/loan-products/calculations/computationRegistry.js`** → `**personal-loan/personalLoanComputation.js**` / `**home-loan/homeLoanComputation.js**` |
 | —    | Login                               | `POST /auth/login` → **access_token**                                                                                                                                                                                                                                                                                                     |
 | —    | KYC                                 | `POST /onboarding/kyc` → **VERIFIED**                                                                                                                                                                                                                                                                                                     |
 | —    | Optional profile                    | `GET /auth/me`, `GET /onboarding/status`                                                                                                                                                                                                                                                                                                  |
@@ -557,7 +643,7 @@ Use the same list whenever you change URLs, fields, or rules so **docs**, **test
 
 **Read this first (plain English)**
 
-1. **Catalogue** = the frozen definitions for each `**product_code`** (**PERSONAL_LOAN**, **HOME_LOAN**, …): allowed amounts, terms, labels, fees, and validation. Each row also carries `**product_loan_type`** (`**PERSONAL`**  `**BUSINESS**`) and `**loan_type**` (product family: `**personal**`, `**home**`, `**car**`, …). **PERSONAL** groups consumer retail products (unsecured personal loan, home loan, car loan, etc.); **BUSINESS** is reserved for commercial-only products. Source enum: `**javascript/lib/productLoanTaxonomy.js`**. Developers edit `**javascript/lib/loanProductCatalog.js`** (`**LOAN_PRODUCTS_BY_CODE**`, `**buildLoanProductReferencePayload**`); the API exposes the same data at `**GET /v1/reference/loan-products**` so UIs and tests stay in sync. Product-specific eligibility and preview math live under `**javascript/lib/loan-products/**` (§**6**).
+1. **Catalogue** = the frozen definitions for each `**product_code`** (**PERSONAL_LOAN**, **HOME_LOAN**, …): allowed amounts, terms, labels, fees, and validation. Each row also carries `**product_loan_type`** (`**PERSONAL`**  `**BUSINESS**`) and `**loan_type**` (product family: `**personal**`, `**home**`, `**car**`, …). **PERSONAL** groups consumer retail products (unsecured personal loan, home loan, car loan, etc.); **BUSINESS** is reserved for commercial-only products. Source enum: `**src/utils/productLoanTaxonomy.js`**. Developers edit `**src/loanProductCatalog.js`** (`**LOAN_PRODUCTS_BY_CODE**`, `**buildLoanProductReferencePayload**`); the API exposes the same data at `**GET /v1/reference/loan-products**` so UIs and tests stay in sync. Product-specific eligibility and preview math live under `**javascript/lib/loan-products/**` (§**6**).
 2. **LOV** (“list of values”) = the **dropdown codes** in that JSON (purposes, ID types, address rows, and so on). Your app should **not** hard-code lists that contradict the catalogue.
 3. **Payment rails** here only means: when you post a repayment, you label **how** it was paid using an allowed `**method`** (this mock knows `**ACH`** and `**WIRE**`).
 
@@ -637,7 +723,7 @@ The sandbox does **not** open real accounts. For **borrower messaging** (especia
 
 **F. Paying the loan back (payment “rail”)**
 
-On `**POST /v1/loans/{loanId}/payments`**, set `**method`** to `**ACH**` or `**WIRE**` (see `**javascript/lib/loanConstants.js**`). That is only a **label** in the practice API, not a real bank transfer.
+On `**POST /v1/loans/{loanId}/payments`**, set `**method`** to `**ACH**` or `**WIRE**` (see `**src/utils/loanConstants.js**`). That is only a **label** in the practice API, not a real bank transfer.
 
 ---
 
@@ -664,7 +750,7 @@ The server computes interest, fees, amortization, EIR, and net proceeds.
 - **Before login / without an application:** `**GET /v1/reference/loan-computation-preview?principal_cents=…&term_months=…`**
 - **When you already have a draft:** `**GET /v1/loan-applications/{applicationId}/computation-preview`** with **Bearer** (reads amount and term from that application).
 
-Preview math is dispatched by `**javascript/lib/loan-products/computationRegistry.js`** (**PERSONAL_LOAN:** `**personal-loan/personalLoanComputation.js`**; HOME_LOAN: `**home-loan/homeLoanComputation.js`**).
+Preview math is dispatched by `**src/loan-products/calculations/computationRegistry.js`** (**PERSONAL_LOAN:** `**personal-loan/personalLoanComputation.js`**; HOME_LOAN: `**home-loan/homeLoanComputation.js`**).
 
 **Step 3 — Basic details**
 
@@ -731,15 +817,15 @@ Preview math is dispatched by `**javascript/lib/loan-products/computationRegistr
 | `**method`** (on record payment)            | **ACH**, **WIRE**                                                                                    | **ACH** — NACHA-style retail ACH; **WIRE** — domestic wire. Default **ACH** if omitted.                                                                                                                                                                                                                                                                                                                                                                                             |
 
 
-**Payment preview (calculator):** `**GET /v1/reference/loan-computation-preview`** with query `**principal_cents`** and `**term_months**` returns total interest, monthly amortization, fees, net proceeds, and effective annual **EIR** (%). **PERSONAL_LOAN** uses the add-on model in `**javascript/lib/loan-products/personal-loan/personalLoanComputation.js`**. HOME_LOAN uses level annual % by initial interest fixing (`**interest_fixing_years`** **1–5**, default **1**) in `**javascript/lib/loan-products/home-loan/homeLoanComputation.js`** — **loan term** is **1–25 years** (**12–300** months, **12**-month steps) and is separate from the **fixing** choice (Metrobank public calculator). **After** the borrower creates an application, `**GET /v1/loan-applications/{applicationId}/computation-preview`** (Bearer required) uses `**additional_information.interest_fixing_years`** (default **1**) plus principal/term from the draft — response includes `**application_id`**. `**LoanApiClient.getLoanComputationPreview({ … })`** and `**getLoanComputationPreviewForApplication(id)**` wrap the two routes.
+**Payment preview (calculator):** `**GET /v1/reference/loan-computation-preview`** with query `**principal_cents`** and `**term_months**` returns total interest, monthly amortization, fees, net proceeds, and effective annual **EIR** (%). **PERSONAL_LOAN** uses the add-on model in `**src/loan-products/types/personal-loan/personalLoanComputation.js`**. HOME_LOAN uses level annual % by initial interest fixing (`**interest_fixing_years`** **1–5**, default **1**) in `**src/loan-products/types/home-loan/homeLoanComputation.js`** — **loan term** is **1–25 years** (**12–300** months, **12**-month steps) and is separate from the **fixing** choice (Metrobank public calculator). **After** the borrower creates an application, `**GET /v1/loan-applications/{applicationId}/computation-preview`** (Bearer required) uses `**additional_information.interest_fixing_years`** (default **1**) plus principal/term from the draft — response includes `**application_id`**. `**LoanApiClient.getLoanComputationPreview({ … })`** and `**getLoanComputationPreviewForApplication(id)**` wrap the two routes.
 
-Term union for tooling is still re-exported from `**javascript/lib/loanConstants.js**` as `**ALLOWED_LOAN_TERM_MONTHS**` (derived from the catalogue).
+Term union for tooling is still re-exported from `**src/utils/loanConstants.js**` as `**ALLOWED_LOAN_TERM_MONTHS**` (derived from the catalogue).
 
 #### Stipulation `description` text — full sandbox list (copy-paste)
 
 For `**POST …/underwriting/decision**` with `**"outcome": "CONDITIONAL"**`, each stipulation is `**{ "description": "<your text>" }**`. This mock **does not** check descriptions against a bank catalogue — **any** text works. The list below is **only** so you can pick realistic demo strings without searching elsewhere.
 
-The same strings are exported in code as `**STIPULATION_DESCRIPTION_EXAMPLES`** in `**javascript/lib/loanConstants.js`** (also re-exported from `**javascript/lib/sampleData.js**`). Use `**buildConditionalUnderwritingExample(n)**` in `**sampleData.js**` to build a body with the first **n** entries programmatically.
+The same strings are exported in code as `**STIPULATION_DESCRIPTION_EXAMPLES`** in `**src/utils/loanConstants.js`** (also re-exported from `**src/utils/sampleData.js**`). Use `**buildConditionalUnderwritingExample(n)**` in `**sampleData.js**` to build a body with the first **n** entries programmatically.
 
 
 | Topic                     | Example `description` values (use in `stipulations[]`)                                                                                                                                                                                |
@@ -781,7 +867,7 @@ Automations and manual checks both rely on **HTTP status codes**. Quick meanings
 | **422** | The **JSON body or field values** do not pass validation (wrong type, unknown enum, out-of-range amount).              |
 
 
-Sections **A–H** below list **what can go wrong**, the usual **status code**, and whether **Vitest** (and sometimes **Postman**) already covers it. Column **Automated** points to `**javascript/test/integration/loanEdgeCases.test.js`** and Postman **Edge cases** where noted.
+Sections **A–H** below list **what can go wrong**, the usual **status code**, and whether **Vitest** (and sometimes **Postman**) already covers it. Column **Automated** points to `**tests/integration/loanEdgeCases.test.js`** and Postman **Edge cases** where noted.
 
 #### A. Not found
 
@@ -935,30 +1021,30 @@ Use this list when communicating scope to **risk**, **ops**, or **compliance**: 
 | `.prettierrc`                                                           | Prettier formatting                                                                                                                                                  |
 | `scripts/validate-openapi.mjs`                                          | CI **OpenAPI** parse / `$ref` check                                                                                                                                  |
 | `.github/workflows/ci.yml`                                              | **GitHub Actions** merge gate                                                                                                                                        |
-| `javascript/lib/loanApiClient.js`                                       | HTTP client — includes `**completePepComplianceClearance`** (PEP gate before **submit**)                                                                             |
-| `javascript/lib/config.js`                                              | Env: `LOAN_API_BASE_URL`, `LOAN_API_KEY`                                                                                                                             |
-| `javascript/lib/loanConstants.js`                                       | Term union + payment **LOVs**; `**STIPULATION_DESCRIPTION_EXAMPLES`** (copy-paste stip text)                                                                         |
-| `javascript/lib/productLoanTaxonomy.js`                                 | `**PRODUCT_LOAN_TYPE**` — `**PERSONAL**` (consumer retail) vs `**BUSINESS**` (commercial); used on each `**GET /reference/loan-products**` row                       |
-| `javascript/lib/loanProductCatalog.js`                                  | **PERSONAL_LOAN** + **HOME_LOAN** catalogue objects, `**LOAN_PRODUCTS_BY_CODE`**, `**buildLoanProductReferencePayload**`, create-application validation              |
-| `javascript/lib/loan-products/catalog.js`                               | `**getLoanProductByCode**`, `**registeredLoanProductCodes**` — thin re-export of catalogue keys                                                                      |
-| `javascript/lib/loan-products/registry.js`                              | `**ELIGIBILITY_BY_PRODUCT_CODE**`, `**evaluateEligibilityForProduct**` — e.g. `**personal-loan/personalLoanEligibility.js**`, `**home-loan/homeLoanEligibility.js**` |
-| `javascript/lib/loan-products/computationRegistry.js`                   | `**COMPUTATION_BY_PRODUCT_CODE**`, `**computeLoanPreviewForProduct**` — `**GET /reference/loan-computation-preview**` and per-application preview                    |
-| `javascript/lib/loan-products/lifecyclePolicies.js`                     | Per-product submit / PEP / Metrobank deposit gates                                                                                                                   |
-| `javascript/lib/loan-products/shared/borrowerAge.js`                    | `**ageOnDate**`, `**addCalendarMonths**` — shared eligibility age math                                                                                               |
-| `javascript/lib/loan-products/personal-loan/personalLoanEligibility.js` | Step **6+** eligibility checks (**PERSONAL_LOAN**)                                                                                                                   |
-| `javascript/lib/loan-products/personal-loan/personalLoanComputation.js` | Add-on interest, fees, net proceeds, **EIR** — **PERSONAL_LOAN** preview                                                                                             |
+| `src/api/loanApiClient.js`                                       | HTTP client — includes `**completePepComplianceClearance`** (PEP gate before **submit**)                                                                             |
+| `src/config/config.js`                                              | Env: `LOAN_API_BASE_URL`, `LOAN_API_KEY`                                                                                                                             |
+| `src/utils/loanConstants.js`                                       | Term union + payment **LOVs**; `**STIPULATION_DESCRIPTION_EXAMPLES`** (copy-paste stip text)                                                                         |
+| `src/utils/productLoanTaxonomy.js`                                 | `**PRODUCT_LOAN_TYPE**` — `**PERSONAL**` (consumer retail) vs `**BUSINESS**` (commercial); used on each `**GET /reference/loan-products**` row                       |
+| `src/loanProductCatalog.js`                                  | **PERSONAL_LOAN** + **HOME_LOAN** catalogue objects, `**LOAN_PRODUCTS_BY_CODE`**, `**buildLoanProductReferencePayload**`, create-application validation              |
+| `src/loan-products/calculations/catalog.js`                               | `**getLoanProductByCode**`, `**registeredLoanProductCodes**` — thin re-export of catalogue keys                                                                      |
+| `src/loan-products/calculations/registry.js`                              | `**ELIGIBILITY_BY_PRODUCT_CODE**`, `**evaluateEligibilityForProduct**` — e.g. `**personal-loan/personalLoanEligibility.js**`, `**home-loan/homeLoanEligibility.js**` |
+| `src/loan-products/calculations/computationRegistry.js`                   | `**COMPUTATION_BY_PRODUCT_CODE**`, `**computeLoanPreviewForProduct**` — `**GET /reference/loan-computation-preview**` and per-application preview                    |
+| `src/loan-products/lifecyclePolicies.js`                     | Per-product submit / PEP / Metrobank deposit gates                                                                                                                   |
+| `src/loan-products/shared/borrowerAge.js`                    | `**ageOnDate**`, `**addCalendarMonths**` — shared eligibility age math                                                                                               |
+| `src/loan-products/types/personal-loan/personalLoanEligibility.js` | Step **6+** eligibility checks (**PERSONAL_LOAN**)                                                                                                                   |
+| `src/loan-products/types/personal-loan/personalLoanComputation.js` | Add-on interest, fees, net proceeds, **EIR** — **PERSONAL_LOAN** preview                                                                                             |
 | `javascript/lib/loan-products/personal-loan/personalLoanOccupations.js` | **employment.occupation** LOV for **PERSONAL_LOAN**                                                                                                                  |
-| `javascript/lib/loan-products/home-loan/homeLoanCatalog.js`             | `**HOME_LOAN`** LOVs (**primary ID** lists, **purpose_options**, address samples), lock-in / LTV helpers — used with `**loanProductCatalog.js`**                     |
-| `javascript/lib/loan-products/home-loan/homeLoanEligibility.js`         | Step **6+** eligibility checks (**HOME_LOAN**)                                                                                                                       |
-| `javascript/lib/loan-products/home-loan/homeLoanComputation.js`         | **HOME_LOAN** payment preview when `**product_code=HOME_LOAN`** on `**GET /reference/loan-computation-preview**`                                                     |
-| `javascript/lib/sampleData.js`                                          | Example payloads (`**buildSampleLoanApplication**`, `**buildHomeLoanSampleApplication**`, …)                                                                         |
-| `javascript/mock-server/server.js`                                      | Practice API + `/docs`                                                                                                                                               |
-| `javascript/mock-server/openapi.json`                                   | OpenAPI / Swagger source                                                                                                                                             |
-| `javascript/test/unit/*.test.js`                                        | Vitest — catalogue / eligibility / computation (no MSW)                                                                                                              |
-| `javascript/test/integration/*.test.js`                                 | Vitest + **MSW** — lifecycle + edge cases                                                                                                                            |
-| `javascript/test/integration/flowHelpers.js`                            | Shared **throughCredit** / **activeLoan** chains for integration tests                                                                                               |
-| `javascript/test/integration/sessionHelpers.js`                         | **login** + **KYC** helpers for integration tests                                                                                                                    |
-| `javascript/test/helpers/assertions.js`                                 | Shared API error assertions                                                                                                                                          |
+| `src/loan-products/types/home-loan/homeLoanCatalog.js`             | `**HOME_LOAN`** LOVs (**primary ID** lists, **purpose_options**, address samples), lock-in / LTV helpers — used with `**loanProductCatalog.js`**                     |
+| `src/loan-products/types/home-loan/homeLoanEligibility.js`         | Step **6+** eligibility checks (**HOME_LOAN**)                                                                                                                       |
+| `src/loan-products/types/home-loan/homeLoanComputation.js`         | **HOME_LOAN** payment preview when `**product_code=HOME_LOAN`** on `**GET /reference/loan-computation-preview**`                                                     |
+| `src/utils/sampleData.js`                                          | Example payloads (`**buildSampleLoanApplication**`, `**buildHomeLoanSampleApplication**`, …)                                                                         |
+| `mock-server/server.js`                                      | Practice API + `/docs`                                                                                                                                               |
+| `mock-server/openapi.json`                                   | OpenAPI / Swagger source                                                                                                                                             |
+| `tests/unit/*.test.js`                                        | Vitest — catalogue / eligibility / computation (no MSW)                                                                                                              |
+| `tests/integration/*.test.js`                                 | Vitest + **MSW** — lifecycle + edge cases                                                                                                                            |
+| `tests/integration/flowHelpers.js`                            | Shared **throughCredit** / **activeLoan** chains for integration tests                                                                                               |
+| `tests/integration/sessionHelpers.js`                         | **login** + **KYC** helpers for integration tests                                                                                                                    |
+| `tests/helpers/assertions.js`                                 | Shared API error assertions                                                                                                                                          |
 | `postman/collection/Loan_Lifecycle_API.postman_collection.json`         | Collection + **Flow — Happy path** (Personal) + **Flow — Metrobank Home Loan** for Runner                                                                            |
 | `postman/environments/Local_Mock.postman_environment.json`              | Local URLs + demo auth + runtime variables                                                                                                                           |
 
@@ -969,7 +1055,7 @@ Use this list when communicating scope to **risk**, **ops**, or **compliance**: 
 
 The repo ships **import-ready Runner flows**: `**postman/collection/Loan_Lifecycle_API.postman_collection.json`** includes **Flow — Happy path (import & run in order)** (**Personal Loan**) and **Flow — Metrobank Home Loan (happy path)** (**HOME_LOAN** — [§5.0.1](#501-metrobank-home-loan--full-e2e-happy-path)). Attach the **Local mock** environment below.
 
-**Contract parity:** The collection **description** (overview + flow folders) matches `**javascript/mock-server/openapi.json`** (`**info.version**` **0.8.25**: `**info`**, **Tags**, `**LoanProductCatalogEntry`** (`**product_loan_type**`, `**metrobank_lifecycle_phases**`, `**MetrobankHomeLoanLifecyclePhase**`), `**POST …/compliance/pep-clearance**`, `**HOME_LOAN**` intake fields, `**info.description**` source-map for `**loan-products/**` and `**productLoanTaxonomy.js**`) and [§5 Loan lifecycle](#5-loan-lifecycle-business-view) — [§5.0](#50-step-by-step-happy-path), [§5.0.1](#501-metrobank-home-loan--full-e2e-happy-path), Step **7b**, [§5.4](#54-mapping-to-production-bank-lifecycle). Update **OpenAPI**, **§5**, **§6** (file map), and **Postman together when routes, PEP rules, product codes, lifecycle copy, catalogue taxonomy, or module paths change.
+**Contract parity:** The collection **description** (overview + flow folders) matches `**mock-server/openapi.json`** (`**info.version**` **0.8.25**: `**info`**, **Tags**, `**LoanProductCatalogEntry`** (`**product_loan_type**`, `**metrobank_lifecycle_phases**`, `**MetrobankHomeLoanLifecyclePhase**`), `**POST …/compliance/pep-clearance**`, `**HOME_LOAN**` intake fields, `**info.description**` source-map for `**loan-products/**` and `**productLoanTaxonomy.js**`) and [§5 Loan lifecycle](#5-loan-lifecycle-business-view) — [§5.0](#50-step-by-step-happy-path), [§5.0.1](#501-metrobank-home-loan--full-e2e-happy-path), Step **7b**, [§5.4](#54-mapping-to-production-bank-lifecycle). Update **OpenAPI**, **§5**, **§6** (file map), and **Postman together when routes, PEP rules, product codes, lifecycle copy, catalogue taxonomy, or module paths change.
 
 ### 7.1 Files in `postman/`
 
@@ -1011,7 +1097,7 @@ If the mock uses another port (e.g. `**PORT=8766 npm run start:mock`**), update 
 
 ### 7.4 OpenAPI spec in Postman (optional)
 
-After `**npm run start:mock`**, Import → Link or File → [http://127.0.0.1:8765/openapi.json](http://127.0.0.1:8765/openapi.json), or import `**javascript/mock-server/openapi.json`**. Keep the definition beside the collection for schema hints and parity with the repo’s OpenAPI source.
+After `**npm run start:mock`**, Import → Link or File → [http://127.0.0.1:8765/openapi.json](http://127.0.0.1:8765/openapi.json), or import `**mock-server/openapi.json`**. Keep the definition beside the collection for schema hints and parity with the repo’s OpenAPI source.
 
 ### 7.5 Run the happy path
 
@@ -1100,7 +1186,7 @@ flowchart LR
 | **Vitest**                    | The **test runner** behind `**npm test`**, `**npm run test:watch`**, `**npm run test:ui**`, and coverage commands.                                                                                                                                  |
 | **MSW (Mock Service Worker)** | Library that **intercepts** HTTP from Node tests and returns **canned responses**. Lets you test the client **without** starting the mock server.                                                                                                   |
 | **Integration test (here)**   | A test that opens a **real TCP connection** to the practice API. `**npm run test:integration`** starts the server on port **9876**; a developer manually pairing terminals often uses **8765**.                                                     |
-| **OpenAPI**                   | A structured **description** of every path, method, and JSON schema. This repo’s source file is `**javascript/mock-server/openapi.json`**.                                                                                                          |
+| **OpenAPI**                   | A structured **description** of every path, method, and JSON schema. This repo’s source file is `**mock-server/openapi.json`**.                                                                                                          |
 | **Swagger UI**                | A **web page** (here at `**/docs`**) that reads OpenAPI and lets you **Try it out** on each endpoint.                                                                                                                                               |
 | **LOS**                       | Loan Origination System — bank software for **applications, decisions, and onboarding**.                                                                                                                                                            |
 | **KYC**                       | Know Your Customer — **identity checks** before lending.                                                                                                                                                                                            |
@@ -1173,24 +1259,24 @@ Use this when you are **editing** rules or data for a product that **already exi
 
 **Step 1 — Change the “source of truth” in JavaScript**
 
-- **Personal Loan:** open `javascript/lib/loanProductCatalog.js` (find the `PERSONAL_LOAN` block). For “can this customer apply?” logic, use `javascript/lib/loan-products/personal-loan/personalLoanEligibility.js`. For payment/fee preview math, use `javascript/lib/loan-products/personal-loan/personalLoanComputation.js`.
+- **Personal Loan:** open `src/loanProductCatalog.js` (find the `PERSONAL_LOAN` block). For “can this customer apply?” logic, use `src/loan-products/types/personal-loan/personalLoanEligibility.js`. For payment/fee preview math, use `src/loan-products/types/personal-loan/personalLoanComputation.js`.
 - **Home Loan:** use `javascript/lib/loan-products/home-loan/` (for example `homeLoanCatalog.js`, `homeLoanEligibility.js`, `homeLoanComputation.js`) and the same catalogue file for the `HOME_LOAN` row.
-- If you only need **example JSON** for tests or copy-paste, update `javascript/lib/sampleData.js`.
+- If you only need **example JSON** for tests or copy-paste, update `src/utils/sampleData.js`.
 
 **Step 2 — Update the mock server**
 
-- Open `javascript/mock-server/server.js` and make sure create/update routes **enforce** the same rules (the server is what returns **422** / **409** in the browser).
+- Open `mock-server/server.js` and make sure create/update routes **enforce** the same rules (the server is what returns **422** / **409** in the browser).
 
 **Step 3 — Update the API contract (OpenAPI) and Swagger**
 
-- Edit `javascript/mock-server/openapi.json` (paths, JSON shapes, examples). Bump `info.version` if users should see a new version string.
+- Edit `mock-server/openapi.json` (paths, JSON shapes, examples). Bump `info.version` if users should see a new version string.
 - Run `npm run validate:openapi`.
 - Start the mock (`npm run start:mock`) and open [http://127.0.0.1:8765/docs](http://127.0.0.1:8765/docs). **Hard-refresh** the page so Swagger loads your changes.
 
 **Step 4 — Update the HTTP client and tests (if anything public changed)**
 
-- If URLs or request bodies changed: `javascript/lib/loanApiClient.js`.
-- Update unit tests under `javascript/test/unit/` (eligibility, computation, catalogue) and integration tests under `javascript/test/integration/` if responses or URLs changed.
+- If URLs or request bodies changed: `src/api/loanApiClient.js`.
+- Update unit tests under `tests/unit/` (eligibility, computation, catalogue) and integration tests under `tests/integration/` if responses or URLs changed.
 
 **Step 5 — Update Postman**
 
@@ -1236,27 +1322,27 @@ This is the **largest** change: you are adding something like a **new product li
 
 **Step 1 — Add the product to the catalogue**
 
-- In `javascript/lib/loanProductCatalog.js`, add a new entry to `LOAN_PRODUCTS_BY_CODE` with your new `product_code`, limits, labels, and intake metadata. The API **GET /reference/loan-products** will list it once the server uses this object.
+- In `src/loanProductCatalog.js`, add a new entry to `LOAN_PRODUCTS_BY_CODE` with your new `product_code`, limits, labels, and intake metadata. The API **GET /reference/loan-products** will list it once the server uses this object.
 
 **Step 2 — Wire eligibility and computation**
 
 - Create a small folder under `javascript/lib/loan-products/<your-product>/` with `…Eligibility.js` and `…Computation.js` (copy **Personal** or **Home** as a starting point).
 - Register them in:
-  - `javascript/lib/loan-products/registry.js` → `ELIGIBILITY_BY_PRODUCT_CODE`
-  - `javascript/lib/loan-products/computationRegistry.js` → `COMPUTATION_BY_PRODUCT_CODE`  
+  - `src/loan-products/calculations/registry.js` → `ELIGIBILITY_BY_PRODUCT_CODE`
+  - `src/loan-products/calculations/computationRegistry.js` → `COMPUTATION_BY_PRODUCT_CODE`  
   Without these two lines, the API will return errors like “no eligibility registered” or “no computation registered” for your new code.
 
 **Step 3 — Teach the mock server**
 
-- In `javascript/mock-server/server.js`, accept your `product_code` on create/preview where validation runs, and add any product-specific branches (same pattern as `PERSONAL_LOAN` / `HOME_LOAN`).
+- In `mock-server/server.js`, accept your `product_code` on create/preview where validation runs, and add any product-specific branches (same pattern as `PERSONAL_LOAN` / `HOME_LOAN`).
 
 **Step 4 — Document in OpenAPI and Swagger**
 
-- Extend `javascript/mock-server/openapi.json`: schemas for new fields, examples, and catalogue descriptions. Bump `info.version`. Run `npm run validate:openapi`.
+- Extend `mock-server/openapi.json`: schemas for new fields, examples, and catalogue descriptions. Bump `info.version`. Run `npm run validate:openapi`.
 
 **Step 5 — Client and tests**
 
-- Extend `javascript/lib/loanApiClient.js` only if you added **new** URLs (not just new `product_code` on existing routes).
+- Extend `src/api/loanApiClient.js` only if you added **new** URLs (not just new `product_code` on existing routes).
 - Add unit tests for eligibility/computation; extend integration tests if the lifecycle should be covered end-to-end.
 
 **Step 6 — Postman**
@@ -1273,11 +1359,11 @@ This is the **largest** change: you are adding something like a **new product li
 
 | What you mean in plain English | Main file or folder |
 | ------------------------------ | ------------------- |
-| Loan amounts, terms, product text shown to users | `javascript/lib/loanProductCatalog.js` |
-| “Is this application allowed?” rules | `javascript/lib/loan-products/registry.js` + your `*Eligibility.js` |
-| Payment / fee preview numbers | `javascript/lib/loan-products/computationRegistry.js` + your `*Computation.js` |
-| What the HTTP API actually returns | `javascript/mock-server/server.js` |
-| What Swagger shows (the contract) | `javascript/mock-server/openapi.json` |
+| Loan amounts, terms, product text shown to users | `src/loanProductCatalog.js` |
+| “Is this application allowed?” rules | `src/loan-products/calculations/registry.js` + your `*Eligibility.js` |
+| Payment / fee preview numbers | `src/loan-products/calculations/computationRegistry.js` + your `*Computation.js` |
+| What the HTTP API actually returns | `mock-server/server.js` |
+| What Swagger shows (the contract) | `mock-server/openapi.json` |
 | Browser **Try it out** page | Same as above—Swagger **reads** `openapi.json` (restart mock + hard-refresh `/docs`) |
 | Postman requests and Runner order | `postman/collection/Loan_Lifecycle_API.postman_collection.json` |
 | Postman base URL and demo variables | `postman/environments/Local_Mock.postman_environment.json` |

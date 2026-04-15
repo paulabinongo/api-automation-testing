@@ -2,7 +2,7 @@
  * Origination + servicing LOVs shared by the mock API, OpenAPI examples, and tests.
  * Terms = union of **term_months** across all products (**GET /v1/reference/loan-products**); payment methods = servicing rails.
  */
-import { ALL_CATALOG_TERM_MONTHS } from './loanProductCatalog.js'
+import { ALL_CATALOG_TERM_MONTHS } from '../loanProductCatalog.js'
 
 export const ALLOWED_LOAN_TERM_MONTHS = ALL_CATALOG_TERM_MONTHS
 

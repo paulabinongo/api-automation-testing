@@ -3,8 +3,8 @@
  * Package: **`javascript/lib/loan-products/home-loan/`**. Intake merge validation in **`../../loanProductCatalog.js`**; eligibility in **`./homeLoanEligibility.js`**.
  */
 
-import { PH_ADDRESS_VALID_ROWS } from '../../philippineAddressReference.js'
-import { PRODUCT_LOAN_TYPE } from '../../productLoanTaxonomy.js'
+import { PH_ADDRESS_VALID_ROWS } from '../../../utils/philippineAddressReference.js'
+import { PRODUCT_LOAN_TYPE } from '../../../utils/productLoanTaxonomy.js'
 
 function phpToCentavos(pesos) {
   return Math.round(pesos * 100)

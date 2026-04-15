@@ -3,7 +3,7 @@
  * automatically when you add them to **`LOAN_PRODUCTS_BY_CODE`** in **`loanProductCatalog.js`**.
  */
 
-import { LOAN_PRODUCTS_BY_CODE } from '../loanProductCatalog.js'
+import { LOAN_PRODUCTS_BY_CODE } from '../../loanProductCatalog.js'
 
 export { LOAN_PRODUCTS_BY_CODE }
 

@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['javascript/test/**/*.test.js'],
+    include: ['tests/**/*.test.js'],
     fileParallelism: false,
     pool: 'forks',
     clearMocks: true,
@@ -14,7 +14,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json-summary'],
       reportsDirectory: './coverage',
-      include: ['javascript/lib/{loanApiClient,config,sampleData,loanConstants}.js'],
+      include: ['src/**/*.{js,ts}'],
       exclude: ['**/node_modules/**', '**/test/**', '**/mock-server/**'],
       thresholds: {
         lines: 85,

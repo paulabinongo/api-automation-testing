@@ -10,7 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'crypto'
 
-import { PAYMENT_METHODS } from '../lib/loanConstants.js'
+import { PAYMENT_METHODS } from '../src/utils/loanConstants.js'
 import {
   applicationRequiresMetrobankDepositAccountConfirmation,
   applyHomeLoanInternalFieldDefaults,
@@ -19,22 +19,22 @@ import {
   METROBANK_DEPOSIT_REPAYMENT_PLAN,
   primaryIdUploadValuesForProduct,
   validateApplicationAgainstCatalog,
-} from '../lib/loanProductCatalog.js'
-import { getLoanProductByCode } from '../lib/loan-products/catalog.js'
-import { computeLoanPreviewForProduct } from '../lib/loan-products/computationRegistry.js'
+} from '../src/loanProductCatalog.js'
+import { getLoanProductByCode } from '../src/loan-products/calculations/catalog.js'
+import { computeLoanPreviewForProduct } from '../src/loan-products/calculations/computationRegistry.js'
 import {
   PRODUCT_CODES_REQUIRING_DOCUMENT_INTAKE_BEFORE_SUBMIT,
   PRODUCT_CODES_WITH_METROBANK_DEPOSIT_CONFIRM,
   PRODUCT_CODES_WITH_PEP_COMPLIANCE_GATE,
-} from '../lib/loan-products/lifecyclePolicies.js'
-import { evaluateEligibilityForProduct } from '../lib/loan-products/registry.js'
-import { computeMetrobankHomeLoanLifecyclePhase } from '../lib/loan-products/home-loan/metrobankHomeLoanLifecyclePhase.js'
+} from '../src/loan-products/lifecyclePolicies.js'
+import { evaluateEligibilityForProduct } from '../src/loan-products/calculations/registry.js'
+import { computeMetrobankHomeLoanLifecyclePhase } from '../src/loan-products/types/home-loan/metrobankHomeLoanLifecyclePhase.js'
 import {
   computeHomeLoanApplicationNonRefundableFees,
   hasValidHomeLoanBookingFeesRecorded,
   validateHomeLoanBookingFeesBody,
   validateHomeLoanDocumentsPostBody,
-} from '../lib/loan-products/home-loan/homeLoanLosValidation.js'
+} from '../src/loan-products/types/home-loan/homeLoanLosValidation.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const openApiSpec = JSON.parse(readFileSync(path.join(__dirname, 'openapi.json'), 'utf8'))

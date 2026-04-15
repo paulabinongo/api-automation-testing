@@ -3,20 +3,19 @@
  * Catalogue is **PHP-only**: **`principal_cents`** and **`employment.gross_monthly_income_cents`** are **PHP centavos** (1 PHP = 100 centavos).
  */
 
-import { HOME_LOAN_PRODUCT, HOME_LOAN_PURPOSES } from './loan-products/home-loan/homeLoanCatalog.js'
+import { HOME_LOAN_PRODUCT, HOME_LOAN_PURPOSES } from './loan-products/types/home-loan/homeLoanCatalog.js'
 import {
   PERSONAL_LOAN_OCCUPATIONS,
   PERSONAL_LOAN_OCCUPATION_CODES,
-} from './loan-products/personal-loan/personalLoanOccupations.js'
+} from './loan-products/types/personal-loan/personalLoanOccupations.js'
 import {
   PH_ADDRESS_VALID_ROWS,
   isValidPhAddressRow,
   isValidPhAddressTriplet,
-} from './philippineAddressReference.js'
-import { isHomeLoanEmploymentIncomeOnly } from './loan-products/home-loan/homeLoanEligibility.js'
-import { PRODUCT_LOAN_TYPE } from './productLoanTaxonomy.js'
+} from './utils/philippineAddressReference.js'
+import { isHomeLoanEmploymentIncomeOnly } from './loan-products/types/home-loan/homeLoanEligibility.js'
+import { PRODUCT_LOAN_TYPE } from './utils/productLoanTaxonomy.js'
 
-export { PRODUCT_LOAN_TYPE } from './productLoanTaxonomy.js'
 
 /** @param {number} pesos Whole PHP */
 function phpToCentavos(pesos) {

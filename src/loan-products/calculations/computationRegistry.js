@@ -3,8 +3,8 @@
  * and per-application preview use this registry so each catalogue can ship its own math module.
  */
 
-import { computeHomeLoanPreview } from './home-loan/homeLoanComputation.js'
-import { computePersonalLoanPreview } from './personal-loan/personalLoanComputation.js'
+import { computeHomeLoanPreview } from '../types/home-loan/homeLoanComputation.js'
+import { computePersonalLoanPreview } from '../types/personal-loan/personalLoanComputation.js'
 
 /** @type {Readonly<Record<string, (principalCents: number, termMonths: number, options?: object) => object | null>>} */
 export const COMPUTATION_BY_PRODUCT_CODE = Object.freeze({

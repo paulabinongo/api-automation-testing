@@ -9,12 +9,12 @@ export {
   LOAN_PRODUCTS_BY_CODE,
   getLoanProductByCode,
   registeredLoanProductCodes,
-} from './catalog.js'
-export { ELIGIBILITY_BY_PRODUCT_CODE, evaluateEligibilityForProduct } from './registry.js'
+} from './calculations/catalog.js'
+export { ELIGIBILITY_BY_PRODUCT_CODE, evaluateEligibilityForProduct } from './calculations/registry.js'
 export {
   COMPUTATION_BY_PRODUCT_CODE,
   computeLoanPreviewForProduct,
-} from './computationRegistry.js'
+} from './calculations/computationRegistry.js'
 export {
   PRODUCT_CODES_REQUIRING_DOCUMENT_INTAKE_BEFORE_SUBMIT,
   PRODUCT_CODES_WITH_PEP_COMPLIANCE_GATE,

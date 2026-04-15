@@ -8,7 +8,7 @@ import {
   homeLoanEffectiveLtvCapPercent,
   homeLoanMaxTermMonthsAllowed,
 } from './homeLoanCatalog.js'
-import { addCalendarMonths, ageOnDate } from '../shared/borrowerAge.js'
+import { addCalendarMonths, ageOnDate } from '../../shared/borrowerAge.js'
 
 /**
  * **Metrobank public application form** sends **employment** with only **`gross_monthly_income_cents`**.

@@ -3,8 +3,8 @@
  * Pure checks — call after **validateApplicationAgainstCatalog** (intake shape + amounts).
  */
 
-import { PERSONAL_LOAN_PRODUCT } from '../../loanProductCatalog.js'
-import { addCalendarMonths, ageOnDate } from '../shared/borrowerAge.js'
+import { PERSONAL_LOAN_PRODUCT } from '../../../loanProductCatalog.js'
+import { addCalendarMonths, ageOnDate } from '../../shared/borrowerAge.js'
 
 /**
  * @param {object} body — same shape as **POST /loan-applications** (after catalogue validation)

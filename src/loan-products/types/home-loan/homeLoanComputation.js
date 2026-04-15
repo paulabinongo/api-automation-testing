@@ -5,8 +5,6 @@
 
 import {
   HOME_LOAN_ANNUAL_RATES_BY_LOCK_IN_YEARS,
-  HOME_LOAN_MAX_TERM_YEARS,
-  HOME_LOAN_MIN_TERM_YEARS,
   HOME_LOAN_PRODUCT,
   HOME_LOAN_PURPOSE_DETAILS,
 } from './homeLoanCatalog.js'
@@ -43,8 +41,8 @@ function annualPercentForFixing(lockYears, useHomeEquityTier) {
  * @param {{ loan_purpose?: string, interest_fixing_years?: number }} [options] `interest_fixing_years` **1–5** (defaults **1**); invalid → **null**
  */
 export function computeHomeLoanPreview(principalCents, termMonths, options = {}) {
-  const minM = HOME_LOAN_MIN_TERM_YEARS * 12
-  const maxM = HOME_LOAN_MAX_TERM_YEARS * 12
+  const minM = 12  // 1 year minimum
+  const maxM = 300  // 25 years maximum
   if (
     typeof principalCents !== 'number' ||
     !Number.isFinite(principalCents) ||
