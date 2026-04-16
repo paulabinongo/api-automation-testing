@@ -2,18 +2,8 @@
   "info": {
     "_postman_id": "a1b2c3d4-loan-lifecycle-001",
     "name": "Loan Lifecycle API",
-    "description": "**Lifecycle** matches **Swagger UI**, **`mock-server/openapi.json`**, and **`docs/DOCUMENTATION.md`** §**5** (happy path §**5.0**, **Metrobank Home Loan** §**5.0.1**, production phase map §**5.4**). **OpenAPI **`info.version`** **0.8.25** ( **`mock-server/openapi.json`** ) adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**. **Loan catalogue:** each **`GET /reference/loan-products`** row includes **`product_loan_type`** and **`loan_type`** — **`src/utils/productLoanTaxonomy.js`**. The **`HOME_LOAN`** row includes **`metrobank_lifecycle_phases`** (six Metrobank business phases) — Swagger **`MetrobankHomeLoanLifecyclePhase`** / **`LoanProductCatalogEntry`** (**`openapi.json`** **0.8.25**).\n\n**Order (high level):** **Login** → **KYC** → **Create loan application** → **Documents** → (**optional:** **metrobank-deposit-account/confirm** when opening a Metrobank deposit for **ADA** — needed before **underwriting APPROVE**, not before **Submit**) → (**PEP Yes:** **compliance/pep-clearance**) → **Submit** → **Ops accept** → **Disclosures acknowledge** → Credit → **Start underwriting** → **Underwriting decision** → (optional **stipulations**) → **Funding authorize** → **Fund** (book) → **Disburse** → Get loan → Schedule → Payment(s) → Payoff → optional **Logout**.\n\n**Personal Loan (DRAFT path):** optional **0a. Eligibility preview** → **1. Create** → **1b. Loan computation preview** → **1c. Register documents** (**`POST …/documents`**) → **1c-MB. Metrobank deposit confirm** (**`POST …/metrobank-deposit-account/confirm`** when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** and **`additional_information.metrobank_deposit_repayment_plan`** is **`WILL_OPEN_METROBANK_DEPOSIT`**) → **1d. PEP compliance clearance** (**`POST …/compliance/pep-clearance`** — **200** when Step **6** PEP is **Yes** on either question, **400** when both **No**; required before **2. Submit** if **Yes**) → **2. Submit**. Same operation IDs and paths as **Swagger** / **`openapi.json`**.\n\n**ADA / Metrobank deposit:** **`{{metrobank_client_type}}`** defaults to **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**. **`EXISTING_CLIENT_CREDIT_CARD`** / **`NOT_METROBANK_CLIENT`** may **create** and **submit** without **1c-MB**; **`POST …/underwriting/decision`** (**APPROVE** / **CONDITIONAL**) returns **422** until **`metrobank_deposit_account_confirmed_at`** is set (e.g. via **1c-MB** while **DRAFT** with **`WILL_OPEN_METROBANK_DEPOSIT`**). See **`openapi.json` 0.8.25**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack — see **`docs/DOCUMENTATION.md`** §**5.4** for what real institutions add.\n\n**Import-ready flows:** **Flow — Happy path (import & run in order)** (Personal Loan) and **Flow — Metrobank Home Loan (happy path)** (**HOME_LOAN** — **`docs/DOCUMENTATION.md`** §**5.0.1**). OpenAPI **0.8.25**.\n\n**Stipulation tests:** **Tests — stipulations (single & multiple)** — Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** — select **Loan Lifecycle — Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`mock-server/openapi.json`** in Postman. **Product source (contract parity):** **`src/loanProductCatalog.js`**, **`src/utils/productLoanTaxonomy.js`** (**`PERSONAL`** / **`BUSINESS`**); **`javascript/lib/loan-products/computationRegistry.js`** + **`personal-loan/personalLoanComputation.js`** / **`home-loan/homeLoanComputation.js`**; **`javascript/lib/loan-products/registry.js`**. See **`docs/DOCUMENTATION.md`** §**6**.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only — do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** — set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
+    "description": "**Lifecycle** matches **Swagger UI**, **`mock-server/openapi.json`**, and **`docs/DOCUMENTATION.md`** \u00a7**5** (happy path \u00a7**5.0**, **Metrobank Home Loan** \u00a7**5.0.1**, production phase map \u00a7**5.4**). **OpenAPI **`info.version`** **0.8.25** ( **`mock-server/openapi.json`** ) adds **GET /v1/health**, **GET /v1/reference/loan-products**, response headers **`X-Correlation-Id`** / **`X-Request-Id`**, optional **`Idempotency-Key`** on authenticated **POST**. **Loan catalogue:** each **`GET /reference/loan-products`** row includes **`product_loan_type`** and **`loan_type`** \u2014 **`src/utils/productLoanTaxonomy.js`**. The **`HOME_LOAN`** row includes **`metrobank_lifecycle_phases`** (six Metrobank business phases) \u2014 Swagger **`MetrobankHomeLoanLifecyclePhase`** / **`LoanProductCatalogEntry`** (**`openapi.json`** **0.8.25**).\n\n**Order (high level):** **Login** \u2192 **KYC** \u2192 **Create loan application** \u2192 **Documents** \u2192 (**optional:** **metrobank-deposit-account/confirm** when opening a Metrobank deposit for **ADA** \u2014 needed before **underwriting APPROVE**, not before **Submit**) \u2192 (**PEP Yes:** **compliance/pep-clearance**) \u2192 **Submit** \u2192 **Ops accept** \u2192 **Disclosures acknowledge** \u2192 Credit \u2192 **Start underwriting** \u2192 **Underwriting decision** \u2192 (optional **stipulations**) \u2192 **Funding authorize** \u2192 **Fund** (book) \u2192 **Disburse** \u2192 Get loan \u2192 Schedule \u2192 Payment(s) \u2192 Payoff \u2192 optional **Logout**.\n\n**Personal Loan (DRAFT path):** optional **0a. Eligibility preview** \u2192 **1. Create** \u2192 **1b. Loan computation preview** \u2192 **1c. Register documents** (**`POST \u2026/documents`**) \u2192 **1c-MB. Metrobank deposit confirm** (**`POST \u2026/metrobank-deposit-account/confirm`** when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** and **`additional_information.metrobank_deposit_repayment_plan`** is **`WILL_OPEN_METROBANK_DEPOSIT`**) \u2192 **1d. PEP compliance clearance** (**`POST \u2026/compliance/pep-clearance`** \u2014 **200** when Step **6** PEP is **Yes** on either question, **400** when both **No**; required before **2. Submit** if **Yes**) \u2192 **2. Submit**. Same operation IDs and paths as **Swagger** / **`openapi.json`**.\n\n**ADA / Metrobank deposit:** **`{{metrobank_client_type}}`** defaults to **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**. **`EXISTING_CLIENT_CREDIT_CARD`** / **`NOT_METROBANK_CLIENT`** may **create** and **submit** without **1c-MB**; **`POST \u2026/underwriting/decision`** (**APPROVE** / **CONDITIONAL**) returns **422** until **`metrobank_deposit_account_confirmed_at`** is set (e.g. via **1c-MB** while **DRAFT** with **`WILL_OPEN_METROBANK_DEPOSIT`**). See **`openapi.json` 0.8.25**.\n\n**Tracing:** Collection **Pre-request** sets **`X-Correlation-Id`** (or **`correlation_id_override`** from the environment). **Tests** copy response **`X-Correlation-Id`** / **`X-Request-Id`** into **`last_correlation_id`** / **`last_request_id`**. **Idempotency:** set environment **`idempotency_key`** (any unique string); it is sent on **POST** requests as **`Idempotency-Key`** (clear it when you do not need deduplication).\n\n**Production alignment:** Vocabulary follows common **LOS / origination + servicing** narratives; this is a **teaching sandbox**, not a full bank stack \u2014 see **`docs/DOCUMENTATION.md`** \u00a7**5.4** for what real institutions add.\n\n**Import-ready flows:** **Flow \u2014 Happy path (import & run in order)** (Personal Loan) and **Flow \u2014 Metrobank Home Loan (happy path)** (**HOME_LOAN** \u2014 **`docs/DOCUMENTATION.md`** \u00a7**5.0.1**). OpenAPI **0.8.25**.\n\n**Stipulation tests:** **Tests \u2014 stipulations (single & multiple)** \u2014 Runner subfolders **A** (1 stip) and **B** (3 stips).\n\n**Setup:** import **`postman/collection/Loan_Lifecycle_API.postman_collection.json`** and **`postman/environments/Local_Mock.postman_environment.json`** \u2014 select **Loan Lifecycle \u2014 Local mock**.\n\n**OpenAPI / Swagger:** environment **`openapi_url`** and **`swagger_url`**, or import **`mock-server/openapi.json`** in Postman. **Product source (contract parity):** **`src/loanProductCatalog.js`**, **`src/utils/productLoanTaxonomy.js`** (**`PERSONAL`** / **`BUSINESS`**); **`javascript/lib/loan-products/computationRegistry.js`** + **`personal-loan/personalLoanComputation.js`** / **`home-loan/homeLoanComputation.js`**; **`javascript/lib/loan-products/registry.js`**. See **`docs/DOCUMENTATION.md`** \u00a7**6**.\n\n**Auth:** **`access_token`** from **Login**; collection Bearer except **Login** and **System & reference**. Password **`demo`** or **`demo123`**. **KYC** is required before **Create application** (**403** if skipped).\n\n**URLs:** Use **`api_root`** for all **`/v1/...`** calls (e.g. `http://127.0.0.1:8765/v1`). Use **`base_url`** for **`/openapi.json`** and **`/docs`** only \u2014 do **not** put **`/v1`** in **`base_url`** or you will get **`/v1/v1/...`** and stray **401**s. **`npm run test:integration`** uses port **9876** \u2014 set **`base_url`**, **`api_root`**, **`openapi_url`**, and **`swagger_url`** accordingly.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "auth": {
-    "type": "bearer",
-    "bearer": [
-      {
-        "key": "token",
-        "value": "{{access_token}}",
-        "type": "string"
-      }
-    ]
   },
   "variable": [
     {
@@ -155,7 +145,7 @@
   "item": [
     {
       "name": "System & reference (no auth)",
-      "description": "**Unauthenticated** probes aligned with **`openapi.json`** **0.8.25**. **Loan product catalogue** returns **`HOME_LOAN`** **`metrobank_lifecycle_phases`** (six phases — Swagger **`MetrobankHomeLoanLifecyclePhase`**). Run before **Login**.",
+      "description": "**Unauthenticated** probes aligned with **`openapi.json`** **0.8.25**. **Loan product catalogue** returns **`HOME_LOAN`** **`metrobank_lifecycle_phases`** (six phases \u2014 Swagger **`MetrobankHomeLoanLifecyclePhase`**). Run before **Login**.",
       "auth": {
         "type": "noauth"
       },
@@ -182,7 +172,7 @@
             "method": "GET",
             "header": [],
             "url": "{{api_root}}/health",
-            "description": "**GET /v1/health** — liveness, **environment**, **api_revision**. No Bearer."
+            "description": "**GET /v1/health** \u2014 liveness, **environment**, **api_revision**. No Bearer."
           },
           "response": []
         },
@@ -224,7 +214,7 @@
             "method": "GET",
             "header": [],
             "url": "{{api_root}}/reference/loan-products",
-            "description": "**GET /v1/reference/loan-products** — approved **term_months** and limits. No Bearer. Built from **`src/loanProductCatalog.js`**. **`HOME_LOAN`**: **`metrobank_lifecycle_phases`** (6), **`citizenship_options`**, **`loan_requirements`**, **`fees_and_charges`** — see **`openapi.json`** **`LoanProductCatalogEntry`** / **`MetrobankHomeLoanLifecyclePhase`** (**0.8.25**) and **docs/DOCUMENTATION.md** §**5.0.1**."
+            "description": "**GET /v1/reference/loan-products** \u2014 approved **term_months** and limits. No Bearer. Built from **`src/loanProductCatalog.js`**. **`HOME_LOAN`**: **`metrobank_lifecycle_phases`** (6), **`citizenship_options`**, **`loan_requirements`**, **`fees_and_charges`** \u2014 see **`openapi.json`** **`LoanProductCatalogEntry`** / **`MetrobankHomeLoanLifecyclePhase`** (**0.8.25**) and **docs/DOCUMENTATION.md** \u00a7**5.0.1**."
           },
           "response": []
         },
@@ -293,7 +283,7 @@
                   "if (pm.response.code !== 200) return;",
                   "if (!exp) {",
                   "    pm.test('term_months supported by preview', function () {",
-                  "        pm.expect.fail('Unsupported term_months — use 12, 18, 24, or 36 (see loanProductCatalog.js / personal-loan preview).');",
+                  "        pm.expect.fail('Unsupported term_months \u2014 use 12, 18, 24, or 36 (see loanProductCatalog.js / personal-loan preview).');",
                   "    });",
                   "    return;",
                   "}",
@@ -319,7 +309,7 @@
             "method": "GET",
             "header": [],
             "url": "{{api_root}}/reference/loan-computation-preview?principal_cents={{loan_preview_principal_cents}}&term_months={{loan_preview_term_months}}",
-            "description": "**GET /v1/reference/loan-computation-preview** — add-on interest, fees, net proceeds, EIR (**default `product_code`:** **PERSONAL_LOAN**).\n\n**Query (dynamic):** **`principal_cents`**, **`term_months`** — set environment **`loan_preview_principal_cents`** and **`loan_preview_term_months`** (or collection defaults). **PERSONAL_LOAN** terms: **12, 18, 24, 36**. **HOME_LOAN:** add **`product_code=HOME_LOAN`**, optional **`loan_purpose`**, optional **`interest_fixing_years`** (**1–5**, default **1**). **Loan term** is **1–25 years** (**12–300** months, **12**-month steps); **fixing** selects the rate row (Metrobank calculator).\n\n**Repo:** **`javascript/lib/loan-products/computationRegistry.js`** → **`personal-loan/personalLoanComputation.js`** / **`home-loan/homeLoanComputation.js`**; keep rates aligned with **`javascript/lib/loan-products/home-loan/homeLoanCatalog.js`**.\n\n**Why centavos?** The API stores money as **integer PHP centavos** (1 PHP = 100 centavos) so amounts stay exact — no floating-point rounding bugs in principal, fees, or amortization. Same pattern as many ledgers and payment APIs."
+            "description": "**GET /v1/reference/loan-computation-preview** \u2014 add-on interest, fees, net proceeds, EIR (**default `product_code`:** **PERSONAL_LOAN**).\n\n**Query (dynamic):** **`principal_cents`**, **`term_months`** \u2014 set environment **`loan_preview_principal_cents`** and **`loan_preview_term_months`** (or collection defaults). **PERSONAL_LOAN** terms: **12, 18, 24, 36**. **HOME_LOAN:** add **`product_code=HOME_LOAN`**, optional **`loan_purpose`**, optional **`interest_fixing_years`** (**1\u20135**, default **1**). **Loan term** is **1\u201325 years** (**12\u2013300** months, **12**-month steps); **fixing** selects the rate row (Metrobank calculator).\n\n**Repo:** **`javascript/lib/loan-products/computationRegistry.js`** \u2192 **`personal-loan/personalLoanComputation.js`** / **`home-loan/homeLoanComputation.js`**; keep rates aligned with **`javascript/lib/loan-products/home-loan/homeLoanCatalog.js`**.\n\n**Why centavos?** The API stores money as **integer PHP centavos** (1 PHP = 100 centavos) so amounts stay exact \u2014 no floating-point rounding bugs in principal, fees, or amortization. Same pattern as many ledgers and payment APIs."
           },
           "response": []
         },
@@ -352,15 +342,15 @@
             "method": "GET",
             "header": [],
             "url": "{{api_root}}/reference/loan-computation-preview?product_code=HOME_LOAN&loan_purpose=PURCHASE_HOUSE_AND_LOT&principal_cents=50000000&term_months=12&interest_fixing_years={{home_loan_interest_fixing_years}}",
-            "description": "**GET /v1/reference/loan-computation-preview** — **HOME_LOAN** sample: **PHP 500,000** principal, **1-year** amortization term, **`interest_fixing_years`** from **`{{home_loan_interest_fixing_years}}`** (**1–5**). Matches Metrobank calculator: fixing period ≠ loan term when you change **`term_months`** (e.g. **240** = **20 years**)."
+            "description": "**GET /v1/reference/loan-computation-preview** \u2014 **HOME_LOAN** sample: **PHP 500,000** principal, **1-year** amortization term, **`interest_fixing_years`** from **`{{home_loan_interest_fixing_years}}`** (**1\u20135**). Matches Metrobank calculator: fixing period \u2260 loan term when you change **`term_months`** (e.g. **240** = **20 years**)."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Flow — Happy path (import & run in order)",
-      "description": "Same journey as **Swagger** operation order and **`docs/DOCUMENTATION.md`** §**5.0**. Run **Collection Runner** on **this folder only** (top to bottom). Environment: **Loan Lifecycle — Local mock**. **Login** → **KYC** → optional **0a. Eligibility preview** → **1. Create** → **1b** → **1c** (**`{{primary_id_document_type}}`** on **`POST …/documents`**) → **1c-MB. Metrobank deposit confirm** — **Local mock** defaults to **no deposit yet** (**`NOT_METROBANK_CLIENT`** + **`metrobank_deposit_repayment_plan_line`** for **`WILL_OPEN`** on **1. Create**; see §**7.3**). **200** after **1c**; **400** if env uses **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (confirm not applicable); **409** if plan missing / wrong or docs incomplete → **1d. PEP compliance clearance** (**200** or **400** when PEP both **No**) → **2. Submit** → numbered steps **3 … 14**; **15. Logout** is optional. Steps **1** (create) and **7** (underwriting) save **application_id** and **loan_id** via Tests. If step **7** is **CONDITIONAL**, it also sets **`stipulation_ids_json`** and **`stipulation_id`** — run **Fulfill all stipulations** in folder **Conditional — fulfill stipulations** once, then **9. Fund** (after **8. Funding — authorize**).",
+      "name": "Flow \u2014 Happy path (import & run in order)",
+      "description": "Same journey as **Swagger** operation order and **`docs/DOCUMENTATION.md`** \u00a7**5.0**. Run **Collection Runner** on **this folder only** (top to bottom). Environment: **Loan Lifecycle \u2014 Local mock**. **Login** \u2192 **KYC** \u2192 optional **0a. Eligibility preview** \u2192 **1. Create** \u2192 **1b** \u2192 **1c** (**`{{primary_id_document_type}}`** on **`POST \u2026/documents`**) \u2192 **1c-MB. Metrobank deposit confirm** \u2014 **Local mock** defaults to **no deposit yet** (**`NOT_METROBANK_CLIENT`** + **`metrobank_deposit_repayment_plan_line`** for **`WILL_OPEN`** on **1. Create**; see \u00a7**7.3**). **200** after **1c**; **400** if env uses **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (confirm not applicable); **409** if plan missing / wrong or docs incomplete \u2192 **1d. PEP compliance clearance** (**200** or **400** when PEP both **No**) \u2192 **2. Submit** \u2192 numbered steps **3 \u2026 14**; **15. Logout** is optional. Steps **1** (create) and **7** (underwriting) save **application_id** and **loan_id** via Tests. If step **7** is **CONDITIONAL**, it also sets **`stipulation_ids_json`** and **`stipulation_id`** \u2014 run **Fulfill all stipulations** in folder **Conditional \u2014 fulfill stipulations** once, then **9. Fund** (after **8. Funding \u2014 authorize**).",
       "item": [
         {
           "name": "Login",
@@ -400,7 +390,7 @@
               "raw": "{\n  \"email\": \"{{demo_login_email}}\",\n  \"password\": \"{{demo_login_password}}\"\n}"
             },
             "url": "{{api_root}}/auth/login",
-            "description": "Public — no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
+            "description": "Public \u2014 no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
           },
           "response": []
         },
@@ -429,6 +419,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -463,6 +458,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -470,7 +470,7 @@
               "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"{{metrobank_client_type}}\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false{{metrobank_deposit_repayment_plan_line}}\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications/eligibility-preview",
-            "description": "**Personal Loan intake:** **POST /v1/loan-applications/eligibility-preview** — same JSON as **1. Create**; dry-run catalogue + eligibility (UI **Step 6** **Next**). No draft. **Optional** in Runner."
+            "description": "**Personal Loan intake:** **POST /v1/loan-applications/eligibility-preview** \u2014 same JSON as **1. Create**; dry-run catalogue + eligibility (UI **Step 6** **Next**). No draft. **Optional** in Runner."
           },
           "response": []
         },
@@ -502,6 +502,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -509,7 +514,7 @@
               "raw": "{\n  \"product_code\": \"PERSONAL_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 36,\n  \"metrobank_client_type\": \"{{metrobank_client_type}}\",\n  \"loan_purpose\": \"PERSONAL_CONSUMPTION\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false{{metrobank_deposit_repayment_plan_line}}\n  },\n  \"borrower\": {\n    \"first_name\": \"Alex\",\n    \"middle_name\": \"Jose\",\n    \"last_name\": \"Rivera\",\n    \"full_name\": \"Alex Jose Rivera\",\n    \"email\": \"alex.rivera@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"citizenship\": \"FILIPINO\",\n    \"primary_id_document_type\": \"{{primary_id_document_type}}\",\n    \"primary_id_document_number\": \"12345678901\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true\n    },\n    \"gender\": \"MALE\",\n    \"marital_status\": \"SINGLE\",\n    \"education\": \"COLLEGE_GRADUATE\",\n    \"place_of_birth\": \"Makati\",\n    \"mailing_same_as_residential\": true,\n    \"residential_address\": {\n      \"street_line\": \"Rizal Street\",\n      \"subdivision_village\": \"Greenwoods Subdivision\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    },\n    \"home_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"12345678\"\n    }\n  },\n  \"employment\": {\n    \"status\": \"EMPLOYED\",\n    \"source_of_funds\": \"EMPLOYED\",\n    \"employment_status\": \"REGULAR\",\n    \"occupation\": \"OFFICE_CLERK\",\n    \"industry\": \"Financial Services\",\n    \"business_email\": \"hr@examplecorp.com\",\n    \"years_working_total\": 10,\n    \"gross_monthly_income_cents\": 3333333,\n    \"employer_name\": \"Example Corp\",\n    \"employer_address\": {\n      \"street_line\": \"Ayala Avenue\",\n      \"subdivision_building\": \"Enterprise Tower\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"Bel-Air\",\n      \"postal_code\": \"1209\"\n    },\n    \"years_with_current_employer\": 3,\n    \"is_regular_employment\": true,\n    \"business_mobile_phone\": \"+639181112233\",\n    \"business_phone\": {\n      \"area_code\": \"082\",\n      \"subscriber_number\": \"87654321\"\n    }\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications",
-            "description": "**Personal Loan:** **DRAFT** after full intake (**docs/DOCUMENTATION.md** §5.0). **`loan_purpose`**, **additional_information** (PEP; optional **`metrobank_deposit_repayment_plan`** as a **JSON string**, e.g. **`\"WILL_OPEN_METROBANK_DEPOSIT\"`** — use env **`metrobank_deposit_repayment_plan_line`** §**7.3**), **`borrower.primary_id_document_type`** = **`{{primary_id_document_type}}`** — **Step 3** subset (**step3_primary_id_document_types** on **GET /reference/loan-products**); Step 7 upload uses the full **primary_id_document_types** list. Saves **`application_id`**."
+            "description": "**Personal Loan:** **DRAFT** after full intake (**docs/DOCUMENTATION.md** \u00a75.0). **`loan_purpose`**, **additional_information** (PEP; optional **`metrobank_deposit_repayment_plan`** as a **JSON string**, e.g. **`\"WILL_OPEN_METROBANK_DEPOSIT\"`** \u2014 use env **`metrobank_deposit_repayment_plan_line`** \u00a7**7.3**), **`borrower.primary_id_document_type`** = **`{{primary_id_document_type}}`** \u2014 **Step 3** subset (**step3_primary_id_document_types** on **GET /reference/loan-products**); Step 7 upload uses the full **primary_id_document_types** list. Saves **`application_id`**."
           },
           "response": []
         },
@@ -520,7 +525,7 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "// Same catalogue math as **Loan computation preview** — inputs come from **POST …/loan-applications** (principal_cents, term_months).",
+                  "// Same catalogue math as **Loan computation preview** \u2014 inputs come from **POST \u2026/loan-applications** (principal_cents, term_months).",
                   "function pvOrdinaryAnnuity(r, n, payment) {",
                   "    if (r <= 0) return payment * n;",
                   "    return (payment * (1 - Math.pow(1 + r, -n))) / r;",
@@ -588,9 +593,15 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/computation-preview",
-            "description": "**GET /v1/loan-applications/{applicationId}/computation-preview** — same numbers as the public reference preview, but **principal** and **term** are read from the borrower’s application (step **1**). Requires **Bearer**. Run **after** **1. Create loan application** so **`application_id`** is set."
+            "description": "**GET /v1/loan-applications/{applicationId}/computation-preview** \u2014 same numbers as the public reference preview, but **principal** and **term** are read from the borrower\u2019s application (step **1**). Requires **Bearer**. Run **after** **1. Create loan application** so **`application_id`** is set."
           },
           "response": []
         },
@@ -617,6 +628,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -629,7 +645,7 @@
           "response": []
         },
         {
-          "name": "1c-MB. Metrobank deposit confirm (conditional — ADA)",
+          "name": "1c-MB. Metrobank deposit confirm (conditional \u2014 ADA)",
           "event": [
             {
               "listen": "test",
@@ -659,6 +675,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -666,7 +687,7 @@
               "raw": "{}"
             },
             "url": "{{api_root}}/loan-applications/{{application_id}}/metrobank-deposit-account/confirm",
-            "description": "**ADA:** After **POST …/documents**. Draft must have **`additional_information.metrobank_deposit_repayment_plan`:** **`WILL_OPEN_METROBANK_DEPOSIT`** (string) when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`**. **Local mock** env defaults supply this on **1. Create**. **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`:** **400** not required. **409** if plan missing / wrong for **NOT** / **credit-card**, or **`WILL_USE_OTHER_BANK_DEPOSIT_ONLY`** — Runner expects **200** or **400**."
+            "description": "**ADA:** After **POST \u2026/documents**. Draft must have **`additional_information.metrobank_deposit_repayment_plan`:** **`WILL_OPEN_METROBANK_DEPOSIT`** (string) when **`metrobank_client_type`** is **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`**. **Local mock** env defaults supply this on **1. Create**. **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`:** **400** not required. **409** if plan missing / wrong for **NOT** / **credit-card**, or **`WILL_USE_OTHER_BANK_DEPOSIT_ONLY`** \u2014 Runner expects **200** or **400**."
           },
           "response": []
         },
@@ -699,6 +720,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -706,7 +732,7 @@
               "raw": "{}"
             },
             "url": "{{api_root}}/loan-applications/{{application_id}}/compliance/pep-clearance",
-            "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required — Runner test accepts **200** or **400**."
+            "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required \u2014 Runner test accepts **200** or **400**."
           },
           "response": []
         },
@@ -727,14 +753,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
             "description": "Moves application to SUBMITTED. **1c-MB** is **not** required for submit; **underwriting APPROVE** still needs **`metrobank_deposit_account_confirmed_at`** on **NOT** / **credit-card** paths. **PEP Yes:** run **1d** after **1c** (and after **1c-MB** if you ran it)."
           },
           "response": []
         },
         {
-          "name": "3. Ops — accept for processing",
+          "name": "3. Ops \u2014 accept for processing",
           "event": [
             {
               "listen": "test",
@@ -754,14 +786,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/processing/accept",
-            "description": "LOS-style: **SUBMITTED** → **IN_PROCESSING** (ops / processing queue)."
+            "description": "LOS-style: **SUBMITTED** \u2192 **IN_PROCESSING** (ops / processing queue)."
           },
           "response": []
         },
         {
-          "name": "4. Disclosures — acknowledge",
+          "name": "4. Disclosures \u2014 acknowledge",
           "event": [
             {
               "listen": "test",
@@ -785,6 +823,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -821,6 +864,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -853,9 +901,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/start",
-            "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING** (underwriting queue) before **decision**."
+            "description": "**CREDIT_COMPLETED** \u2192 **IN_UNDERWRITING** (underwriting queue) before **decision**."
           },
           "response": []
         },
@@ -902,6 +956,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -909,12 +968,12 @@
               "raw": "{\n  \"outcome\": \"APPROVE\"\n}"
             },
             "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/decision",
-            "description": "Straight **APPROVE** → **PENDING_FUNDING** (no stips). For **CONDITIONAL**, replace body with `outcome` + `stipulations[]` — Tests save **`loan_id`**, **`stipulation_ids_json`** (all UUIDs), and the first open **`stipulation_id`**. Clear all stips in **one** call: **POST …/stipulations/fulfill-all** (folder **Conditional — fulfill stipulations**). Or fulfill one-by-one with **`{{stipulation_id}}`**. Empty **`stipulation_id`** yields `.../stipulations//fulfill` → **404**."
+            "description": "Straight **APPROVE** \u2192 **PENDING_FUNDING** (no stips). For **CONDITIONAL**, replace body with `outcome` + `stipulations[]` \u2014 Tests save **`loan_id`**, **`stipulation_ids_json`** (all UUIDs), and the first open **`stipulation_id`**. Clear all stips in **one** call: **POST \u2026/stipulations/fulfill-all** (folder **Conditional \u2014 fulfill stipulations**). Or fulfill one-by-one with **`{{stipulation_id}}`**. Empty **`stipulation_id`** yields `.../stipulations//fulfill` \u2192 **404**."
           },
           "response": []
         },
         {
-          "name": "8. Funding — authorize (secondary approval)",
+          "name": "8. Funding \u2014 authorize (secondary approval)",
           "event": [
             {
               "listen": "test",
@@ -934,9 +993,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/funding/authorize",
-            "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** — production-style **clear-to-fund** before **GL** booking."
+            "description": "**PENDING_FUNDING** \u2192 **CLEARED_FOR_BOOKING** \u2014 production-style **clear-to-fund** before **GL** booking."
           },
           "response": []
         },
@@ -961,9 +1026,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/fund",
-            "description": "Books the loan: **CLEARED_FOR_BOOKING** → **FUNDED** (`funded_at`). Requires **8. Funding — authorize** first."
+            "description": "Books the loan: **CLEARED_FOR_BOOKING** \u2192 **FUNDED** (`funded_at`). Requires **8. Funding \u2014 authorize** first."
           },
           "response": []
         },
@@ -988,9 +1059,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/disburse",
-            "description": "Sends proceeds to the borrower: **FUNDED** → **ACTIVE** (`disbursed_at`). Requires **9. Fund** first."
+            "description": "Sends proceeds to the borrower: **FUNDED** \u2192 **ACTIVE** (`disbursed_at`). Requires **9. Fund** first."
           },
           "response": []
         },
@@ -1011,7 +1088,13 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}",
             "description": "After **Disburse**, expect **`status`: ACTIVE** and **`balance_cents`** for repayments."
           },
@@ -1034,7 +1117,13 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/payment-schedule",
             "description": "Illustrative amortization-style schedule from the mock (demo only)."
           },
@@ -1061,6 +1150,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1068,7 +1162,7 @@
               "raw": "{\n  \"amount_cents\": {{payment_amount_cents}},\n  \"method\": \"{{payment_method}}\"\n}"
             },
             "url": "{{api_root}}/loans/{{loan_id}}/payments",
-            "description": "Loan must be **ACTIVE** (run **10. Disburse** first). **`method`**: **ACH** (installments / NACHA-style) or **WIRE** (domestic wire / payoff-style). Set `payment_amount_cents`; use **Get loan** → `balance_cents` for a full payoff."
+            "description": "Loan must be **ACTIVE** (run **10. Disburse** first). **`method`**: **ACH** (installments / NACHA-style) or **WIRE** (domestic wire / payoff-style). Set `payment_amount_cents`; use **Get loan** \u2192 `balance_cents` for a full payoff."
           },
           "response": []
         },
@@ -1089,7 +1183,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/payoff",
             "description": "Closes the loan on the mock (**CLOSED**). Run after the loan is paid down or for demo teardown."
           },
@@ -1114,17 +1214,23 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/auth/logout",
-            "description": "Invalidates **access_token** — you must **Login** again for further protected calls. Clears **access_token** in the active environment (if any) and collection."
+            "description": "Invalidates **access_token** \u2014 you must **Login** again for further protected calls. Clears **access_token** in the active environment (if any) and collection."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Flow — Metrobank Home Loan (happy path)",
-      "description": "**Metrobank Home Loan** (**HOME_LOAN**) — business lifecycle phases **1–6** are documented in **`GET /reference/loan-products`** → **`metrobank_lifecycle_phases`** (OpenAPI **`MetrobankHomeLoanLifecyclePhase`**) and **docs/DOCUMENTATION.md** §**5.0.1**. **Technical** flow matches **Personal Loan** (§**5.0**): **ADA** via **`metrobank_client_type`** + optional **`metrobank-deposit-account/confirm`**. Run **Collection Runner** on **this folder only** (or run **System & reference → Loan product catalogue** first to assert **HOME_LOAN** phases in CI).\n\n**Order:** **Login** → **KYC** → **1. Create** (**`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**) → **1b** → **1c** (LOS document checklist + application fees — **`homeLoanLosValidation.js`**) → **1c-MB** (**400** when depositor — OK) → **1d** → **2 … 7** → **7b. HOME_LOAN booking fees** (before **8. Funding — authorize**) → **8 … 15**.\n\n**13. Record payment** uses **{{home_loan_payment_amount_cents}}**.",
+      "name": "Flow \u2014 Metrobank Home Loan (happy path)",
+      "description": "**Metrobank Home Loan** (**HOME_LOAN**) \u2014 business lifecycle phases **1\u20136** are documented in **`GET /reference/loan-products`** \u2192 **`metrobank_lifecycle_phases`** (OpenAPI **`MetrobankHomeLoanLifecyclePhase`**) and **docs/DOCUMENTATION.md** \u00a7**5.0.1**. **Technical** flow matches **Personal Loan** (\u00a7**5.0**): **ADA** via **`metrobank_client_type`** + optional **`metrobank-deposit-account/confirm`**. Run **Collection Runner** on **this folder only** (or run **System & reference \u2192 Loan product catalogue** first to assert **HOME_LOAN** phases in CI).\n\n**Order:** **Login** \u2192 **KYC** \u2192 **1. Create** (**`EXISTING_CLIENT_DEPOSIT_ACCOUNT`**) \u2192 **1b** \u2192 **1c** (LOS document checklist + application fees \u2014 **`homeLoanLosValidation.js`**) \u2192 **1c-MB** (**400** when depositor \u2014 OK) \u2192 **1d** \u2192 **2 \u2026 7** \u2192 **7b. HOME_LOAN booking fees** (before **8. Funding \u2014 authorize**) \u2192 **8 \u2026 15**.\n\n**13. Record payment** uses **{{home_loan_payment_amount_cents}}**.",
       "item": [
         {
           "name": "Login",
@@ -1164,7 +1270,7 @@
               "raw": "{\n  \"email\": \"{{demo_login_email}}\",\n  \"password\": \"{{demo_login_password}}\"\n}"
             },
             "url": "{{api_root}}/auth/login",
-            "description": "Public — no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
+            "description": "Public \u2014 no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
           },
           "response": []
         },
@@ -1193,6 +1299,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1235,6 +1346,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1242,7 +1358,7 @@
               "raw": "{\n  \"product_code\": \"HOME_LOAN\",\n  \"principal_cents\": 50000000,\n  \"term_months\": 240,\n  \"metrobank_client_type\": \"EXISTING_CLIENT_DEPOSIT_ACCOUNT\",\n  \"loan_purpose\": \"PURCHASE_HOUSE_AND_LOT\",\n  \"additional_information\": {\n    \"pep_close_family_or_public_position\": false,\n    \"pep_financial_transactions_on_behalf\": false,\n    \"property_appraised_value_cents\": 100000000,\n    \"metrobank_preferred_contact_date\": \"2099-06-15\",\n    \"metrobank_preferred_contact_time\": \"10:00\"\n  },\n  \"borrower\": {\n    \"first_name\": \"Juan\",\n    \"last_name\": \"Cruz\",\n    \"email\": \"juan.delacruz@example.com\",\n    \"mobile_phone\": \"+639171234567\",\n    \"consents\": {\n      \"terms_of_use_accepted\": true,\n      \"terms_and_conditions_accepted\": true,\n      \"data_privacy_policy_accepted\": true,\n      \"home_loan_undertaking_accepted\": true,\n      \"metrobank_amla_disclosure_acknowledged\": true,\n      \"metrobank_policies_footer_disclaimer_acknowledged\": true\n    },\n    \"residential_address\": {\n      \"street_line\": \"123 Mabini Street\",\n      \"subdivision_village\": \"SampleVillagePhase1\",\n      \"region\": \"National Capital Region (NCR)\",\n      \"province\": \"NCR\",\n      \"city_town\": \"Makati\",\n      \"barangay\": \"San Antonio\",\n      \"postal_code\": \"1200\",\n      \"home_ownership\": \"OWNED\"\n    }\n  },\n  \"employment\": {\n    \"gross_monthly_income_cents\": 5000000\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications",
-            "description": "**HOME_LOAN** **DRAFT** — **public application form** only (mirrors **`buildHomeLoanSampleApplication(240)`**): names, contact, PH address triplet, appraisal + preferred callback, income-only **employment**, policy **consents**. Server merges PEP/category/collateral defaults and internal KYC placeholders. Sample **`metrobank_preferred_contact_date`** **2099-06-15**. **`metrobank_client_type`** (**ADA**). Saves **`application_id`**. See **docs/DOCUMENTATION.md** §**5.0.1**, **`docs/METROBANK_HOME_LOAN_POLICIES.md`**, **OpenAPI** **0.8.25**."
+            "description": "**HOME_LOAN** **DRAFT** \u2014 **public application form** only (mirrors **`buildHomeLoanSampleApplication(240)`**): names, contact, PH address triplet, appraisal + preferred callback, income-only **employment**, policy **consents**. Server merges PEP/category/collateral defaults and internal KYC placeholders. Sample **`metrobank_preferred_contact_date`** **2099-06-15**. **`metrobank_client_type`** (**ADA**). Saves **`application_id`**. See **docs/DOCUMENTATION.md** \u00a7**5.0.1**, **`docs/METROBANK_HOME_LOAN_POLICIES.md`**, **OpenAPI** **0.8.25**."
           },
           "response": []
         },
@@ -1268,9 +1384,15 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/computation-preview",
-            "description": "**GET /v1/loan-applications/{applicationId}/computation-preview** — same numbers as the public reference preview; **principal**, **term**, **`loan_purpose`**, and **`additional_information.interest_fixing_years`** (default **1**) come from the application. Requires **Bearer**. Run **after** **1. Create loan application** so **`application_id`** is set."
+            "description": "**GET /v1/loan-applications/{applicationId}/computation-preview** \u2014 same numbers as the public reference preview; **principal**, **term**, **`loan_purpose`**, and **`additional_information.interest_fixing_years`** (default **1**) come from the application. Requires **Bearer**. Run **after** **1. Create loan application** so **`application_id`** is set."
           },
           "response": []
         },
@@ -1300,6 +1422,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1307,12 +1434,12 @@
               "raw": "{\n  \"primary_id_document_type\": \"PASSPORT\",\n  \"home_loan_document_checklist\": {\n    \"doc_personal_application_form_signed\": true,\n    \"doc_personal_government_id_provided\": true,\n    \"doc_collateral_tct_or_cct_copy\": true,\n    \"doc_collateral_tax_declaration\": true,\n    \"doc_personal_marriage_contract_if_applicable\": true,\n    \"doc_income_employed_coe_payslips_or_itr\": true\n  },\n  \"home_loan_property_region\": \"METRO_MANILA\",\n  \"home_loan_title_investigation_title_count\": 1,\n  \"home_loan_application_fee_payments\": {\n    \"appraisal_fee_cents\": 400000,\n    \"title_investigation_cents\": 100000\n  }\n}"
             },
             "url": "{{api_root}}/loan-applications/{{application_id}}/documents",
-            "description": "**HOME_LOAN** Step 7 — LOS: **`primary_id_document_type`** = **PASSPORT**; **`home_loan_document_checklist`** (all required lines **true** for this profile — see **`homeLoanLosValidation.js`**); **`home_loan_property_region`** (**METRO_MANILA** or **OTHER**) + **`home_loan_application_fee_payments`** must match catalogue appraisal + title investigation (**`GET /reference/loan-products`** → **fees_and_charges**)."
+            "description": "**HOME_LOAN** Step 7 \u2014 LOS: **`primary_id_document_type`** = **PASSPORT**; **`home_loan_document_checklist`** (all required lines **true** for this profile \u2014 see **`homeLoanLosValidation.js`**); **`home_loan_property_region`** (**METRO_MANILA** or **OTHER**) + **`home_loan_application_fee_payments`** must match catalogue appraisal + title investigation (**`GET /reference/loan-products`** \u2192 **fees_and_charges**)."
           },
           "response": []
         },
         {
-          "name": "1c-MB. Metrobank deposit confirm (conditional — ADA)",
+          "name": "1c-MB. Metrobank deposit confirm (conditional \u2014 ADA)",
           "event": [
             {
               "listen": "test",
@@ -1342,6 +1469,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1349,7 +1481,7 @@
               "raw": "{}"
             },
             "url": "{{api_root}}/loan-applications/{{application_id}}/metrobank-deposit-account/confirm",
-            "description": "**ADA** — same as Personal Loan flow. **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** on **Create** → **400** not required; **`NOT_METROBANK_CLIENT`** / **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`** → **200** after documents."
+            "description": "**ADA** \u2014 same as Personal Loan flow. **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** on **Create** \u2192 **400** not required; **`NOT_METROBANK_CLIENT`** / **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`** \u2192 **200** after documents."
           },
           "response": []
         },
@@ -1382,6 +1514,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1389,7 +1526,7 @@
               "raw": "{}"
             },
             "url": "{{api_root}}/loan-applications/{{application_id}}/compliance/pep-clearance",
-            "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required — Runner test accepts **200** or **400**."
+            "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required \u2014 Runner test accepts **200** or **400**."
           },
           "response": []
         },
@@ -1416,14 +1553,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
-            "description": "Moves application to **SUBMITTED**. **Submit** does not require **`metrobank_deposit_account_confirmed_at`**; **underwriting** **APPROVE** does when **`WILL_OPEN_METROBANK_DEPOSIT`**. **PEP** both **No** — **1d** may return **400**."
+            "description": "Moves application to **SUBMITTED**. **Submit** does not require **`metrobank_deposit_account_confirmed_at`**; **underwriting** **APPROVE** does when **`WILL_OPEN_METROBANK_DEPOSIT`**. **PEP** both **No** \u2014 **1d** may return **400**."
           },
           "response": []
         },
         {
-          "name": "3. Ops — accept for processing",
+          "name": "3. Ops \u2014 accept for processing",
           "event": [
             {
               "listen": "test",
@@ -1443,14 +1586,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/processing/accept",
-            "description": "LOS-style: **SUBMITTED** → **IN_PROCESSING** (ops / processing queue)."
+            "description": "LOS-style: **SUBMITTED** \u2192 **IN_PROCESSING** (ops / processing queue)."
           },
           "response": []
         },
         {
-          "name": "4. Disclosures — acknowledge",
+          "name": "4. Disclosures \u2014 acknowledge",
           "event": [
             {
               "listen": "test",
@@ -1474,6 +1623,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1510,6 +1664,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1542,9 +1701,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/start",
-            "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING** (underwriting queue) before **decision**."
+            "description": "**CREDIT_COMPLETED** \u2192 **IN_UNDERWRITING** (underwriting queue) before **decision**."
           },
           "response": []
         },
@@ -1591,6 +1756,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1598,7 +1768,7 @@
               "raw": "{\n  \"outcome\": \"APPROVE\"\n}"
             },
             "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/decision",
-            "description": "Straight **APPROVE** → **PENDING_FUNDING** (no stips). For **CONDITIONAL**, replace body with `outcome` + `stipulations[]` — Tests save **`loan_id`**, **`stipulation_ids_json`** (all UUIDs), and the first open **`stipulation_id`**. Clear all stips in **one** call: **POST …/stipulations/fulfill-all** (folder **Conditional — fulfill stipulations**). Or fulfill one-by-one with **`{{stipulation_id}}`**. Empty **`stipulation_id`** yields `.../stipulations//fulfill` → **404**."
+            "description": "Straight **APPROVE** \u2192 **PENDING_FUNDING** (no stips). For **CONDITIONAL**, replace body with `outcome` + `stipulations[]` \u2014 Tests save **`loan_id`**, **`stipulation_ids_json`** (all UUIDs), and the first open **`stipulation_id`**. Clear all stips in **one** call: **POST \u2026/stipulations/fulfill-all** (folder **Conditional \u2014 fulfill stipulations**). Or fulfill one-by-one with **`{{stipulation_id}}`**. Empty **`stipulation_id`** yields `.../stipulations//fulfill` \u2192 **404**."
           },
           "response": []
         },
@@ -1622,6 +1792,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1629,12 +1804,12 @@
               "raw": "{\n  \"handling_fee_cents\": 500000,\n  \"notarial_document_count\": 3,\n  \"notarial_fee_cents\": 120000,\n  \"dst_acknowledged\": true,\n  \"mri_insurance_acknowledged\": true,\n  \"property_insurance_acknowledged\": true\n}"
             },
             "url": "{{api_root}}/loan-applications/{{application_id}}/home-loan/fees/booking",
-            "description": "**HOME_LOAN** — **POST /v1/loan-applications/{applicationId}/home-loan/fees/booking** (OpenAPI **submitHomeLoanBookingFees**). Record handling, notarial, DST/MRI/property insurance acknowledgements before **8. Funding — authorize**. Must match **GET /reference/loan-products** → **fees_and_charges.after_approval**."
+            "description": "**HOME_LOAN** \u2014 **POST /v1/loan-applications/{applicationId}/home-loan/fees/booking** (OpenAPI **submitHomeLoanBookingFees**). Record handling, notarial, DST/MRI/property insurance acknowledgements before **8. Funding \u2014 authorize**. Must match **GET /reference/loan-products** \u2192 **fees_and_charges.after_approval**."
           },
           "response": []
         },
         {
-          "name": "8. Funding — authorize (secondary approval)",
+          "name": "8. Funding \u2014 authorize (secondary approval)",
           "event": [
             {
               "listen": "test",
@@ -1654,9 +1829,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/funding/authorize",
-            "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** — production-style **clear-to-fund** before **GL** booking."
+            "description": "**PENDING_FUNDING** \u2192 **CLEARED_FOR_BOOKING** \u2014 production-style **clear-to-fund** before **GL** booking."
           },
           "response": []
         },
@@ -1681,9 +1862,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/fund",
-            "description": "Books the loan: **CLEARED_FOR_BOOKING** → **FUNDED** (`funded_at`). Requires **8. Funding — authorize** first."
+            "description": "Books the loan: **CLEARED_FOR_BOOKING** \u2192 **FUNDED** (`funded_at`). Requires **8. Funding \u2014 authorize** first."
           },
           "response": []
         },
@@ -1708,9 +1895,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/disburse",
-            "description": "Sends proceeds to the borrower: **FUNDED** → **ACTIVE** (`disbursed_at`). Requires **9. Fund** first."
+            "description": "Sends proceeds to the borrower: **FUNDED** \u2192 **ACTIVE** (`disbursed_at`). Requires **9. Fund** first."
           },
           "response": []
         },
@@ -1731,7 +1924,13 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}",
             "description": "After **Disburse**, expect **`status`: ACTIVE** and **`balance_cents`** for repayments."
           },
@@ -1756,7 +1955,13 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/payment-schedule",
             "description": "Illustrative amortization-style schedule from the mock (demo only)."
           },
@@ -1783,6 +1988,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1811,7 +2021,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/payoff",
             "description": "Closes the loan on the mock (**CLOSED**). Run after the loan is paid down or for demo teardown."
           },
@@ -1836,20 +2052,26 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/auth/logout",
-            "description": "Invalidates **access_token** — you must **Login** again for further protected calls. Clears **access_token** in the active environment (if any) and collection."
+            "description": "Invalidates **access_token** \u2014 you must **Login** again for further protected calls. Clears **access_token** in the active environment (if any) and collection."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Tests — stipulations (single & multiple)",
-      "description": "Automated checks for **CONDITIONAL** underwriting. Run **Tests — A** *or* **Tests — B** in **Collection Runner** (not together). Requires mock: **`npm run start:mock`**. Restart the mock between A and B if the same server session causes conflicts (fresh DB each process — in-memory reset on restart only if you restart).",
+      "name": "Tests \u2014 stipulations (single & multiple)",
+      "description": "Automated checks for **CONDITIONAL** underwriting. Run **Tests \u2014 A** *or* **Tests \u2014 B** in **Collection Runner** (not together). Requires mock: **`npm run start:mock`**. Restart the mock between A and B if the same server session causes conflicts (fresh DB each process \u2014 in-memory reset on restart only if you restart).",
       "item": [
         {
-          "name": "Tests — A: Single stipulation (CONDITIONAL)",
+          "name": "Tests \u2014 A: Single stipulation (CONDITIONAL)",
           "description": "**Collection Runner:** select **only this folder**. Fresh **`application_id`** each run. Chain ends at **FUNDED** (no disburse). Assertions: one stip after underwriting, **fulfill-all** returns one id, fund succeeds.",
           "item": [
             {
@@ -1890,7 +2112,7 @@
                   "raw": "{\n  \"email\": \"{{demo_login_email}}\",\n  \"password\": \"{{demo_login_password}}\"\n}"
                 },
                 "url": "{{api_root}}/auth/login",
-                "description": "Public — no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
+                "description": "Public \u2014 no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
               },
               "response": []
             },
@@ -1919,6 +2141,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -1958,6 +2185,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -1992,6 +2224,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2004,7 +2241,7 @@
               "response": []
             },
             {
-              "name": "1c-MB. Metrobank deposit confirm (conditional — ADA)",
+              "name": "1c-MB. Metrobank deposit confirm (conditional \u2014 ADA)",
               "event": [
                 {
                   "listen": "test",
@@ -2034,6 +2271,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2041,7 +2283,7 @@
                   "raw": "{}"
                 },
                 "url": "{{api_root}}/loan-applications/{{application_id}}/metrobank-deposit-account/confirm",
-                "description": "**ADA:** Same as happy-path **1c-MB** — **Local mock** / collection defaults use **`NOT_METROBANK_CLIENT`** + **`WILL_OPEN`** plan on create; **400** when **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (clear plan line); **409** if plan wrong or docs incomplete."
+                "description": "**ADA:** Same as happy-path **1c-MB** \u2014 **Local mock** / collection defaults use **`NOT_METROBANK_CLIENT`** + **`WILL_OPEN`** plan on create; **400** when **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (clear plan line); **409** if plan wrong or docs incomplete."
               },
               "response": []
             },
@@ -2074,6 +2316,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2081,7 +2328,7 @@
                   "raw": "{}"
                 },
                 "url": "{{api_root}}/loan-applications/{{application_id}}/compliance/pep-clearance",
-                "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required — Runner test accepts **200** or **400**."
+                "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required \u2014 Runner test accepts **200** or **400**."
               },
               "response": []
             },
@@ -2102,14 +2349,20 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
                 "description": "Moves application to SUBMITTED. **ADA:** **1c-MB** optional before submit; required before **APPROVE** when **NOT** / **credit-card** without deposit confirm. **PEP Yes:** **1d** after **1c** (and **1c-MB** if used)."
               },
               "response": []
             },
             {
-              "name": "3. Ops — accept for processing",
+              "name": "3. Ops \u2014 accept for processing",
               "event": [
                 {
                   "listen": "test",
@@ -2125,14 +2378,20 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/processing/accept",
-                "description": "**SUBMITTED** → **IN_PROCESSING**."
+                "description": "**SUBMITTED** \u2192 **IN_PROCESSING**."
               },
               "response": []
             },
             {
-              "name": "4. Disclosures — acknowledge",
+              "name": "4. Disclosures \u2014 acknowledge",
               "event": [
                 {
                   "listen": "test",
@@ -2152,6 +2411,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2188,6 +2452,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2216,9 +2485,15 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/start",
-                "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING**."
+                "description": "**CREDIT_COMPLETED** \u2192 **IN_UNDERWRITING**."
               },
               "response": []
             },
@@ -2271,6 +2546,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2278,7 +2558,7 @@
                   "raw": "{\n  \"outcome\": \"CONDITIONAL\",\n  \"stipulations\": [\n    { \"description\": \"Proof of income (W-2)\" }\n  ]\n}"
                 },
                 "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/decision",
-                "description": "**Tests — A:** One stipulation; response must be **APPROVED_CONDITIONAL** / **PENDING_STIPS**; Tests save **loan_id** and **stipulation_ids_json**."
+                "description": "**Tests \u2014 A:** One stipulation; response must be **APPROVED_CONDITIONAL** / **PENDING_STIPS**; Tests save **loan_id** and **stipulation_ids_json**."
               },
               "response": []
             },
@@ -2310,14 +2590,20 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/fulfill-all",
                 "description": "Clears **every** open stipulation; response includes **`fulfilled_stipulation_ids`**. Uses only **`application_id`** (from env). **409** if you used straight **APPROVE** or already cleared stips."
               },
               "response": []
             },
             {
-              "name": "8. Funding — authorize",
+              "name": "8. Funding \u2014 authorize",
               "event": [
                 {
                   "listen": "test",
@@ -2337,9 +2623,15 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loans/{{loan_id}}/funding/authorize",
-                "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** before **fund**."
+                "description": "**PENDING_FUNDING** \u2192 **CLEARED_FOR_BOOKING** before **fund**."
               },
               "response": []
             },
@@ -2367,16 +2659,22 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loans/{{loan_id}}/fund",
-                "description": "**CLEARED_FOR_BOOKING** → **FUNDED** — requires **8. Funding — authorize** first."
+                "description": "**CLEARED_FOR_BOOKING** \u2192 **FUNDED** \u2014 requires **8. Funding \u2014 authorize** first."
               },
               "response": []
             }
           ]
         },
         {
-          "name": "Tests — B: Multiple stipulations (CONDITIONAL ×3)",
+          "name": "Tests \u2014 B: Multiple stipulations (CONDITIONAL \u00d73)",
           "description": "**Collection Runner:** select **only this folder**. Same as **A** but three stips; **fulfill-all** clears all in one call; asserts three **`fulfilled_stipulation_ids`**.",
           "item": [
             {
@@ -2417,7 +2715,7 @@
                   "raw": "{\n  \"email\": \"{{demo_login_email}}\",\n  \"password\": \"{{demo_login_password}}\"\n}"
                 },
                 "url": "{{api_root}}/auth/login",
-                "description": "Public — no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
+                "description": "Public \u2014 no Bearer header. Password must be **demo** or **demo123**. Saves **access_token** for the collection."
               },
               "response": []
             },
@@ -2446,6 +2744,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2485,6 +2788,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2519,6 +2827,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2531,7 +2844,7 @@
               "response": []
             },
             {
-              "name": "1c-MB. Metrobank deposit confirm (conditional — ADA)",
+              "name": "1c-MB. Metrobank deposit confirm (conditional \u2014 ADA)",
               "event": [
                 {
                   "listen": "test",
@@ -2561,6 +2874,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2568,7 +2886,7 @@
                   "raw": "{}"
                 },
                 "url": "{{api_root}}/loan-applications/{{application_id}}/metrobank-deposit-account/confirm",
-                "description": "**ADA:** Same as happy-path **1c-MB** — **Local mock** / collection defaults use **`NOT_METROBANK_CLIENT`** + **`WILL_OPEN`** plan on create; **400** when **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (clear plan line); **409** if plan wrong or docs incomplete."
+                "description": "**ADA:** Same as happy-path **1c-MB** \u2014 **Local mock** / collection defaults use **`NOT_METROBANK_CLIENT`** + **`WILL_OPEN`** plan on create; **400** when **`EXISTING_CLIENT_DEPOSIT_ACCOUNT`** (clear plan line); **409** if plan wrong or docs incomplete."
               },
               "response": []
             },
@@ -2601,6 +2919,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2608,7 +2931,7 @@
                   "raw": "{}"
                 },
                 "url": "{{api_root}}/loan-applications/{{application_id}}/compliance/pep-clearance",
-                "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required — Runner test accepts **200** or **400**."
+                "description": "**After Step 7** when **Step 6 PEP** is **Yes** on either question: required before **2. Submit** (else **409**). If both PEP answers are **No**, returns **400** not required \u2014 Runner test accepts **200** or **400**."
               },
               "response": []
             },
@@ -2629,14 +2952,20 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/submit",
                 "description": "Moves application to SUBMITTED. **ADA:** **1c-MB** optional before submit; required before **APPROVE** when **NOT** / **credit-card** without deposit confirm. **PEP Yes:** **1d** after **1c** (and **1c-MB** if used)."
               },
               "response": []
             },
             {
-              "name": "3. Ops — accept for processing",
+              "name": "3. Ops \u2014 accept for processing",
               "event": [
                 {
                   "listen": "test",
@@ -2652,14 +2981,20 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/processing/accept",
-                "description": "**SUBMITTED** → **IN_PROCESSING**."
+                "description": "**SUBMITTED** \u2192 **IN_PROCESSING**."
               },
               "response": []
             },
             {
-              "name": "4. Disclosures — acknowledge",
+              "name": "4. Disclosures \u2014 acknowledge",
               "event": [
                 {
                   "listen": "test",
@@ -2679,6 +3014,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2715,6 +3055,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2743,9 +3088,15 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/start",
-                "description": "**CREDIT_COMPLETED** → **IN_UNDERWRITING**."
+                "description": "**CREDIT_COMPLETED** \u2192 **IN_UNDERWRITING**."
               },
               "response": []
             },
@@ -2798,6 +3149,11 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
                   }
                 ],
                 "body": {
@@ -2805,7 +3161,7 @@
                   "raw": "{\n  \"outcome\": \"CONDITIONAL\",\n  \"stipulations\": [\n    { \"description\": \"Proof of income (W-2)\" },\n    { \"description\": \"Signed disclosures\" },\n    { \"description\": \"Insurance binder\" }\n  ]\n}"
                 },
                 "url": "{{api_root}}/loan-applications/{{application_id}}/underwriting/decision",
-                "description": "**Tests — B:** Three stips; **fulfill-all** must return three **`fulfilled_stipulation_ids`**; Tests save **loan_id** and **stipulation_ids_json**."
+                "description": "**Tests \u2014 B:** Three stips; **fulfill-all** must return three **`fulfilled_stipulation_ids`**; Tests save **loan_id** and **stipulation_ids_json**."
               },
               "response": []
             },
@@ -2837,14 +3193,20 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/fulfill-all",
                 "description": "Clears **every** open stipulation; response includes **`fulfilled_stipulation_ids`**. Uses only **`application_id`** (from env). **409** if you used straight **APPROVE** or already cleared stips."
               },
               "response": []
             },
             {
-              "name": "8. Funding — authorize",
+              "name": "8. Funding \u2014 authorize",
               "event": [
                 {
                   "listen": "test",
@@ -2864,9 +3226,15 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loans/{{loan_id}}/funding/authorize",
-                "description": "**PENDING_FUNDING** → **CLEARED_FOR_BOOKING** before **fund**."
+                "description": "**PENDING_FUNDING** \u2192 **CLEARED_FOR_BOOKING** before **fund**."
               },
               "response": []
             },
@@ -2894,9 +3262,15 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
                 "url": "{{api_root}}/loans/{{loan_id}}/fund",
-                "description": "**CLEARED_FOR_BOOKING** → **FUNDED** — requires **8. Funding — authorize** first."
+                "description": "**CLEARED_FOR_BOOKING** \u2192 **FUNDED** \u2014 requires **8. Funding \u2014 authorize** first."
               },
               "response": []
             }
@@ -2905,8 +3279,8 @@
       ]
     },
     {
-      "name": "Conditional — fulfill stipulations (optional)",
-      "description": "After **step 7** (underwriting) with **CONDITIONAL**, Tests set **`stipulation_ids_json`** and **`stipulation_id`**. **Preferred:** run **Fulfill all stipulations** once. **Alternative:** per-stip fulfills. Then **8. Funding — authorize** and **9. Fund**. With **straight APPROVE**, skip this folder.",
+      "name": "Conditional \u2014 fulfill stipulations (optional)",
+      "description": "After **step 7** (underwriting) with **CONDITIONAL**, Tests set **`stipulation_ids_json`** and **`stipulation_id`**. **Preferred:** run **Fulfill all stipulations** once. **Alternative:** per-stip fulfills. Then **8. Funding \u2014 authorize** and **9. Fund**. With **straight APPROVE**, skip this folder.",
       "item": [
         {
           "name": "Fulfill all stipulations (one request)",
@@ -2932,7 +3306,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/fulfill-all",
             "description": "Clears **every** open stipulation; response includes **`fulfilled_stipulation_ids`**. Uses only **`application_id`** (from env). **409** if you used straight **APPROVE** or already cleared stips."
           },
@@ -2968,7 +3348,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/{{stipulation_id}}/fulfill",
             "description": "Uses **`stipulation_id`** from underwriting or from the previous fulfill response."
           },
@@ -3004,7 +3390,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/{{stipulation_id}}/fulfill",
             "description": "Skip in Runner if only one stipulation."
           },
@@ -3040,7 +3432,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}/stipulations/{{stipulation_id}}/fulfill",
             "description": "Skip in Runner if you have fewer than three stips. After the last fulfill, **`loan.status`** should be **PENDING_FUNDING**."
           },
@@ -3050,7 +3448,7 @@
     },
     {
       "name": "Edge cases (manual QA)",
-      "description": "Run these **after** you understand the happy path. Expect **4xx** responses — that is correct for invalid actions.\n\n**Auth:** run **Login** (and **KYC** if the scenario touches loan create) before edge requests that need a token — or duplicate requests with **Login** + **KYC** in the same folder.\n\n**EC-DEL:** run **Flow — Happy path** through **1. Create** (or run **Login**, **KYC**, then **1. Create** only) so **`application_id`** is set — **DELETE** immediately → **409** + **`Retry-After`** + **`type`** / **`title`** on the JSON error.\n\n**Setup tips:** EC3 needs **`loan_id`** from a full path through **10. Disburse** (loan **ACTIVE**). EC5: through **9. Fund**, skip **10. Disburse** (loan **FUNDED**). EC6: through **7** (underwriting) only — no **funding/authorize** or **fund** (loan **PENDING_FUNDING**). Restart the mock between setups if needed.",
+      "description": "Run these **after** you understand the happy path. Expect **4xx** responses \u2014 that is correct for invalid actions.\n\n**Auth:** run **Login** (and **KYC** if the scenario touches loan create) before edge requests that need a token \u2014 or duplicate requests with **Login** + **KYC** in the same folder.\n\n**EC-DEL:** run **Flow \u2014 Happy path** through **1. Create** (or run **Login**, **KYC**, then **1. Create** only) so **`application_id`** is set \u2014 **DELETE** immediately \u2192 **409** + **`Retry-After`** + **`type`** / **`title`** on the JSON error.\n\n**Setup tips:** EC3 needs **`loan_id`** from a full path through **10. Disburse** (loan **ACTIVE**). EC5: through **9. Fund**, skip **10. Disburse** (loan **FUNDED**). EC6: through **7** (underwriting) only \u2014 no **funding/authorize** or **fund** (loan **PENDING_FUNDING**). Restart the mock between setups if needed.",
       "item": [
         {
           "name": "EC-DEL. Cancel DRAFT too soon (expect 409 + Retry-After)",
@@ -3081,9 +3479,15 @@
           ],
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/{{application_id}}",
-            "description": "Requires **`application_id`** from **1. Create** (same session). **DELETE** within **`DRAFT_MIN_RETENTION_MS`** (default **60** s on **`npm run start:mock`**) → **409** — see **`docs/DOCUMENTATION.md`** §**3.1**."
+            "description": "Requires **`application_id`** from **1. Create** (same session). **DELETE** within **`DRAFT_MIN_RETENTION_MS`** (default **60** s on **`npm run start:mock`**) \u2192 **409** \u2014 see **`docs/DOCUMENTATION.md`** \u00a7**3.1**."
           },
           "response": []
         },
@@ -3102,13 +3506,19 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loan-applications/00000000-0000-0000-0000-000000000001/submit"
           },
           "response": []
         },
         {
-          "name": "EC2. Create application — invalid principal (expect 422)",
+          "name": "EC2. Create application \u2014 invalid principal (expect 422)",
           "event": [
             {
               "listen": "test",
@@ -3126,6 +3536,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -3155,6 +3570,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -3162,7 +3582,7 @@
               "raw": "{\n  \"amount_cents\": 999999999999,\n  \"method\": \"ACH\"\n}"
             },
             "url": "{{api_root}}/loans/{{loan_id}}/payments",
-            "description": "Requires **`loan_id`** from the full happy path **1 → 6** (including **Disburse**) so the loan is **ACTIVE**. Body overpays intentionally."
+            "description": "Requires **`loan_id`** from the full happy path **1 \u2192 6** (including **Disburse**) so the loan is **ACTIVE**. Body overpays intentionally."
           },
           "response": []
         },
@@ -3181,13 +3601,19 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/00000000-0000-0000-0000-000000000002"
           },
           "response": []
         },
         {
-          "name": "EC5. Pay before disburse — loan FUNDED only (expect 409)",
+          "name": "EC5. Pay before disburse \u2014 loan FUNDED only (expect 409)",
           "event": [
             {
               "listen": "test",
@@ -3205,6 +3631,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -3212,7 +3643,7 @@
               "raw": "{\n  \"amount_cents\": 100,\n  \"method\": \"ACH\"\n}"
             },
             "url": "{{api_root}}/loans/{{loan_id}}/payments",
-            "description": "**Setup:** Through **9. Fund**, **do not** run **10. Disburse**. Loan is **FUNDED**; payments require **ACTIVE** — mock returns **409**."
+            "description": "**Setup:** Through **9. Fund**, **do not** run **10. Disburse**. Loan is **FUNDED**; payments require **ACTIVE** \u2014 mock returns **409**."
           },
           "response": []
         },
@@ -3231,9 +3662,15 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{api_root}}/loans/{{loan_id}}/disburse",
-            "description": "**Setup:** Through **7. Underwriting decision** only (**no** **8. Funding — authorize** / **9. Fund**). Loan is **PENDING_FUNDING**; **disburse** requires **FUNDED** — mock returns **409**."
+            "description": "**Setup:** Through **7. Underwriting decision** only (**no** **8. Funding \u2014 authorize** / **9. Fund**). Loan is **PENDING_FUNDING**; **disburse** requires **FUNDED** \u2014 mock returns **409**."
           },
           "response": []
         }

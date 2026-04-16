@@ -6,7 +6,30 @@ with open('Loan_Lifecycle_API.postman_collection.json', 'r') as f:
     collection = json.load(f)
 
 # Endpoints that need authentication
-auth_endpoints = ['/auth/logout', '/onboarding/kyc', '/onboarding/status', '/auth/me']
+auth_endpoints = [
+    '/auth/logout', 
+    '/auth/me', 
+    '/onboarding/status', 
+    '/onboarding/kyc', 
+    '/loan-applications',
+    '/loan-applications/eligibility-preview',
+    '/loan-applications/',
+    '/loans/',
+    '/loan-applications/submit',
+    '/loan-applications/processing/accept',
+    '/loan-applications/disclosures/acknowledge',
+    '/loan-applications/credit-check',
+    '/loan-applications/underwriting/start',
+    '/loan-applications/underwriting/decision',
+    '/loan-applications/stipulations/',
+    '/loan-applications/home-loan/fees/booking',
+    '/loans/funding/authorize',
+    '/loans/fund',
+    '/loans/disburse',
+    '/loans/payment-schedule',
+    '/loans/payments',
+    '/loans/payoff'
+]
 
 def add_auth_to_items(items):
     """Recursively add auth to specific endpoints"""
