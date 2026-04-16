@@ -532,15 +532,14 @@ v1.post('/auth/login', (req, res) => {
   })
 })
 
-v1.use(authRequired)
-v1.use(idempotencyForAuthedMutations)
 
-v1.post('/auth/logout', (req, res) => {
+// Apply authentication only to specific endpoints that need it
+v1.post('/auth/logout', authRequired, (req, res) => {
   sessions.delete(req.accessToken)
   res.status(204).end()
 })
 
-v1.get('/auth/me', (req, res) => {
+v1.get('/auth/me', authRequired, (req, res) => {
   const k = req.bankSession.kyc
   res.json({
     user: { id: req.bankSession.user_id, email: req.bankSession.email },
@@ -550,7 +549,7 @@ v1.get('/auth/me', (req, res) => {
   })
 })
 
-v1.get('/onboarding/status', (req, res) => {
+v1.get('/onboarding/status', authRequired, (req, res) => {
   const k = req.bankSession.kyc
   res.json({
     kyc_complete: Boolean(k && k.status === 'VERIFIED'),
@@ -559,7 +558,7 @@ v1.get('/onboarding/status', (req, res) => {
   })
 })
 
-v1.post('/onboarding/kyc', (req, res) => {
+v1.post('/onboarding/kyc', authRequired, (req, res) => {
   const body = req.body || {}
   const errs = []
   if (!body.full_name) errs.push('full_name required')
@@ -584,7 +583,7 @@ v1.post('/onboarding/kyc', (req, res) => {
   })
 })
 
-v1.post('/loan-applications', (req, res) => {
+v1.post('/loan-applications', authRequired, (req, res) => {
   const k = req.bankSession.kyc
   if (!k || k.status !== 'VERIFIED') {
     return sendError(
@@ -648,7 +647,7 @@ v1.post('/loan-applications', (req, res) => {
   res.status(200).json(sanitizeApplicationOut(row))
 })
 
-v1.post('/loan-applications/eligibility-preview', (req, res) => {
+v1.post('/loan-applications/eligibility-preview', authRequired, (req, res) => {
   const k = req.bankSession.kyc
   if (!k || k.status !== 'VERIFIED') {
     return sendError(
@@ -671,7 +670,7 @@ v1.post('/loan-applications/eligibility-preview', (req, res) => {
   })
 })
 
-v1.patch('/loan-applications/:applicationId', (req, res) => {
+v1.patch('/loan-applications/:applicationId', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.owner_user_id !== req.bankSession.user_id) {
@@ -751,7 +750,7 @@ v1.patch('/loan-applications/:applicationId', (req, res) => {
   res.json(sanitizeApplicationOut(row))
 })
 
-v1.post('/loan-applications/:applicationId/documents', (req, res) => {
+v1.post('/loan-applications/:applicationId/documents', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.owner_user_id !== req.bankSession.user_id) {
@@ -844,7 +843,7 @@ v1.post('/loan-applications/:applicationId/documents', (req, res) => {
 /**
  * **Metrobank deposit for ADA** — for **`NOT_METROBANK_CLIENT`** or **`EXISTING_CLIENT_CREDIT_CARD`** with **`WILL_OPEN_METROBANK_DEPOSIT`**, after document registration. Sets **`metrobank_deposit_account_confirmed_at`** for **underwriting** approval (not a **submit** gate).
  */
-v1.post('/loan-applications/:applicationId/metrobank-deposit-account/confirm', (req, res) => {
+v1.post('/loan-applications/:applicationId/metrobank-deposit-account/confirm', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.owner_user_id !== req.bankSession.user_id) {
@@ -916,7 +915,7 @@ v1.post('/loan-applications/:applicationId/metrobank-deposit-account/confirm', (
  * **PEP / enhanced due diligence gate** (production-shaped). After **Step 7** document registration,
  * **Personal Loan** applications with **either** Step 6 PEP boolean **true** must call this **before** **submit**.
  */
-v1.post('/loan-applications/:applicationId/compliance/pep-clearance', (req, res) => {
+v1.post('/loan-applications/:applicationId/compliance/pep-clearance', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.owner_user_id !== req.bankSession.user_id) {
@@ -953,7 +952,7 @@ v1.post('/loan-applications/:applicationId/compliance/pep-clearance', (req, res)
 /**
  * Borrower abandons a **DRAFT** — not allowed until the draft is at least **draftMinRetentionMs()** old.
  */
-v1.delete('/loan-applications/:applicationId', (req, res) => {
+v1.delete('/loan-applications/:applicationId', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.owner_user_id !== req.bankSession.user_id) {
@@ -1000,7 +999,7 @@ v1.delete('/loan-applications/:applicationId', (req, res) => {
   res.status(204).end()
 })
 
-v1.get('/loan-applications/:applicationId', (req, res) => {
+v1.get('/loan-applications/:applicationId', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   res.json(sanitizeApplicationOut(row))
@@ -1008,10 +1007,11 @@ v1.get('/loan-applications/:applicationId', (req, res) => {
 
 v1.get(
   '/loan-applications/:applicationId/computation-preview',
+  authRequired,
   sendLoanComputationPreviewFromApplication,
 )
 
-v1.post('/loan-applications/:applicationId/submit', (req, res) => {
+v1.post('/loan-applications/:applicationId/submit', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'DRAFT') {
@@ -1056,7 +1056,7 @@ v1.post('/loan-applications/:applicationId/submit', (req, res) => {
 })
 
 /** LOS: processing / ops accepts the file into the working queue (after borrower submit). */
-v1.post('/loan-applications/:applicationId/processing/accept', (req, res) => {
+v1.post('/loan-applications/:applicationId/processing/accept', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'SUBMITTED') {
@@ -1074,7 +1074,7 @@ v1.post('/loan-applications/:applicationId/processing/accept', (req, res) => {
 })
 
 /** Reg-TILA-style initial disclosure package acknowledged (sandbox: one POST). */
-v1.post('/loan-applications/:applicationId/disclosures/acknowledge', (req, res) => {
+v1.post('/loan-applications/:applicationId/disclosures/acknowledge', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'IN_PROCESSING') {
@@ -1093,7 +1093,7 @@ v1.post('/loan-applications/:applicationId/disclosures/acknowledge', (req, res) 
   res.json(sanitizeApplicationOut(row))
 })
 
-v1.post('/loan-applications/:applicationId/credit-check', (req, res) => {
+v1.post('/loan-applications/:applicationId/credit-check', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'IN_PROCESSING') {
@@ -1137,7 +1137,7 @@ v1.post('/loan-applications/:applicationId/credit-check', (req, res) => {
 })
 
 /** Underwriting queue: credit done, waiting for underwriter decision. */
-v1.post('/loan-applications/:applicationId/underwriting/start', (req, res) => {
+v1.post('/loan-applications/:applicationId/underwriting/start', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'CREDIT_COMPLETED') {
@@ -1174,7 +1174,7 @@ function createLoanRecord(applicationId, appRow, loanStatus) {
   return loan
 }
 
-v1.post('/loan-applications/:applicationId/underwriting/decision', (req, res) => {
+v1.post('/loan-applications/:applicationId/underwriting/decision', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'IN_UNDERWRITING') {
@@ -1227,7 +1227,7 @@ v1.post('/loan-applications/:applicationId/underwriting/decision', (req, res) =>
   res.json({ application: sanitizeApplicationOut(row), loan: enrichLoanOut(loan) })
 })
 
-v1.post('/loan-applications/:applicationId/stipulations/fulfill-all', (req, res) => {
+v1.post('/loan-applications/:applicationId/stipulations/fulfill-all', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'APPROVED_CONDITIONAL') {
@@ -1235,7 +1235,7 @@ v1.post('/loan-applications/:applicationId/stipulations/fulfill-all', (req, res)
       req,
       res,
       409,
-      'fulfill-all is only valid while the application is APPROVED_CONDITIONAL (current: ' +
+      'fulfill-all is only valid while application is APPROVED_CONDITIONAL (current: ' +
         row.status +
         '). With straight APPROVE, skip stip fulfillment and fund directly.',
     )
@@ -1266,7 +1266,7 @@ v1.post('/loan-applications/:applicationId/stipulations/fulfill-all', (req, res)
   })
 })
 
-v1.post('/loan-applications/:applicationId/stipulations/:stipulationId/fulfill', (req, res) => {
+v1.post('/loan-applications/:applicationId/stipulations/:stipulationId/fulfill', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.status !== 'APPROVED_CONDITIONAL') {
@@ -1274,7 +1274,7 @@ v1.post('/loan-applications/:applicationId/stipulations/:stipulationId/fulfill',
       req,
       res,
       409,
-      'Fulfill is only valid while the application is APPROVED_CONDITIONAL (current: ' +
+      'Fulfill is only valid while application is APPROVED_CONDITIONAL (current: ' +
         row.status +
         '). If you used straight APPROVE, skip fulfill. If stips are already cleared, status moves to APPROVED_CLEAR_TO_CLOSE — fund (book) then disburse (send proceeds).',
     )
@@ -1303,7 +1303,7 @@ v1.post('/loan-applications/:applicationId/stipulations/:stipulationId/fulfill',
  * **HOME_LOAN** — record post-approval booking fee lines (handling, notarial, DST / MRI / property insurance acknowledgements)
  * before **POST /v1/loans/{loanId}/funding/authorize**. Amounts must match **`GET /reference/loan-products`** → **fees_and_charges.after_approval**.
  */
-v1.post('/loan-applications/:applicationId/home-loan/fees/booking', (req, res) => {
+v1.post('/loan-applications/:applicationId/home-loan/fees/booking', authRequired, (req, res) => {
   const row = getApp(req.params.applicationId)
   if (!row) return sendError(req, res, 404, 'Application not found')
   if (row.owner_user_id !== req.bankSession.user_id) {
@@ -1353,7 +1353,7 @@ v1.post('/loan-applications/:applicationId/home-loan/fees/booking', (req, res) =
   res.json(sanitizeApplicationOut(row))
 })
 
-v1.get('/loans/:loanId', (req, res) => {
+v1.get('/loans/:loanId', authRequired, (req, res) => {
   const row = getLoanRow(req.params.loanId)
   if (!row) return sendError(req, res, 404, 'Loan not found')
   res.json(enrichLoanOut(row))
@@ -1394,7 +1394,7 @@ function executeDisburse(loanId) {
 }
 
 /** Secondary control: funding desk / committee clears the loan to book (PENDING_FUNDING → CLEARED_FOR_BOOKING). */
-v1.post('/loans/:loanId/funding/authorize', (req, res) => {
+v1.post('/loans/:loanId/funding/authorize', authRequired, (req, res) => {
   const row = getLoanRow(req.params.loanId)
   if (!row) return sendError(req, res, 404, 'Loan not found')
   if (row.status !== 'PENDING_FUNDING') {
@@ -1422,19 +1422,19 @@ v1.post('/loans/:loanId/funding/authorize', (req, res) => {
   res.json(enrichLoanOut(row))
 })
 
-v1.post('/loans/:loanId/fund', (req, res) => {
+v1.post('/loans/:loanId/fund', authRequired, (req, res) => {
   const result = executeFund(req.params.loanId)
   if (result.error) return sendError(req, res, result.error, result.detail)
   res.json(enrichLoanOut(result.loan))
 })
 
-v1.post('/loans/:loanId/disburse', (req, res) => {
+v1.post('/loans/:loanId/disburse', authRequired, (req, res) => {
   const result = executeDisburse(req.params.loanId)
   if (result.error) return sendError(req, res, result.error, result.detail)
   res.json(enrichLoanOut(result.loan))
 })
 
-v1.get('/loans/:loanId/payment-schedule', (req, res) => {
+v1.get('/loans/:loanId/payment-schedule', authRequired, (req, res) => {
   const loan = getLoanRow(req.params.loanId)
   if (!loan) return sendError(req, res, 404, 'Loan not found')
   const term = Number(loan.term_months)
@@ -1468,7 +1468,7 @@ v1.get('/loans/:loanId/payment-schedule', (req, res) => {
   })
 })
 
-v1.post('/loans/:loanId/payments', (req, res) => {
+v1.post('/loans/:loanId/payments', authRequired, (req, res) => {
   const row = getLoanRow(req.params.loanId)
   if (!row) return sendError(req, res, 404, 'Loan not found')
   const body = req.body || {}
@@ -1501,7 +1501,7 @@ v1.post('/loans/:loanId/payments', (req, res) => {
   })
 })
 
-v1.post('/loans/:loanId/payoff', (req, res) => {
+v1.post('/loans/:loanId/payoff', authRequired, (req, res) => {
   const row = getLoanRow(req.params.loanId)
   if (!row) return sendError(req, res, 404, 'Loan not found')
   if (row.status === 'CLOSED') return res.json(enrichLoanOut(row))
