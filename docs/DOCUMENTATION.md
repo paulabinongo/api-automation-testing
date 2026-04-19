@@ -16,19 +16,83 @@ A comprehensive API automation testing framework for loan lifecycle management w
 
 ## 🚀 Quick Start
 
-```bash
-# Clone and setup
-git clone https://github.com/paulabinongo/api-automation-testing.git
-cd api-automation-testing
-npm install
+Get up and running with these simple steps. Each command includes explanations to help you understand what's happening.
 
-# Run tests
+### 📦 Clone and Setup
+
+```bash
+# Clone the repository (downloads the complete project)
+git clone https://github.com/paulabinongo/api-automation-testing.git
+
+# Navigate to the project directory
+cd api-automation-testing
+
+# Install all dependencies (Node.js packages, test tools, etc.)
+npm install
+```
+
+**What this does:**
+- Downloads the complete API automation testing framework
+- Installs Node.js dependencies for testing, mock server, and development tools
+- Sets up the project structure with all necessary files
+
+### 🧪 Run Tests
+
+```bash
+# Run all tests (unit + integration)
 npm test
 
-# Start mock server with Swagger UI
-npm run start:mock
-# Visit http://127.0.0.1:8765/docs for interactive API docs
+# Run tests in watch mode (re-runs automatically when files change)
+npm run test:watch
+
+# Generate coverage report (shows how much code is tested)
+npm run test:coverage
 ```
+
+**What this does:**
+- **Unit tests:** Fast checks that individual functions work correctly
+- **Integration tests:** Full API workflow tests against the mock server
+- **Coverage report:** Shows percentage of code covered by tests
+- **Watch mode:** Perfect for development - tests re-run automatically
+
+### 🚀 Start Mock Server
+
+```bash
+# Start the mock API server (includes Swagger UI)
+npm run start:mock
+
+# Visit the interactive API documentation
+# Open this URL in your browser: http://127.0.0.1:8765/docs
+```
+
+**What this does:**
+- Starts a local Express server that simulates a real bank API
+- Includes **Swagger UI** for interactive API testing in your browser
+- Server runs on `http://127.0.0.1:8765` by default
+- **Swagger UI** available at `http://127.0.0.1:8765/docs`
+
+### 🎯 Quick Verification
+
+After running the above commands, you should have:
+1. ✅ **Project downloaded** and dependencies installed
+2. ✅ **Tests passing** - run `npm test` to verify
+3. ✅ **Mock server running** - visit `http://127.0.0.1:8765/docs`
+4. ✅ **Ready to develop** - start making changes and testing
+
+### 🔧 If Something Goes Wrong
+
+```bash
+# Check if port 8765 is already in use
+lsof -ti tcp:8765 | xargs kill
+
+# Or use a different port
+PORT=8766 npm run start:mock
+```
+
+**Common issues:**
+- **Port already in use:** Another process is using port 8765
+- **Node.js version:** Ensure you have Node.js 20 or newer
+- **Dependencies missing:** Run `npm install` again
 
 ## 📋 Overview
 
@@ -101,16 +165,157 @@ npm run format         # Code formatting
 
 ---
 
-## What you get (at a glance)
+## 🎯 What You Get (At a Glance)
 
+### 🧪 Core Components
 
-| Piece                                               | Plain-English purpose                                                                                            |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Vitest**                                          | Automated checks so changes do not silently break API behavior.                                                  |
-| **HTTP client** (`loanApiClient.js`)                | Same URLs as Postman/Swagger, usable from Node tests or scripts.                                                 |
-| **Practice API + Swagger**                          | A local “fake bank” plus a browser page to **Try it out** — no real core banking system required.                |
-| **OpenAPI** (`mock-server/openapi.json`) | Machine-readable **contract** (paths, JSON shapes). CI validates it. **Swagger** at `**/docs`** loads this file. |
+| Component | Purpose | How to Use |
+|-----------|---------|-------------|
+| **Vitest** | Automated testing framework | `npm test` for quick checks, `npm run test:watch` for development |
+| **Mock Server** | Practice API environment | `npm run start:mock` runs locally at `http://127.0.0.1:8765` |
+| **Swagger UI** | Interactive API documentation | Visit `http://127.0.0.1:8765/docs` to try endpoints |
+| **HTTP Client** | API integration library | Use `loanApiClient.js` in tests or custom scripts |
+| **OpenAPI Spec** | Machine-readable contract | `mock-server/openapi.json` defines all API contracts |
 
+### 📋 Key Features
+
+| Feature | Description | Location |
+|---------|-------------|----------|
+| **Loan Lifecycle** | Complete loan flow from application to payoff | Mock server + Postman collection |
+| **Multiple Loan Types** | Personal, Home, Business loans | Product catalog system |
+| **Authentication** | Bearer token security | Login/logout endpoints with protected routes |
+| **Validation** | Input validation & business rules | Server-side validation with detailed error messages |
+| **Testing** | Unit + Integration tests | Fast unit tests + full workflow integration tests |
+
+### 🛠️ Technology Stack
+
+| Technology | Version | Purpose |
+|------------|--------|---------|
+| **Node.js** | 20+ | Runtime environment |
+| **Vitest** | Latest | Testing framework |
+| **Express** | Latest | Mock server framework |
+| **OpenAPI 3.0** | - | API specification standard |
+| **MSW** | Latest | Mock Service Worker for tests |
+
+---
+
+## 🚀 Quick Reference Guides
+
+### 📝 Common Development Tasks
+
+#### Add a New API Endpoint
+1. **Add route to mock server:**
+   ```javascript
+   // In mock-server/server.js
+   v1.post('/new-endpoint', (req, res) => {
+     res.json({ message: 'Hello from new endpoint!' })
+   })
+   ```
+
+2. **Update OpenAPI specification:**
+   ```json
+   // In mock-server/openapi.json
+   {
+     "paths": {
+       "/v1/new-endpoint": {
+         "post": {
+           "summary": "Create new resource",
+           "responses": {
+             "200": { "description": "Success" }
+           }
+         }
+       }
+     }
+   }
+   }
+   ```
+
+3. **Add test case:**
+   ```javascript
+   // In tests/unit/new-endpoint.test.js
+   import { describe, it, expect } from 'vitest'
+   import { loanApiClient } from '../src/api/loanApiClient.js'
+   
+   describe('new endpoint', () => {
+     it('should create new resource', async () => {
+       const response = await loanApiClient.createResource({})
+       expect(response.success).toBe(true)
+     })
+   })
+   ```
+
+#### Debug Test Failures
+1. **Run with verbose output:**
+   ```bash
+   npm test --reporter=verbose
+   ```
+
+2. **Run single test file:**
+   ```bash
+   npm test new-endpoint.test.js
+   ```
+
+3. **Check mock server logs:**
+   ```bash
+   npm run start:mock 2>&1 | tee server.log
+   ```
+
+#### Environment Setup Issues
+1. **Check Node version:**
+   ```bash
+   node --version  # Should be 20+
+   ```
+
+2. **Verify environment variables:**
+   ```bash
+   echo $LOAN_API_BASE_URL
+   echo $NODE_ENV
+   ```
+
+### 📊 API Testing Patterns
+
+#### Authentication Testing
+```javascript
+// Test with valid token
+const client = new loanApiClient('http://127.0.0.1:8765')
+client.setToken('valid-bearer-token')
+
+// Test without token (should fail)
+const unauthClient = new loanApiClient('http://127.0.0.1:8765')
+// This will return 401 for protected endpoints
+```
+
+#### Error Handling
+```javascript
+try {
+  const response = await loanApiClient.createLoan(data)
+  if (!response.success) {
+    console.error('API Error:', response.error)
+    // Handle error appropriately
+  }
+} catch (error) {
+  console.error('Network Error:', error.message)
+  // Handle network errors
+}
+```
+
+#### Data Validation
+```javascript
+// Always validate data before sending
+const validateLoanData = (data) => {
+  if (!data.principal_cents || data.principal_cents <= 0) {
+    throw new Error('Principal amount must be positive')
+  }
+  if (!data.borrower || !data.borrower.first_name) {
+    throw new Error('Borrower information required')
+  }
+  return data
+}
+```
+
+---
+
+*Update this file when URLs, auth, or the loan model change.*
 
 **Sandbox Practice arning:** The **story** matches how many banks talk (KYC, underwriting, funding, disbursement). The **depth** is for **learning and automation**, **not** for regulatory or production sign-off.
 
@@ -146,20 +351,64 @@ npm run format         # Code formatting
 
 ---
 
-## Table of contents
+## 📋 Table of contents
 
-1. [Prerequisites and setup](#1-prerequisites--setup)
+### 🚀 Getting Started
+1. [Prerequisites & setup](#1-prerequisites--setup)
+   - 1.0 [In plain words](#10-in-plain-words)
+   - 1.1 [Install steps](#11-install-steps)
 2. [Run tests](#2-run-tests)
-3. [Practice API and Swagger](#3-practice-api--swagger)
+   - 2.1 [Why two modes?](#21-why-two-modes)
+   - 2.2 [Unit tests only](#22-unit-tests-only)
+   - 2.3 [Integration tests (real server)](#23-integration-tests-real-server)
+3. [Practice API & Swagger](#3-practice-api--swagger)
+   - 3.1 [Start the mock server](#31-start-the-mock-server)
+   - 3.2 [Open Swagger UI](#32-open-swagger-ui)
+   - 3.3 [Try real HTTP calls](#33-try-real-http-calls)
+
+### 🛠️ Development & Configuration
 4. [Modify the project](#4-modify-the-project)
+   - 4.1 [Where to edit](#41-where-to-edit)
+   - 4.2 [Add a new field](#42-add-a-new-field)
+   - 4.3 [Change validation rules](#43-change-validation-rules)
+   - 4.4 [Update sample data](#44-update-sample-data)
+   - 4.5 [Mock Service Worker (MSW) handlers](#45-mock-service-worker-msw-handlers)
+   - 4.6 [Environment variables](#46-environment-variables)
+   - 4.7 [Port in use](#47-port-in-use)
+
+### 🏦 Loan Lifecycle & Business Logic
 5. [Loan lifecycle (business view)](#5-loan-lifecycle-business-view)
-6. [Who uses what and file map](#6-who-uses-what--file-map)
+   - 5.0 [Step-by-step happy path](#50-step-by-step-happy-path)
+     - 5.0.1 [Metrobank Home Loan — full E2E happy path](#501-metrobank-home-loan--full-e2e-happy-path)
+     - 5.0.2 [Metrobank Home Loan policies](#502-metrobank-home-loan-policies)
+   - 5.1 [Product catalogue (terms) & payment rails](#52-product-catalogue-terms--payment-rails-mock-lovs)
+   - 5.2 [First screen: repayment method](#53-first-screen-repayment-method-metrobank-deposit--ada)
+   - 5.3 [PEP gate](#54-pep-gate)
+   - 5.4 [Edge cases catalog](#55-edge-cases-catalog)
+   - 5.5 [Production mapping](#56-mapping-to-production-bank-lifecycle)
+6. [Who uses what & file map](#6-who-uses-what--file-map)
+
+### 📤 Testing & Quality Assurance
 7. [Postman](#7-postman)
+   - 7.1 [Import collection & environment](#71-import-collection-and-environment)
+   - 7.2 [OpenAPI spec in Postman](#74-openapi-spec-in-postman-optional)
+   - 7.3 [Runner: happy path](#73-runner-happy-path)
+   - 7.4 [Runner: edge cases](#75-runner-edge-cases)
+   - 7.5 [Manual QA](#76-manual-qa)
 8. [Command cheat sheet](#8-command-cheat-sheet)
+
+### 📚 Reference & Standards
 9. [Glossary](#9-glossary)
 10. [PM / BA checklist](#10-pm--ba-checklist)
 11. [API automation standards](#11-api-automation-standards-this-repo)
+
+### 🔄 Advanced Topics
 12. [Manual update workflow (loan lifecycle artifacts)](#12-manual-update-workflow-loan-lifecycle-artifacts)
+   - 12.1 [Path A: change Personal/Home Loan](#121-path-a-change-personal-loan-or-home-loan)
+   - 12.2 [Path B: another loan of same type](#122-path-b-another-loan-of-same-type)
+   - 12.3 [Path C: new loan product type](#123-path-c-new-loan-product-type)
+   - 12.4 [Simple "where do I edit?" table](#124-simple-where-do-i-edit-table)
+   - 12.5 [Dynamic system components](#125-dynamic-system-components)
 
 
 ## 1. Prerequisites & setup
@@ -1374,6 +1623,75 @@ flowchart LR
 
 
 **MSW vs integration:** Most of the suite can run **without** a server (**MSW** fakes HTTP). When `**LOAN_API_BASE_URL`** points at the mock (`**127.0.0.1`** + `**/v1**`), **integration** tests also hit a **live** server — `**npm run test:integration`** starts the API on **9876** automatically. Exact test counts change over time; run `**npm test`** / `**npm run test:integration`** for the current numbers.
+
+---
+
+## 9. Troubleshooting
+
+### 🔧 Common Issues & Solutions
+
+#### Port Already in Use
+**Problem:** `Error: listen EADDRINUSE: address already in use :::8765`
+**Solution:** 
+```bash
+# Kill any process using port 8765
+lsof -ti tcp:8765 | xargs kill
+
+# Or use different port
+PORT=8766 npm run start:mock
+```
+
+#### Tests Fail After Changes
+**Problem:** Tests were passing, now they're failing
+**Solutions:**
+- **Check syntax:** `node -e "JSON.parse(require('fs').readFileSync('mock-server/openapi.json','utf8')); console.log('OK')"`
+- **Restart server:** Stop and restart the mock server after big changes
+- **Clear cache:** `npm run test --clear-cache`
+
+#### Mock Server Won't Start
+**Problem:** Server crashes on startup
+**Solutions:**
+- **Check Node version:** `node --version` (requires Node.js 20+)
+- **Reinstall dependencies:** `rm -rf node_modules && npm install`
+- **Check environment:** Ensure no conflicting environment variables
+
+#### Postman Collection Not Working
+**Problem:** "Could not send request" or "404 Not Found"
+**Solutions:**
+- **Check base URL:** Verify `base_url` in environment matches mock server
+- **Check variables:** Ensure `access_token`, `application_id`, `loan_id` are populated
+- **Import fresh:** Re-import collection if structure was changed
+
+### ❓ Frequently Asked Questions
+
+#### Q: Do I need a real bank account to use this?
+**A:** No! This is a **practice/sandbox** environment. All "bank" operations are simulated by the mock server.
+
+#### Q: Can I use this with my own loan product?
+**A:** Yes! See [§12](#12-manual-update-workflow-loan-lifecycle-artifacts) for adding new loan products. The framework is designed to be extensible.
+
+#### Q: Why are there two test modes?
+**A:** 
+- **Unit tests (`npm test`):** Fast, no server needed, perfect for TDD
+- **Integration tests (`npm run test:integration`):** Full workflow against real HTTP server
+- Both are important for different testing scenarios
+
+#### Q: How do I debug failing tests?
+**A:** 
+1. Run tests with `--reporter=verbose`: `npm test --reporter=verbose`
+2. Use VS Code debugger with breakpoints
+3. Check mock server logs for request/response details
+4. Use Swagger UI to test endpoints manually
+
+#### Q: Can I contribute to this project?
+**A:** Absolutely! See [§11](#11-api-automation-standards-this-repo) for contribution guidelines and coding standards.
+
+#### Q: Where can I get help?
+**A:** 
+- Check this documentation first
+- Review existing test files for examples
+- Look at the mock server implementation
+- Check the OpenAPI specification for contract details
 
 ---
 
