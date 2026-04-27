@@ -150,6 +150,93 @@
         }
       }
     },
+    "/v1/loans-by-type": {
+      "get": {
+        "tags": ["Reference"],
+        "summary": "Get loans by type (public endpoint)",
+        "description": "**No authentication required.** Returns all loans in the system, optionally filtered by **product_code** and/or **loan_type**. Useful for public loan catalog browsing and analytics. Includes Metrobank Home Loan lifecycle phase when applicable.",
+        "operationId": "getLoansByType",
+        "security": [],
+        "parameters": [
+          {
+            "name": "product_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["PERSONAL_LOAN", "PERSONAL_LOAN_QUICK_CASH", "PERSONAL_LOAN_PREMIUM", "PERSONAL_LOAN_SALARY", "BUSINESS_LOAN_WORKING_CAPITAL", "BUSINESS_LOAN_EQUIPMENT_FINANCING", "BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE", "HOME_LOAN"]
+            },
+            "description": "Filter by catalogue **product_code**. Includes Personal and Business Loan variants. If omitted, returns all loan types."
+          },
+          {
+            "name": "loan_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["personal", "business", "home"]
+            },
+            "description": "Filter by **loan_type** (product family). If omitted, returns all loan families."
+          },
+          {
+            "name": "personal_loan_category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["standard", "quick_cash", "premium", "salary", "all_personal"]
+            },
+            "description": "Filter Personal Loan variants by category. 'standard' = PERSONAL_LOAN, 'quick_cash' = PERSONAL_LOAN_QUICK_CASH, 'premium' = PERSONAL_LOAN_PREMIUM, 'salary' = PERSONAL_LOAN_SALARY, 'all_personal' = all Personal Loan types."
+          },
+          {
+            "name": "business_loan_category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["working_capital", "equipment_financing", "commercial_real_estate", "all_business"]
+            },
+            "description": "Filter Business Loan variants by category. 'working_capital' = BUSINESS_LOAN_WORKING_CAPITAL, 'equipment_financing' = BUSINESS_LOAN_EQUIPMENT_FINANCING, 'commercial_real_estate' = BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE, 'all_business' = all Business Loan types."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loans filtered by type",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoansByTypeOut" },
+                "example": {
+                  "loans": [
+                    {
+                      "loan_id": "loan_123",
+                      "application_id": "app_456",
+                      "product_code": "PERSONAL_LOAN",
+                      "loan_type": "personal",
+                      "principal_cents": 500000,
+                      "term_months": 12,
+                      "status": "ACTIVE",
+                      "balance_cents": 450000,
+                      "created_at": "2024-01-15T10:30:00Z",
+                      "funded_at": "2024-01-15T11:00:00Z",
+                      "interest_rate_percent": 12.5
+                    }
+                  ],
+                  "total_count": 1,
+                  "filters": {
+                    "product_code": "PERSONAL_LOAN",
+                    "loan_type": null
+                  },
+                  "note": "Public endpoint - no authentication required. Returns loans filtered by type."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters"
+          }
+        }
+      }
+    },
     "/v1/auth/login": {
       "post": {
         "tags": ["Auth"],
@@ -2491,6 +2578,40 @@
             "description": "Echo of **Retry-After** hint: **429** (rate limit) or **409** (**DELETE** draft retention)."
           }
         }
+      },
+      "LoansByTypeOut": {
+        "type": "object",
+        "properties": {
+          "loans": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/LoanOut" },
+            "description": "Array of loans matching the filter criteria"
+          },
+          "total_count": {
+            "type": "integer",
+            "description": "Total number of loans matching the filters"
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "product_code": {
+                "type": "string",
+                "nullable": true,
+                "description": "Product code filter that was applied (null if no filter)"
+              },
+              "loan_type": {
+                "type": "string", 
+                "nullable": true,
+                "description": "Loan type filter that was applied (null if no filter)"
+              }
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "Endpoint description note"
+          }
+        },
+        "required": ["loans", "total_count", "filters", "note"]
       }
     }
   }

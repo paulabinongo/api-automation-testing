@@ -461,6 +461,256 @@ export const PERSONAL_LOAN_PRODUCT = Object.freeze({
   ),
 })
 
+/** Personal Loan - Quick Cash (smaller amounts, shorter terms) */
+export const PERSONAL_LOAN_QUICK_CASH_PRODUCT = Object.freeze({
+  ...PERSONAL_LOAN_PRODUCT,
+  product_code: 'PERSONAL_LOAN_QUICK_CASH',
+  name: 'Personal Loan - Quick Cash',
+  bank_marketing_name: 'Metrobank Personal Loan - Quick Cash',
+  general_information:
+    'Metrobank Personal Loan Quick Cash provides fast access to smaller amounts for immediate needs. Perfect for emergency expenses, minor home repairs, or short-term cash requirements with faster processing.',
+  principal_range_cents: {
+    min: phpToCentavos(20000),
+    max: phpToCentavos(500000),
+  },
+  allowed_term_months: Object.freeze([6, 12, 18]),
+  min_annual_income_cents: phpToCentavos(180000),
+  eligibility: Object.freeze([
+    'Be a Filipino citizen',
+    'Be at least 21 years old at the time of loan application and 60 years old upon loan maturity',
+    'Have a gross annual income of at least PHP 180,000',
+    'Have a Metrobank credit card or Metrobank deposit account',
+    'If employed: be of regular status with current employer for at least 6 months',
+    'If self-employed: be at least 1 year in the current business',
+  ]),
+})
+
+/** Personal Loan - Premium (higher amounts, longer terms) */
+export const PERSONAL_LOAN_PREMIUM_PRODUCT = Object.freeze({
+  ...PERSONAL_LOAN_PRODUCT,
+  product_code: 'PERSONAL_LOAN_PREMIUM',
+  name: 'Personal Loan - Premium',
+  bank_marketing_name: 'Metrobank Personal Loan - Premium',
+  general_information:
+    'Metrobank Personal Loan Premium offers higher loan amounts and longer terms for major life investments. Ideal for business expansion, major home renovations, or significant personal investments with competitive rates.',
+  principal_range_cents: {
+    min: phpToCentavos(500000),
+    max: phpToCentavos(3000000),
+  },
+  allowed_term_months: Object.freeze([24, 36, 48, 60]),
+  min_annual_income_cents: phpToCentavos(500000),
+  eligibility: Object.freeze([
+    'Be a Filipino citizen',
+    'Be at least 25 years old at the time of loan application and 65 years old upon loan maturity',
+    'Have a gross annual income of at least PHP 500,000',
+    'Have a Metrobank credit card with minimum 2 years history or Metrobank deposit account',
+    'If employed: be of regular status with current employer for at least 2 years',
+    'If self-employed: be at least 3 years in the current business with profitable operations',
+  ]),
+})
+
+/** Personal Loan - Salary Loan (for employed individuals) */
+export const PERSONAL_LOAN_SALARY_PRODUCT = Object.freeze({
+  ...PERSONAL_LOAN_PRODUCT,
+  product_code: 'PERSONAL_LOAN_SALARY',
+  name: 'Personal Loan - Salary Loan',
+  bank_marketing_name: 'Metrobank Personal Loan - Salary Loan',
+  general_information:
+    'Metrobank Personal Loan Salary Loan is designed for employed individuals with stable income. Features competitive rates and simplified processing for regular employees with verifiable employment.',
+  principal_range_cents: {
+    min: phpToCentavos(50000),
+    max: phpToCentavos(1500000),
+  },
+  allowed_term_months: Object.freeze([12, 18, 24, 36]),
+  min_annual_income_cents: phpToCentavos(300000),
+  eligibility: Object.freeze([
+    'Be a Filipino citizen',
+    'Be at least 23 years old at time of loan application and 60 years old upon loan maturity',
+    'Have a gross annual income of at least PHP 300,000',
+    'Must be currently employed with regular status for at least 1 year',
+    'Have Metrobank credit card or Metrobank deposit account',
+    'Company must be registered and operating for at least 2 years',
+  ]),
+})
+
+/** Business Loan - Working Capital (for SME operations) */
+export const BUSINESS_LOAN_WORKING_CAPITAL_PRODUCT = Object.freeze({
+  product_code: 'BUSINESS_LOAN_WORKING_CAPITAL',
+  loan_type: 'business',
+  product_loan_type: PRODUCT_LOAN_TYPE.BUSINESS,
+  name: 'Business Loan - Working Capital',
+  bank_marketing_name: 'Metrobank Business Loan - Working Capital',
+  currency: 'PHP',
+  principal_minor_unit_label: 'centavo (1 PHP = 100 centavos)',
+  general_information:
+    'Metrobank Business Loan Working Capital provides financing for day-to-day business operations. Ideal for SMEs needing working capital for inventory, payroll, or operational expenses. Features flexible terms and competitive business rates.',
+  principal_range_cents: {
+    min: phpToCentavos(100000),
+    max: phpToCentavos(10000000),
+  },
+  allowed_term_months: Object.freeze([12, 24, 36, 48, 60]),
+  min_annual_income_cents: phpToCentavos(600000),
+  eligibility: Object.freeze([
+    'Business must be registered in the Philippines',
+    'Be at least 25 years old at time of loan application and 70 years old upon loan maturity',
+    'Have a gross annual business income of at least PHP 600,000',
+    'Business must be operating for at least 2 years',
+    'Submit audited financial statements for the past 2 years',
+    'Have existing Metrobank business account or be willing to open one',
+  ]),
+  intake_flow: Object.freeze({
+    loan_type: 'business',
+    steps: Object.freeze([
+      Object.freeze({
+        step: 1,
+        key: 'business_verification',
+        title: 'Business Verification',
+        description: 'Verify business registration, operating history, and legal compliance.',
+      }),
+      Object.freeze({
+        step: 2,
+        key: 'financial_documents',
+        title: 'Financial Documents',
+        description: 'Submit audited financial statements, tax returns, and business bank statements.',
+      }),
+      Object.freeze({
+        step: 3,
+        key: 'loan_details',
+        title: 'Loan Application Details',
+        description: 'Specify loan amount, purpose, term, and collateral information.',
+      }),
+      Object.freeze({
+        step: 4,
+        key: 'collateral_assessment',
+        title: 'Collateral Assessment',
+        description: 'Provide details about business assets, inventory, and equipment for collateral evaluation.',
+      }),
+    ]),
+  }),
+})
+
+/** Business Loan - Equipment Financing (for asset acquisition) */
+export const BUSINESS_LOAN_EQUIPMENT_FINANCING_PRODUCT = Object.freeze({
+  ...BUSINESS_LOAN_WORKING_CAPITAL_PRODUCT,
+  product_code: 'BUSINESS_LOAN_EQUIPMENT_FINANCING',
+  name: 'Business Loan - Equipment Financing',
+  bank_marketing_name: 'Metrobank Business Loan - Equipment Financing',
+  general_information:
+    'Metrobank Business Loan Equipment Financing helps businesses acquire new or used equipment and machinery. Features equipment-specific terms with the equipment serving as collateral. Perfect for manufacturing, construction, and service businesses.',
+  principal_range_cents: {
+    min: phpToCentavos(200000),
+    max: phpToCentavos(5000000),
+  },
+  allowed_term_months: Object.freeze([24, 36, 48, 72]),
+  min_annual_income_cents: phpToCentavos(800000),
+  eligibility: Object.freeze([
+    'Business must be registered in the Philippines',
+    'Be at least 30 years old at time of loan application and 65 years old upon loan maturity',
+    'Have a gross annual business income of at least PHP 800,000',
+    'Business must be operating for at least 3 years',
+    'Submit equipment quotations and specifications',
+    'Have existing Metrobank business account or be willing to open one',
+  ]),
+})
+
+/** Business Loan - Commercial Real Estate (for property acquisition) */
+export const BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE_PRODUCT = Object.freeze({
+  ...BUSINESS_LOAN_WORKING_CAPITAL_PRODUCT,
+  product_code: 'BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE',
+  name: 'Business Loan - Commercial Real Estate',
+  bank_marketing_name: 'Metrobank Business Loan - Commercial Real Estate',
+  general_information:
+    'Metrobank Business Loan Commercial Real Estate provides financing for business property acquisition. Suitable for office buildings, warehouses, retail spaces, and mixed-use commercial properties. Features longer terms with property as collateral.',
+  principal_range_cents: {
+    min: phpToCentavos(500000),
+    max: phpToCentavos(20000000),
+  },
+  allowed_term_months: Object.freeze([60, 120, 180, 240]),
+  min_annual_income_cents: phpToCentavos(1200000),
+  eligibility: Object.freeze([
+    'Business must be registered in the Philippines',
+    'Be at least 35 years old at time of loan application and 70 years old upon loan maturity',
+    'Have a gross annual business income of at least PHP 1,200,000',
+    'Business must be operating for at least 5 years',
+    'Submit property appraisal and title documents',
+    'Have existing Metrobank business account or be willing to open one',
+  ]),
+  home_ownership_options: PERSONAL_LOAN_PRODUCT.home_ownership_options,
+  gender_options: PERSONAL_LOAN_PRODUCT.gender_options,
+  marital_status_options: PERSONAL_LOAN_PRODUCT.marital_status_options,
+  education_options: PERSONAL_LOAN_PRODUCT.education_options,
+  occupations: PERSONAL_LOAN_OCCUPATIONS,
+  source_of_funds_options: PERSONAL_LOAN_PRODUCT.source_of_funds_options,
+  employment_status_options: PERSONAL_LOAN_PRODUCT.employment_status_options,
+})
+
+/** Car Loan - Vehicle Financing (for personal vehicle purchase) */
+export const CAR_LOAN_PRODUCT = Object.freeze({
+  product_code: 'CAR_LOAN',
+  loan_type: 'car',
+  product_loan_type: PRODUCT_LOAN_TYPE.PERSONAL,
+  name: 'Car Loan',
+  bank_marketing_name: 'Metrobank Car Loan',
+  currency: 'PHP',
+  principal_minor_unit_label: 'centavo (1 PHP = 100 centavos)',
+  general_information:
+    'Metrobank Car Loan provides financing for new and used vehicle purchases. Features competitive rates and flexible terms for personal vehicle acquisition. Perfect for brand new cars, used cars, or vehicle refinancing with the vehicle serving as collateral.',
+  principal_range_cents: {
+    min: phpToCentavos(200000),
+    max: phpToCentavos(5000000),
+  },
+  allowed_term_months: Object.freeze([12, 24, 36, 48, 60]),
+  min_annual_income_cents: phpToCentavos(400000),
+  eligibility: Object.freeze([
+    'Be a Filipino citizen',
+    'Be at least 21 years old at the time of loan application and 65 years old upon loan maturity',
+    'Have a gross annual income of at least PHP 400,000',
+    'Have a Metrobank credit card or Metrobank deposit account',
+    'If employed: be of regular status with current employer for at least 1 year',
+    'If self-employed: be at least 2 years in the current business',
+    'Submit vehicle quotation and specifications',
+    'Vehicle must be comprehensively insured',
+  ]),
+  intake_flow: Object.freeze({
+    loan_type: 'car',
+    steps: Object.freeze([
+      Object.freeze({
+        step: 1,
+        key: 'vehicle_selection',
+        title: 'Vehicle Selection',
+        description: 'Choose vehicle type, brand, model, and provide vehicle specifications and quotation.',
+      }),
+      Object.freeze({
+        step: 2,
+        key: 'loan_details',
+        title: 'Loan Application Details',
+        description: 'Specify loan amount, down payment, term, and repayment preferences.',
+      }),
+      Object.freeze({
+        step: 3,
+        key: 'borrower_details',
+        title: 'Borrower Information',
+        description: 'Provide personal details, contact information, and employment verification.',
+      }),
+      Object.freeze({
+        step: 4,
+        key: 'vehicle_insurance',
+        title: 'Vehicle Insurance',
+        description: 'Arrange comprehensive insurance coverage for the vehicle.',
+      }),
+    ]),
+  }),
+  metrobank_client_prerequisite: PERSONAL_LOAN_PRODUCT.metrobank_client_prerequisite,
+  landline_area_code_options: PERSONAL_LOAN_PRODUCT.landline_area_code_options,
+  home_ownership_options: PERSONAL_LOAN_PRODUCT.home_ownership_options,
+  gender_options: PERSONAL_LOAN_PRODUCT.gender_options,
+  marital_status_options: PERSONAL_LOAN_PRODUCT.marital_status_options,
+  education_options: PERSONAL_LOAN_PRODUCT.education_options,
+  occupations: PERSONAL_LOAN_OCCUPATIONS,
+  source_of_funds_options: PERSONAL_LOAN_PRODUCT.source_of_funds_options,
+  employment_status_options: PERSONAL_LOAN_PRODUCT.employment_status_options,
+})
+
 /** Borrower/employment LOVs aligned with **PERSONAL_LOAN** reference (shared intake UX for **HOME_LOAN**). */
 const HOME_LOAN_CATALOG_ROW = Object.freeze({
   ...HOME_LOAN_PRODUCT,
@@ -477,11 +727,18 @@ const HOME_LOAN_CATALOG_ROW = Object.freeze({
 
 /**
  * All supported **`product_code`** values and their **GET /reference/loan-products** payloads.
- * Add new products here — **`buildLoanProductReferencePayload`** includes every entry automatically.
- * @type {Readonly<Record<string, typeof PERSONAL_LOAN_PRODUCT>>}
+ * Add new products here - **`buildLoanProductReferencePayload`** includes every entry automatically.
+ * @type {Readonly<Record<string, typeof PERSONAL_LOAN_PRODUCT | typeof HOME_LOAN_PRODUCT | typeof BUSINESS_LOAN_WORKING_CAPITAL_PRODUCT>>}
  */
 export const LOAN_PRODUCTS_BY_CODE = Object.freeze({
   [PERSONAL_LOAN_PRODUCT.product_code]: PERSONAL_LOAN_PRODUCT,
+  [PERSONAL_LOAN_QUICK_CASH_PRODUCT.product_code]: PERSONAL_LOAN_QUICK_CASH_PRODUCT,
+  [PERSONAL_LOAN_PREMIUM_PRODUCT.product_code]: PERSONAL_LOAN_PREMIUM_PRODUCT,
+  [PERSONAL_LOAN_SALARY_PRODUCT.product_code]: PERSONAL_LOAN_SALARY_PRODUCT,
+  [CAR_LOAN_PRODUCT.product_code]: CAR_LOAN_PRODUCT,
+  [BUSINESS_LOAN_WORKING_CAPITAL_PRODUCT.product_code]: BUSINESS_LOAN_WORKING_CAPITAL_PRODUCT,
+  [BUSINESS_LOAN_EQUIPMENT_FINANCING_PRODUCT.product_code]: BUSINESS_LOAN_EQUIPMENT_FINANCING_PRODUCT,
+  [BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE_PRODUCT.product_code]: BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE_PRODUCT,
   [HOME_LOAN_CATALOG_ROW.product_code]: HOME_LOAN_CATALOG_ROW,
 })
 

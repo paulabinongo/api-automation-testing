@@ -314,6 +314,75 @@
           "response": []
         },
         {
+          "name": "Get loans by type",
+          "auth": {
+            "type": "noauth"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "if (pm.response.code !== 200) return;",
+                  "var j = pm.response.json();",
+                  "pm.test('Response structure', function () {",
+                  "    pm.expect(j).to.have.property('loans');",
+                  "    pm.expect(j).to.have.property('total_count');",
+                  "    pm.expect(j).to.have.property('filters');",
+                  "    pm.expect(j).to.have.property('note');",
+                  "    pm.expect(j.loans).to.be.an('array');",
+                  "    pm.expect(j.total_count).to.be.a('number');",
+                  "    pm.expect(j.filters).to.be.an('object');",
+                  "});",
+                  "pm.test('Loan properties', function () {",
+                  "    if (j.loans.length > 0) {",
+                  "        var loan = j.loans[0];",
+                  "        pm.expect(loan).to.have.property('loan_id');",
+                  "        pm.expect(loan).to.have.property('product_code');",
+                  "        pm.expect(loan).to.have.property('loan_type');",
+                  "        pm.expect(loan).to.have.property('status');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{api_root}}/loans-by-type?product_code={{product_code}}&loan_type={{loan_type}}",
+              "host": ["{{api_root}}"],
+              "path": ["loans-by-type"],
+              "query": [
+                {
+                  "key": "product_code",
+                  "value": "{{product_code}}",
+                  "description": "Optional: Filter by product_code (PERSONAL_LOAN, PERSONAL_LOAN_QUICK_CASH, PERSONAL_LOAN_PREMIUM, PERSONAL_LOAN_SALARY, BUSINESS_LOAN_WORKING_CAPITAL, BUSINESS_LOAN_EQUIPMENT_FINANCING, BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE, or HOME_LOAN)"
+                },
+                {
+                  "key": "loan_type",
+                  "value": "{{loan_type}}",
+                  "description": "Optional: Filter by loan_type (personal, business, or home)"
+                },
+                {
+                  "key": "personal_loan_category",
+                  "value": "{{personal_loan_category}}",
+                  "description": "Optional: Filter Personal Loan variants (standard, quick_cash, premium, salary, all_personal)"
+                },
+                {
+                  "key": "business_loan_category",
+                  "value": "{{business_loan_category}}",
+                  "description": "Optional: Filter Business Loan variants (working_capital, equipment_financing, commercial_real_estate, all_business)"
+                }
+              ]
+            },
+            "description": "**GET /v1/loans-by-type** \u2014 Public endpoint to get loans filtered by type without authentication. Returns all loans in the system, optionally filtered by **product_code** and/or **loan_type**. Includes Metrobank Home Loan lifecycle phase when applicable.\n\n**Query parameters (optional):**\n- **product_code**: Filter by catalogue product_code (PERSONAL_LOAN, HOME_LOAN)\n- **loan_type**: Filter by loan type family (personal, home)\n\n**Response includes:**\n- **loans**: Array of loan objects matching filters\n- **total_count**: Number of loans matching criteria\n- **filters**: Applied filter criteria\n- **note**: Endpoint description\n\n**Use cases:**\n- Public loan catalog browsing\n- Analytics and reporting\n- Loan portfolio overview\n\n**No authentication required** - this is a public endpoint for loan discovery."
+          },
+          "response": []
+        },
+        {
           "name": "Home loan computation preview",
           "auth": {
             "type": "noauth"
