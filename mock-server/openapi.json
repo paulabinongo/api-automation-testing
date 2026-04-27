@@ -154,7 +154,7 @@
       "get": {
         "tags": ["Reference"],
         "summary": "Get loans by type (public endpoint)",
-        "description": "**No authentication required.** Returns all loans in the system, optionally filtered by **product_code** and/or **loan_type**. Useful for public loan catalog browsing and analytics. Includes Metrobank Home Loan lifecycle phase when applicable.",
+        "description": "**No authentication required.** Returns all loans in the system, optionally filtered by **product_code**, **loan_type**, or **loan_category**. Useful for public loan catalog browsing and analytics. Includes Metrobank Home Loan lifecycle phase when applicable.",
         "operationId": "getLoansByType",
         "security": [],
         "parameters": [
@@ -164,9 +164,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["PERSONAL_LOAN", "PERSONAL_LOAN_QUICK_CASH", "PERSONAL_LOAN_PREMIUM", "PERSONAL_LOAN_SALARY", "BUSINESS_LOAN_WORKING_CAPITAL", "BUSINESS_LOAN_EQUIPMENT_FINANCING", "BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE", "HOME_LOAN"]
+              "enum": ["PERSONAL_LOAN", "PERSONAL_LOAN_QUICK_CASH", "PERSONAL_LOAN_PREMIUM", "PERSONAL_LOAN_SALARY", "BUSINESS_LOAN_WORKING_CAPITAL", "BUSINESS_LOAN_EQUIPMENT_FINANCING", "BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE", "HOME_LOAN", "CAR_LOAN"]
             },
-            "description": "Filter by catalogue **product_code**. Includes Personal and Business Loan variants. If omitted, returns all loan types."
+            "description": "Filter by catalogue **product_code**. Includes Personal, Home, Car, and Business Loan variants. If omitted, returns all loan types."
           },
           {
             "name": "loan_type",
@@ -174,29 +174,19 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["personal", "business", "home"]
+              "enum": ["personal", "business", "home", "car"]
             },
-            "description": "Filter by **loan_type** (product family). If omitted, returns all loan families."
+            "description": "Filter by **loan_type** family. **personal** for Personal Loan variants, **business** for Business/Corporate loans, **home** for mortgage loans, **car** for vehicle loans."
           },
           {
-            "name": "personal_loan_category",
+            "name": "loan_category",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["standard", "quick_cash", "premium", "salary", "all_personal"]
+              "enum": ["personal", "home", "car", "business_or_commercial", "personal_loan_type", "business_loan_type", "all_personal", "all_business"]
             },
-            "description": "Filter Personal Loan variants by category. 'standard' = PERSONAL_LOAN, 'quick_cash' = PERSONAL_LOAN_QUICK_CASH, 'premium' = PERSONAL_LOAN_PREMIUM, 'salary' = PERSONAL_LOAN_SALARY, 'all_personal' = all Personal Loan types."
-          },
-          {
-            "name": "business_loan_category",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": ["working_capital", "equipment_financing", "commercial_real_estate", "all_business"]
-            },
-            "description": "Filter Business Loan variants by category. 'working_capital' = BUSINESS_LOAN_WORKING_CAPITAL, 'equipment_financing' = BUSINESS_LOAN_EQUIPMENT_FINANCING, 'commercial_real_estate' = BUSINESS_LOAN_COMMERCIAL_REAL_ESTATE, 'all_business' = all Business Loan types."
+            "description": "Filter by hierarchy-based loan category: **personal** = Personal loans, **home** = Home loans, **car** = Car loans, **business_or_commercial** = Business and Commercial loans, **personal_loan_type** = All Personal Loan Type children, **business_loan_type** = All Business Loan Type children, **all_personal** = Legacy all personal, **all_business** = Legacy all business."
           }
         ],
         "responses": {
@@ -233,6 +223,137 @@
           },
           "400": {
             "description": "Invalid query parameters"
+          }
+        }
+      }
+    },
+    "/loan-types-hierarchy": {
+      "get": {
+        "tags": ["Reference"],
+        "summary": "Get all the product loan types",
+        "description": "**No authentication required.** Public endpoint to get all the product loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Commercial). Shows strict parent-child relationships with product details.",
+        "operationId": "getLoanTypesHierarchy",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Loan types hierarchy",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoanTypesHierarchyOut" },
+                "example": {
+                  "hierarchy": {
+                    "personal": {
+                      "name": "Personal Loan Type",
+                      "description": "Consumer and retail loan products for individuals",
+                      "children": [
+                        {
+                          "name": "Personal",
+                          "description": "Unsecured personal loans for various purposes",
+                          "loan_type": "personal",
+                          "products": [
+                            {
+                              "product_code": "PERSONAL_LOAN",
+                              "name": "Personal Loan",
+                              "bank_marketing_name": "Metrobank Personal Loan",
+                              "description": "Metrobank Personal Loan provides flexible financing for various personal needs. Features competitive rates and flexible terms for qualified borrowers.",
+                              "principal_range": {
+                                "min_cents": 2000000,
+                                "max_cents": 200000000
+                              },
+                              "allowed_terms": [12, 18, 24, 36],
+                              "currency": "PHP"
+                            }
+                          ]
+                        },
+                        {
+                          "name": "Home",
+                          "description": "Mortgage loans for property purchase and construction",
+                          "loan_type": "home",
+                          "products": [
+                            {
+                              "product_code": "HOME_LOAN",
+                              "name": "Home Loan",
+                              "bank_marketing_name": "Metrobank Home Loan (Residential)",
+                              "description": "Residential mortgage for purchase, construction, renovation, reimbursement, refinancing, and home equity.",
+                              "principal_range": {
+                                "min_cents": 50000000,
+                                "max_cents": 5000000000
+                              },
+                              "allowed_terms": [12, 24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192, 204, 216, 228, 240, 252, 264, 276, 288, 300],
+                              "currency": "PHP"
+                            }
+                          ]
+                        },
+                        {
+                          "name": "Car",
+                          "description": "Vehicle financing for new and used cars",
+                          "loan_type": "car",
+                          "products": [
+                            {
+                              "product_code": "CAR_LOAN",
+                              "name": "Car Loan",
+                              "bank_marketing_name": "Metrobank Car Loan",
+                              "description": "Metrobank Car Loan provides financing for new and used vehicle purchases.",
+                              "principal_range": {},
+                              "allowed_terms": [12, 24, 36, 48, 60],
+                              "currency": "PHP"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "business": {
+                      "name": "Business Loan Type",
+                      "description": "Commercial and SME loan products for businesses",
+                      "children": [
+                        {
+                          "name": "Business or Commercial",
+                          "description": "Working capital, operational financing, and commercial real estate for businesses",
+                          "loan_type": ["business", "commercial"],
+                          "products": [
+                            {
+                              "product_code": "BUSINESS_LOAN_WORKING_CAPITAL",
+                              "name": "Business Loan - Working Capital",
+                              "bank_marketing_name": "Metrobank Business Loan - Working Capital",
+                              "description": "Metrobank Business Loan Working Capital provides financing for day-to-day business operations.",
+                              "principal_range": {},
+                              "allowed_terms": [12, 24, 36, 48, 60],
+                              "currency": "PHP"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "metadata": {
+                    "total_categories": 2,
+                    "total_children": 2,
+                    "total_products": 9,
+                    "product_loan_types": ["PERSONAL", "BUSINESS"]
+                  },
+                  "note": "Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Commercial)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/loan-types-hierarchy": {
+      "get": {
+        "tags": ["Reference"],
+        "summary": "Get all the product loan types (v1)",
+        "description": "**No authentication required.** Public endpoint to get all the product loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Commercial). Shows strict parent-child relationships with product details.",
+        "operationId": "getLoanTypesHierarchyV1",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Loan types hierarchy",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoanTypesHierarchyOut" }
+              }
+            }
           }
         }
       }
@@ -1455,6 +1576,176 @@
             "items": { "$ref": "#/components/schemas/LoanProductCatalogEntry" }
           },
           "note": { "type": "string" }
+        }
+      },
+      "LoanTypesHierarchyOut": {
+        "type": "object",
+        "description": "Loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Commercial)",
+        "required": ["hierarchy", "metadata", "note"],
+        "properties": {
+          "hierarchy": {
+            "type": "object",
+            "description": "Hierarchical organization of loan types",
+            "required": ["personal", "business"],
+            "properties": {
+              "personal": {
+                "type": "object",
+                "description": "Personal Loan Type with its children",
+                "required": ["name", "description", "children"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Personal Loan Type"
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "Consumer and retail loan products for individuals"
+                  },
+                  "children": {
+                    "type": "array",
+                    "description": "Personal Loan Type children: Personal, Home, Car",
+                    "items": { "$ref": "#/components/schemas/LoanTypeChild" }
+                  }
+                }
+              },
+              "business": {
+                "type": "object",
+                "description": "Business Loan Type with its children",
+                "required": ["name", "description", "children"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Business Loan Type"
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "Commercial and SME loan products for businesses"
+                  },
+                  "children": {
+                    "type": "array",
+                    "description": "Business Loan Type children: Business or Commercial",
+                    "items": { "$ref": "#/components/schemas/LoanTypeChild" }
+                  }
+                }
+              }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Metadata about the hierarchy",
+            "required": ["total_categories", "total_children", "total_products", "product_loan_types"],
+            "properties": {
+              "total_categories": {
+                "type": "integer",
+                "example": 2,
+                "description": "Number of top-level categories (Personal, Business)"
+              },
+              "total_children": {
+                "type": "integer",
+                "example": 2,
+                "description": "Total number of children across all categories"
+              },
+              "total_products": {
+                "type": "integer",
+                "example": 9,
+                "description": "Total number of loan products"
+              },
+              "product_loan_types": {
+                "type": "array",
+                "items": { "type": "string" },
+                "example": ["PERSONAL", "BUSINESS"],
+                "description": "Available product loan types"
+              }
+            }
+          },
+          "note": {
+            "type": "string",
+            "example": "Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Commercial)."
+          }
+        }
+      },
+      "LoanTypeChild": {
+        "type": "object",
+        "description": "A child loan type within a parent category",
+        "required": ["name", "description", "loan_type", "products"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Personal",
+            "description": "Name of the child loan type"
+          },
+          "description": {
+            "type": "string",
+            "example": "Unsecured personal loans for various purposes",
+            "description": "Description of the child loan type"
+          },
+          "loan_type": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ],
+            "example": "personal",
+            "description": "Loan type identifier (string or array for combined types)"
+          },
+          "products": {
+            "type": "array",
+            "description": "Loan products within this child type",
+            "items": { "$ref": "#/components/schemas/LoanProductDetail" }
+          }
+        }
+      },
+      "LoanProductDetail": {
+        "type": "object",
+        "description": "Detailed information about a loan product",
+        "required": ["product_code", "name", "bank_marketing_name", "description", "principal_range", "allowed_terms", "currency"],
+        "properties": {
+          "product_code": {
+            "type": "string",
+            "example": "PERSONAL_LOAN",
+            "description": "Unique product code"
+          },
+          "name": {
+            "type": "string",
+            "example": "Personal Loan",
+            "description": "Product name"
+          },
+          "bank_marketing_name": {
+            "type": "string",
+            "example": "Metrobank Personal Loan",
+            "description": "Bank's marketing name for the product"
+          },
+          "description": {
+            "type": "string",
+            "example": "Metrobank Personal Loan provides flexible financing for various personal needs.",
+            "description": "Product description"
+          },
+          "principal_range": {
+            "type": "object",
+            "description": "Principal amount range in cents",
+            "properties": {
+              "min_cents": {
+                "type": "integer",
+                "example": 2000000,
+                "description": "Minimum principal amount in cents"
+              },
+              "max_cents": {
+                "type": "integer",
+                "example": 200000000,
+                "description": "Maximum principal amount in cents"
+              }
+            }
+          },
+          "allowed_terms": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "example": [12, 18, 24, 36],
+            "description": "Allowed loan terms in months"
+          },
+          "currency": {
+            "type": "string",
+            "example": "PHP",
+            "description": "Currency code"
+          }
         }
       },
       "MetrobankHomeLoanLifecyclePhaseState": {

@@ -367,18 +367,13 @@
                   "description": "Optional: Filter by loan_type (personal, business, or home)"
                 },
                 {
-                  "key": "personal_loan_category",
-                  "value": "{{personal_loan_category}}",
-                  "description": "Optional: Filter Personal Loan variants (standard, quick_cash, premium, salary, all_personal)"
-                },
-                {
-                  "key": "business_loan_category",
-                  "value": "{{business_loan_category}}",
-                  "description": "Optional: Filter Business Loan variants (working_capital, equipment_financing, commercial_real_estate, all_business)"
+                  "key": "loan_category",
+                  "value": "{{loan_category}}",
+                  "description": "Optional: Filter by loan category based on hierarchy: personal, home, car, business_or_commercial, personal_loan_type, business_loan_type, all_personal, all_business"
                 }
               ]
             },
-            "description": "**GET /v1/loans-by-type** \u2014 Public endpoint to get loans filtered by type without authentication. Returns all loans in the system, optionally filtered by **product_code** and/or **loan_type**. Includes Metrobank Home Loan lifecycle phase when applicable.\n\n**Query parameters (optional):**\n- **product_code**: Filter by catalogue product_code (PERSONAL_LOAN, HOME_LOAN)\n- **loan_type**: Filter by loan type family (personal, home)\n\n**Response includes:**\n- **loans**: Array of loan objects matching filters\n- **total_count**: Number of loans matching criteria\n- **filters**: Applied filter criteria\n- **note**: Endpoint description\n\n**Use cases:**\n- Public loan catalog browsing\n- Analytics and reporting\n- Loan portfolio overview\n\n**No authentication required** - this is a public endpoint for loan discovery."
+            "description": "**GET /v1/loans-by-type** \u2014 Public endpoint to get loans filtered by specific loan types and children based on hierarchy. Returns all loans in the system, optionally filtered by **product_code**, **loan_type**, or **loan_category**. Includes Metrobank Home Loan lifecycle phase when applicable.\n\n**Query parameters (optional):**\n- **product_code**: Filter by catalogue product_code (PERSONAL_LOAN, HOME_LOAN, etc.)\n- **loan_type**: Filter by loan type family (personal, business, home, car)\n- **loan_category**: Filter by hierarchy-based categories:\n  * **personal**: Personal loans (all variants)\n  * **home**: Home loans\n  * **car**: Car loans\n  * **business_or_commercial**: Business and Commercial loans\n  * **personal_loan_type**: All Personal Loan Type children\n  * **business_loan_type**: All Business Loan Type children\n  * **all_personal**: Legacy - all personal category loans\n  * **all_business**: Legacy - all business category loans\n\n**Response includes:**\n- **loans**: Array of loan objects matching filters\n- **total_count**: Number of loans matching criteria\n- **filters**: Applied filter criteria\n- **note**: Endpoint description\n\n**Use cases:**\n- Browse loans by specific hierarchy categories\n- Filter by Personal, Home, Car, or Business/Commercial\n- Analytics and reporting by loan type\n\n**No authentication required** - this is a public endpoint for loan discovery."
           },
           "response": []
         },
@@ -412,6 +407,45 @@
             "header": [],
             "url": "{{api_root}}/reference/loan-computation-preview?product_code=HOME_LOAN&loan_purpose=PURCHASE_HOUSE_AND_LOT&principal_cents=50000000&term_months=12&interest_fixing_years={{home_loan_interest_fixing_years}}",
             "description": "**GET /v1/reference/loan-computation-preview** \u2014 **HOME_LOAN** sample: **PHP 500,000** principal, **1-year** amortization term, **`interest_fixing_years`** from **`{{home_loan_interest_fixing_years}}`** (**1\u20135**). Matches Metrobank calculator: fixing period \u2260 loan term when you change **`term_months`** (e.g. **240** = **20 years**)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get all the product loan types",
+          "auth": {
+            "type": "noauth"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Has hierarchy', function () { pm.expect(j.hierarchy && j.hierarchy.personal && j.hierarchy.business).to.be.ok; });",
+                  "pm.test('Personal Loan Type has 1 child', function () { pm.expect(j.hierarchy.personal.children && j.hierarchy.personal.children.length).to.equal(1); });",
+                  "pm.test('Business Loan Type has 1 child', function () { pm.expect(j.hierarchy.business.children && j.hierarchy.business.children.length).to.equal(1); });",
+                  "pm.test('Personal children names', function () { ",
+                  "  var names = j.hierarchy.personal.children.map(c => c.name).sort();",
+                  "  pm.expect(names).to.eql(['Personal']);",
+                  "});",
+                  "pm.test('Business child name', function () { ",
+                  "  pm.expect(j.hierarchy.business.children[0].name).to.eql('Business or Commercial');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/loan-types-hierarchy",
+              "host": ["{{base_url}}"],
+              "path": ["loan-types-hierarchy"]
+            },
+            "description": "**GET /loan-types-hierarchy** \u2014 Public endpoint to get all the product loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Commercial). No authentication required. Shows strict parent-child relationships with product details."
           },
           "response": []
         }
