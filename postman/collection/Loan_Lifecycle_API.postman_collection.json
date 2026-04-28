@@ -423,14 +423,14 @@
                   "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
                   "var j = pm.response.json();",
                   "pm.test('Has hierarchy', function () { pm.expect(j.hierarchy && j.hierarchy.personal && j.hierarchy.business).to.be.ok; });",
-                  "pm.test('Personal Loan Type has 1 child', function () { pm.expect(j.hierarchy.personal.children && j.hierarchy.personal.children.length).to.equal(1); });",
+                  "pm.test('Personal Loan Type has 3 children', function () { pm.expect(j.hierarchy.personal.children && j.hierarchy.personal.children.length).to.equal(3); });",
                   "pm.test('Business Loan Type has 1 child', function () { pm.expect(j.hierarchy.business.children && j.hierarchy.business.children.length).to.equal(1); });",
                   "pm.test('Personal children names', function () { ",
                   "  var names = j.hierarchy.personal.children.map(c => c.name).sort();",
-                  "  pm.expect(names).to.eql(['Personal']);",
+                  "  pm.expect(names).to.eql(['Car', 'Home', 'Personal']);",
                   "});",
                   "pm.test('Business child name', function () { ",
-                  "  pm.expect(j.hierarchy.business.children[0].name).to.eql('Business or Commercial');",
+                  "  pm.expect(j.hierarchy.business.children[0].name).to.eql('Business or Corporate');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -441,8 +441,8 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/loan-types-hierarchy",
-              "host": ["{{base_url}}"],
+              "raw": "{{api_root}}/loan-types-hierarchy",
+              "host": ["{{api_root}}"],
               "path": ["loan-types-hierarchy"]
             },
             "description": "**GET /loan-types-hierarchy** \u2014 Public endpoint to get all the product loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Commercial). No authentication required. Shows strict parent-child relationships with product details."

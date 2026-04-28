@@ -307,15 +307,15 @@
                       "description": "Commercial and SME loan products for businesses",
                       "children": [
                         {
-                          "name": "Business or Commercial",
-                          "description": "Working capital, operational financing, and commercial real estate for businesses",
-                          "loan_type": ["business", "commercial"],
+                          "name": "Business or Corporate",
+                          "description": "Working capital, operational financing, and corporate real estate for businesses",
+                          "loan_type": ["business", "corporate"],
                           "products": [
                             {
                               "product_code": "BUSINESS_LOAN_WORKING_CAPITAL",
-                              "name": "Business Loan - Working Capital",
-                              "bank_marketing_name": "Metrobank Business Loan - Working Capital",
-                              "description": "Metrobank Business Loan Working Capital provides financing for day-to-day business operations.",
+                              "name": "Business or Corporate Loan",
+                              "bank_marketing_name": "Metrobank Business or Corporate Loan",
+                              "description": "Metrobank Business or Corporate Loan provides financing for day-to-day business operations. Ideal for SMEs needing working capital for inventory, payroll, or operational expenses. Features flexible terms and competitive business rates.",
                               "principal_range": {},
                               "allowed_terms": [12, 24, 36, 48, 60],
                               "currency": "PHP"
@@ -327,11 +327,11 @@
                   },
                   "metadata": {
                     "total_categories": 2,
-                    "total_children": 2,
-                    "total_products": 9,
+                    "total_children": 4,
+                    "total_products": 4,
                     "product_loan_types": ["PERSONAL", "BUSINESS"]
                   },
-                  "note": "Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Commercial)."
+                  "note": "Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Corporate)."
                 }
               }
             }
@@ -1642,7 +1642,7 @@
               },
               "total_children": {
                 "type": "integer",
-                "example": 2,
+                "example": 4,
                 "description": "Total number of children across all categories"
               },
               "total_products": {

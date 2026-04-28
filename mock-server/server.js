@@ -536,7 +536,7 @@ v1.get('/loans-by-type', (req, res) => {
   if (loan_category) {
     const loanCategoryMappings = {
       // Personal Loan Type children
-      "personal": ["PERSONAL_LOAN"],
+      "personal": ["PERSONAL_LOAN", "HOME_LOAN", "CAR_LOAN"],
       "home": ["HOME_LOAN"],
       "car": ["CAR_LOAN"],
       // Business Loan Type children
@@ -671,7 +671,7 @@ v1.get('/v1/loans-by-type', (req, res) => {
   if (loan_category) {
     const loanCategoryMappings = {
       // Personal Loan Type children
-      "personal": ["PERSONAL_LOAN"],
+      "personal": ["PERSONAL_LOAN", "HOME_LOAN", "CAR_LOAN"],
       "home": ["HOME_LOAN"],
       "car": ["CAR_LOAN"],
       // Business Loan Type children
@@ -794,6 +794,47 @@ v1.get('/loan-types-hierarchy', async (req, res) => {
           loan_type: "personal",
           products: Object.values(LOAN_PRODUCTS_BY_CODE)
             .filter(product => product.product_code === 'PERSONAL_LOAN')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.name,
+              bank_marketing_name: product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
+        },
+        {
+          name: "Home",
+          description: "Mortgage loans for property purchase and construction",
+          loan_type: "home",
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'home')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.name,
+              bank_marketing_name: product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
+        },
+        {
+          name: "Car",
+          description: "Vehicle financing for new and used cars",
+          loan_type: "car",
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'car')
+            .slice(0, 1)
             .map(product => ({
               product_code: product.product_code,
               name: product.name,
@@ -814,39 +855,24 @@ v1.get('/loan-types-hierarchy', async (req, res) => {
       description: "Commercial and SME loan products for businesses",
       children: [
         {
-          name: "Business or Commercial",
-          description: "Working capital, operational financing, and commercial real estate for businesses",
-          loan_type: ["business", "commercial"],
-          products: [
-            ...Object.values(LOAN_PRODUCTS_BY_CODE)
-              .filter(product => product.loan_type === 'business')
-              .map(product => ({
-                product_code: product.product_code,
-                name: product.name,
-                bank_marketing_name: product.bank_marketing_name,
-                description: product.general_information,
-                principal_range: {
-                  min_cents: product.min_principal_cents,
-                  max_cents: product.max_principal_cents
-                },
-                allowed_terms: product.allowed_term_months,
-                currency: product.currency
-              })),
-            ...Object.values(LOAN_PRODUCTS_BY_CODE)
-              .filter(product => product.product_code.includes('COMMERCIAL_REAL_ESTATE'))
-              .map(product => ({
-                product_code: product.product_code,
-                name: product.name,
-                bank_marketing_name: product.bank_marketing_name,
-                description: product.general_information,
-                principal_range: {
-                  min_cents: product.min_principal_cents,
-                  max_cents: product.max_principal_cents
-                },
-                allowed_terms: product.allowed_term_months,
-                currency: product.currency
-              }))
-          ]
+          name: "Business or Corporate",
+          description: "Working capital, operational financing, and corporate real estate for businesses",
+          loan_type: ["business", "corporate"],
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'business')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.product_code === 'BUSINESS_LOAN_WORKING_CAPITAL' ? 'Business or Corporate Loan' : product.name,
+              bank_marketing_name: product.product_code === 'BUSINESS_LOAN_WORKING_CAPITAL' ? 'Metrobank Business or Corporate Loan' : product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
         }
       ]
     }
@@ -856,11 +882,11 @@ v1.get('/loan-types-hierarchy', async (req, res) => {
     hierarchy: loanTypesHierarchy,
     metadata: {
       total_categories: 2,
-      total_children: 2,
-      total_products: Object.keys(LOAN_PRODUCTS_BY_CODE).length,
+      total_children: 4,
+      total_products: 4,
       product_loan_types: Object.values(PRODUCT_LOAN_TYPE)
     },
-    note: 'Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal) and Business Loan Type (Business or Commercial).'
+    note: 'Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Corporate).'
   })
 })
 
@@ -881,6 +907,47 @@ v1.get('/v1/loan-types-hierarchy', async (req, res) => {
           loan_type: "personal",
           products: Object.values(LOAN_PRODUCTS_BY_CODE)
             .filter(product => product.product_code === 'PERSONAL_LOAN')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.name,
+              bank_marketing_name: product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
+        },
+        {
+          name: "Home",
+          description: "Mortgage loans for property purchase and construction",
+          loan_type: "home",
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'home')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.name,
+              bank_marketing_name: product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
+        },
+        {
+          name: "Car",
+          description: "Vehicle financing for new and used cars",
+          loan_type: "car",
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'car')
+            .slice(0, 1)
             .map(product => ({
               product_code: product.product_code,
               name: product.name,
@@ -901,39 +968,24 @@ v1.get('/v1/loan-types-hierarchy', async (req, res) => {
       description: "Commercial and SME loan products for businesses",
       children: [
         {
-          name: "Business or Commercial",
-          description: "Working capital, operational financing, and commercial real estate for businesses",
-          loan_type: ["business", "commercial"],
-          products: [
-            ...Object.values(LOAN_PRODUCTS_BY_CODE)
-              .filter(product => product.loan_type === 'business')
-              .map(product => ({
-                product_code: product.product_code,
-                name: product.name,
-                bank_marketing_name: product.bank_marketing_name,
-                description: product.general_information,
-                principal_range: {
-                  min_cents: product.min_principal_cents,
-                  max_cents: product.max_principal_cents
-                },
-                allowed_terms: product.allowed_term_months,
-                currency: product.currency
-              })),
-            ...Object.values(LOAN_PRODUCTS_BY_CODE)
-              .filter(product => product.product_code.includes('COMMERCIAL_REAL_ESTATE'))
-              .map(product => ({
-                product_code: product.product_code,
-                name: product.name,
-                bank_marketing_name: product.bank_marketing_name,
-                description: product.general_information,
-                principal_range: {
-                  min_cents: product.min_principal_cents,
-                  max_cents: product.max_principal_cents
-                },
-                allowed_terms: product.allowed_term_months,
-                currency: product.currency
-              }))
-          ]
+          name: "Business or Corporate",
+          description: "Working capital, operational financing, and corporate real estate for businesses",
+          loan_type: ["business", "corporate"],
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'business')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.product_code === 'BUSINESS_LOAN_WORKING_CAPITAL' ? 'Business or Corporate Loan' : product.name,
+              bank_marketing_name: product.product_code === 'BUSINESS_LOAN_WORKING_CAPITAL' ? 'Metrobank Business or Corporate Loan' : product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
         }
       ]
     }
@@ -943,11 +995,11 @@ v1.get('/v1/loan-types-hierarchy', async (req, res) => {
     hierarchy: loanTypesHierarchy,
     metadata: {
       total_categories: 2,
-      total_children: 2,
-      total_products: Object.keys(LOAN_PRODUCTS_BY_CODE).length,
+      total_children: 4,
+      total_products: 4,
       product_loan_types: Object.values(PRODUCT_LOAN_TYPE)
     },
-    note: 'Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal) and Business Loan Type (Business or Commercial).'
+    note: 'Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Corporate).'
   })
 })
 
@@ -1977,6 +2029,47 @@ app.get('/loan-types-hierarchy', async (req, res) => {
           loan_type: "personal",
           products: Object.values(LOAN_PRODUCTS_BY_CODE)
             .filter(product => product.product_code === 'PERSONAL_LOAN')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.name,
+              bank_marketing_name: product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
+        },
+        {
+          name: "Home",
+          description: "Mortgage loans for property purchase and construction",
+          loan_type: "home",
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'home')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.name,
+              bank_marketing_name: product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
+        },
+        {
+          name: "Car",
+          description: "Vehicle financing for new and used cars",
+          loan_type: "car",
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'car')
+            .slice(0, 1)
             .map(product => ({
               product_code: product.product_code,
               name: product.name,
@@ -1997,39 +2090,24 @@ app.get('/loan-types-hierarchy', async (req, res) => {
       description: "Commercial and SME loan products for businesses",
       children: [
         {
-          name: "Business or Commercial",
-          description: "Working capital, operational financing, and commercial real estate for businesses",
-          loan_type: ["business", "commercial"],
-          products: [
-            ...Object.values(LOAN_PRODUCTS_BY_CODE)
-              .filter(product => product.loan_type === 'business')
-              .map(product => ({
-                product_code: product.product_code,
-                name: product.name,
-                bank_marketing_name: product.bank_marketing_name,
-                description: product.general_information,
-                principal_range: {
-                  min_cents: product.min_principal_cents,
-                  max_cents: product.max_principal_cents
-                },
-                allowed_terms: product.allowed_term_months,
-                currency: product.currency
-              })),
-            ...Object.values(LOAN_PRODUCTS_BY_CODE)
-              .filter(product => product.product_code.includes('COMMERCIAL_REAL_ESTATE'))
-              .map(product => ({
-                product_code: product.product_code,
-                name: product.name,
-                bank_marketing_name: product.bank_marketing_name,
-                description: product.general_information,
-                principal_range: {
-                  min_cents: product.min_principal_cents,
-                  max_cents: product.max_principal_cents
-                },
-                allowed_terms: product.allowed_term_months,
-                currency: product.currency
-              }))
-          ]
+          name: "Business or Corporate",
+          description: "Working capital, operational financing, and corporate real estate for businesses",
+          loan_type: ["business", "corporate"],
+          products: Object.values(LOAN_PRODUCTS_BY_CODE)
+            .filter(product => product.loan_type === 'business')
+            .slice(0, 1)
+            .map(product => ({
+              product_code: product.product_code,
+              name: product.product_code === 'BUSINESS_LOAN_WORKING_CAPITAL' ? 'Business or Corporate Loan' : product.name,
+              bank_marketing_name: product.product_code === 'BUSINESS_LOAN_WORKING_CAPITAL' ? 'Metrobank Business or Corporate Loan' : product.bank_marketing_name,
+              description: product.general_information,
+              principal_range: {
+                min_cents: product.min_principal_cents,
+                max_cents: product.max_principal_cents
+              },
+              allowed_terms: product.allowed_term_months,
+              currency: product.currency
+            }))
         }
       ]
     }
@@ -2039,11 +2117,11 @@ app.get('/loan-types-hierarchy', async (req, res) => {
     hierarchy: loanTypesHierarchy,
     metadata: {
       total_categories: 2,
-      total_children: 2,
-      total_products: Object.keys(LOAN_PRODUCTS_BY_CODE).length,
+      total_children: 4,
+      total_products: 4,
       product_loan_types: Object.values(PRODUCT_LOAN_TYPE)
     },
-    note: 'Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal) and Business Loan Type (Business or Commercial).'
+    note: 'Public endpoint - no authentication required. Returns loan types organized by hierarchy: Personal Loan Type (Personal, Home, Car) and Business Loan Type (Business or Corporate).'
   })
 })
 
